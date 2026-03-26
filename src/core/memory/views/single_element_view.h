@@ -1,0 +1,169 @@
+#ifndef IDEAM_CORE_SINGLE_ELEMENT_VIEW_H
+#define IDEAM_CORE_SINGLE_ELEMENT_VIEW_H
+
+#include "memory_common.h"
+#include "strategies.h"
+#include "memory_grant_pod.h"
+#include "view_traits.h"
+#include <type_traits>
+#include <cstdint>
+
+namespace ideam::core {
+
+/**
+ * SingleElementView<T, Strategy>
+ * A version-secured, selection-bound lens into a specific GrantPart.
+ * Access is strictly limited to the elements defined in the MemoryBufferSelectionPOD.
+ */
+template<typename T, typename Strategy = FlatStrategy>
+struct SingleElementView {
+    // --- 8-Byte Block ---
+    T* head_ptr = nullptr;
+    const MemoryGrantPOD* grant = nullptr;
+
+    // --- 4-Byte Block ---
+    uint32_t grant_part_index = 0;
+    uint32_t baked_buffer_version = 0;
+    uint32_t baked_manager_version = 0;
+
+    // --- Strategy Policy ---
+    [[no_unique_address]] Strategy strategy;
+
+    // --- Capability Traits ---
+    static constexpr ViewCapability capabilities = 
+        ViewCapability::LINEAR_ACCESS | 
+        ViewCapability::RANDOM_ACCESS | 
+        (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
+
+    static constexpr bool is_spatial = Strategy::is_spatial;
+    static constexpr bool is_simd = false;
+    static constexpr uint32_t lane_width = 1;
+
+    /**
+     * is_valid
+     * Validates the view against the grant and the global manager state.
+     */
+    [[nodiscard]] inline bool is_valid() const {
+        if (!grant || !grant->active) return false;
+        if (grant_part_index >= grant->part_count) return false;
+
+        const auto& part = grant->parts[grant_part_index];
+        if (part.buffer_version_at_issue != baked_buffer_version) return false;
+        if (grant->global_manager_version_ptr && *grant->global_manager_version_ptr != baked_manager_version) return false;
+        
+        return part.selection.is_valid();
+    }
+
+    /**
+     * operator[]
+     * Selection-Relative Access.
+     * Maps p_selection_index to the actual buffer index via MemoryBufferSelectionPOD.
+     * Provides strict bounds checking against the selection count.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T& operator[](size_t p_selection_index) const {
+        const auto& part = grant->parts[grant_part_index];
+        const auto& selection = part.selection;
+
+        if (p_selection_index >= static_cast<size_t>(selection.element_count)) {
+            return *head_ptr; 
+        }
+
+        size_t actual_buffer_index = 0;
+        switch (selection.mode) {
+            case SelectionMode::SPARSE: {
+                actual_buffer_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
+                break;
+            }
+            case SelectionMode::DENSE: {
+                // For DENSE, selection index is assumed to be the buffer index.
+                if (!selection.is_selected(static_cast<int64_t>(p_selection_index))) {
+                    return *head_ptr;
+                }
+                actual_buffer_index = p_selection_index;
+                break;
+            }
+            case SelectionMode::RANGE: {
+                actual_buffer_index = static_cast<size_t>(selection.start_index) + p_selection_index;
+                break;
+            }
+        }
+
+        if constexpr (std::is_empty_v<Strategy>) {
+            return *Strategy::template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+        } else {
+            return *strategy.template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+        }
+    }
+
+    /**
+     * at (Spatial 2D)
+     * Coordinate-based access. Strictly guarded by Selection bitmask/range.
+     */
+    template<typename S = Strategy>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline typename std::enable_if<S::is_spatial, T&>::type 
+    at(int64_t p_x, int64_t p_y) const {
+        const auto& part = grant->parts[grant_part_index];
+        int64_t flat_idx = strategy.get_index_2d(p_x, p_y, part.element_stride);
+        
+        if (!part.selection.is_selected(flat_idx)) {
+            return *head_ptr;
+        }
+        return *strategy.resolve_2d(head_ptr, p_x, p_y, part.element_stride);
+    }
+
+    /**
+     * at (Spatial 3D)
+     * Coordinate-based access. Strictly guarded by Selection bitmask/range.
+     */
+    template<typename S = Strategy>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline typename std::enable_if<S::is_spatial, T&>::type 
+    at(int64_t p_x, int64_t p_y, int64_t p_z) const {
+        const auto& part = grant->parts[grant_part_index];
+        int64_t flat_idx = strategy.get_index_3d(p_x, p_y, p_z, part.element_stride);
+        
+        if (!part.selection.is_selected(flat_idx)) {
+            return *head_ptr;
+        }
+        return *strategy.resolve_3d(head_ptr, p_x, p_y, p_z, part.element_stride);
+    }
+
+    /**
+     * at (Spatial 4D)
+     * Coordinate-based access. Strictly guarded by Selection bitmask/range.
+     */
+    template<typename S = Strategy>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline typename std::enable_if<S::is_spatial, T&>::type 
+    at(int64_t p_x, int64_t p_y, int64_t p_z, int64_t p_w) const {
+        const auto& part = grant->parts[grant_part_index];
+        int64_t flat_idx = strategy.get_index_4d(p_x, p_y, p_z, p_w, part.element_stride);
+        
+        if (!part.selection.is_selected(flat_idx)) {
+            return *head_ptr;
+        }
+        return *strategy.resolve_4d(head_ptr, p_x, p_y, p_z, p_w, part.element_stride);
+    }
+};
+
+} // namespace ideam::core
+
+#endif // IDEAM_CORE_SINGLE_ELEMENT_VIEW_H
