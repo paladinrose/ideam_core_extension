@@ -8,8 +8,12 @@
 
 #include <godot_cpp/classes/rendering_device.hpp>
 #include <vector>
-#include <unordered_map>
+#include <shared_mutex>
 #include <mutex>
+#include <atomic>
+#include <span>
+#include <concepts>
+#include <new>
 
 namespace ideam::core {
 
@@ -22,6 +26,10 @@ struct GpuSyncCommand {
     size_t offset;
     size_t size;
 };
+
+// C++20 Concept: Enforces that the passed type is exactly one of our secured Grant footprints.
+template <typename T>
+concept IsMemoryGrant = std::is_same_v<T, MemoryGrantPOD> || std::is_same_v<T, MemoryGrantHeavyPOD>;
 
 /**
  * MemoryManagerDOD
@@ -41,28 +49,34 @@ private:
     uint64_t global_version = 0;
 
     // --- The "State Tables" (Data-Oriented Tables) ---
+    // Flat vectors pre-reserved to prevent dynamic reallocation and pointer invalidation.
     std::vector<MemoryBufferPOD> buffers;
-    
-    // Parallel tables for GPU management to keep PODs clean
     std::vector<godot::RID> buffer_gpu_rids;
     std::vector<uint8_t> buffer_dirty_flags; // Bit 0: CPU Dirty, Bit 1: GPU Dirty
 
-    std::unordered_map<uint32_t, uint32_t> id_to_index;
+    // Sparse Array Map: O(1) Cache-Friendly lookups. Index == buffer_id, Value == internal vector index.
+    std::vector<uint32_t> id_to_index;
 
     // --- Shadow Buffer Mapping ---
-    // Maps a Data Buffer ID to its Metadata Shadow Buffer ID
-    std::unordered_map<uint32_t, uint32_t> data_to_shadow_map;
+    // Sparse Array Map: Index == Data Buffer ID, Value == Metadata Shadow Buffer ID
+    std::vector<uint32_t> data_to_shadow_map;
 
     // --- Concurrency Tracking ---
     // Tracks active writers via bitset collision to prevent data races.
-    std::unordered_map<uint32_t, std::vector<uint64_t>> active_write_masks;
+    // Flat array of vectors. Evaluated via C++20 std::atomic_ref.
+    std::vector<std::vector<uint64_t>> active_write_masks;
     
     // --- Internal System Buffers ---
     uint32_t system_command_ring_id = 0xFFFFFFFF;
 
     // --- Godot Integration ---
     godot::RenderingDevice* rd = nullptr;
-    std::mutex manager_mutex;
+    
+    // --- Thread Safety ---
+    // C++17 Read-Write Lock to allow extreme parallel read throughput on worker threads.
+    std::shared_mutex manager_rw_lock;
+    // Fine-grained spinlock specifically for the GPU synchronization ring buffer.
+    std::mutex command_ring_mutex;
 
     // Internal Helpers
     void _update_buffer_pointers();
@@ -72,10 +86,22 @@ private:
     
     /**
      * _check_and_apply_selection_to_mask
-     * Performs intersection checks for WRITE access and updates the active mask.
+     * Performs lock-free intersection checks for WRITE access and updates the active mask.
      * @return true if a collision was detected (for p_add = true), false otherwise.
      */
     bool _check_and_apply_selection_to_mask(const MemoryBufferSelectionPOD& p_selection, uint64_t* p_mask, bool p_add);
+
+    /**
+     * _bake_grant_core
+     * The internal DOD pointer resolution logic. Decoupled from the template to prevent header bloat.
+     */
+    bool _bake_grant_core(GrantPartPOD* r_parts, uint32_t max_parts, uint32_t& r_part_count, uint64_t& r_uniform_handle, std::span<const GrantPartPOD> p_requirements, bool p_needs_gpu);
+
+    /**
+     * _release_grant_core
+     * Internal DOD release logic.
+     */
+    void _release_grant_core(GrantPartPOD* p_parts, uint32_t p_part_count, uint64_t& r_uniform_handle);
 
 public:
     MemoryManagerDOD(size_t p_initial_capacity);
@@ -126,13 +152,33 @@ public:
      * Resolves requirements into high-performance pointers. 
      * Performs JIT GPU sync if p_needs_gpu is true.
      */
-    bool bake_grant(MemoryGrantPOD& r_grant, const std::vector<GrantPartPOD>& p_requirements, bool p_needs_gpu = false);
+    template <IsMemoryGrant TGrant>
+    bool bake_grant(TGrant& r_grant, std::span<const GrantPartPOD> p_requirements, bool p_needs_gpu = false) {
+        constexpr uint32_t max_parts = sizeof(r_grant.parts) / sizeof(GrantPartPOD);
+        if (p_requirements.size() > max_parts) return false;
+
+        r_grant.active = false;
+        r_grant.part_count = 0;
+        
+        if (_bake_grant_core(r_grant.parts, max_parts, r_grant.part_count, r_grant.uniform_set_handle, p_requirements, p_needs_gpu)) {
+            r_grant.manager_version_at_issue = global_version;
+            r_grant.global_manager_version_ptr = &global_version;
+            r_grant.active = true;
+            return true;
+        }
+        return false;
+    }
     
     /**
      * release_grant
      * Clears write masks and marks data as dirty for future GPU syncs.
      */
-    void release_grant(MemoryGrantPOD& r_grant);
+    template <IsMemoryGrant TGrant>
+    void release_grant(TGrant& r_grant) {
+        if (!r_grant.active) return;
+        _release_grant_core(r_grant.parts, r_grant.part_count, r_grant.uniform_set_handle);
+        r_grant.active = false;
+    }
 
     /**
      * flush_gpu_updates
@@ -148,7 +194,6 @@ public:
     [[nodiscard]] const uint64_t* get_global_version_ptr() const { return &global_version; }
     [[nodiscard]] MemoryBufferPOD* get_buffer(uint32_t p_id);
     [[nodiscard]] godot::RenderingDevice* get_rendering_device() const { return rd; }
-
 };
 
 } // namespace ideam::core

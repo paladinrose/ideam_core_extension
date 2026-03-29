@@ -1,0 +1,43 @@
+# 1. Deny everything by default
+/*
+
+# 2. Whitelist the Project Architecture
+!src/
+!src/core/
+!src/godot/
+
+# 3. Whitelist the specific GDExtension bridge
+!godot-project/
+!godot-project/addons/
+!godot-project/addons/ideam_core_extension/
+
+# Explicitly allow the config file
+!godot-project/addons/ideam_core_extension/*.gdextension
+
+!godot-project/addons/ideam_core_extension/lib/
+
+# ENSURE binaries in that same folder are still ignored
+godot-project/addons/ideam_core_extension/lib/*.dll
+godot-project/addons/ideam_core_extension/lib/*.so
+godot-project/addons/ideam_core_extension/lib/*.pdb
+
+# 4. Explicitly block the heavy folders (even if whitelisted above)
+executable/
+godot-cpp/
+.godot/
+bin/
+build/
+.vscode/
+
+# 5. Block binary/non-code artifacts
+*.dll
+*.so
+*.dylib
+*.lib
+*.exe
+*.obj
+*.o
+*.pdb
+*.import
+*.res
+*.tscn

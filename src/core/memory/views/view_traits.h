@@ -19,11 +19,11 @@ enum class ViewCapability : uint32_t {
     VIRTUAL_MEMORY  = 1 << 4  // Paged/Indirect (Strategy-dependent)
 };
 
-inline constexpr ViewCapability operator|(ViewCapability a, ViewCapability b) {
+constexpr ViewCapability operator|(ViewCapability a, ViewCapability b) noexcept {
     return static_cast<ViewCapability>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
 
-inline constexpr bool has_capability(ViewCapability p_mask, ViewCapability p_cap) {
+constexpr bool has_capability(ViewCapability p_mask, ViewCapability p_cap) noexcept {
     return (static_cast<uint32_t>(p_mask) & static_cast<uint32_t>(p_cap)) != 0;
 }
 
@@ -34,7 +34,6 @@ inline constexpr bool has_capability(ViewCapability p_mask, ViewCapability p_cap
  */
 template<typename T_View>
 struct ViewTraits {
-    // These defaults should be overridden by specialized View implementations
     static constexpr ViewCapability capabilities = ViewCapability::NONE;
     static constexpr bool is_spatial = false;
     static constexpr bool is_simd = false;

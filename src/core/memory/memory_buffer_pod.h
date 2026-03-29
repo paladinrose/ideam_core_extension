@@ -2,10 +2,13 @@
 #define IDEAM_CORE_MEMORY_BUFFER_POD_H
 
 #include "memory_common.h"
+#include <cstdint>
+#include <cstddef>
 
 namespace ideam::core {
 
-#define MAX_BUFFER_COLUMNS 16
+// Technical Constraint: Max Buffer Columns is 16
+constexpr uint32_t MAX_BUFFER_COLUMNS = 16;
 
 /**
  * BufferLayoutType
@@ -24,6 +27,7 @@ enum class BufferLayoutType : uint8_t {
 /**
  * ColumnMetadata
  * Unified representation for AoS members, SoA columns, or SparseSet pools.
+ * Strictly packed to 40 bytes.
  */
 struct ColumnMetadata {
     size_t offset;            // Relative to raw_ptr
@@ -34,13 +38,14 @@ struct ColumnMetadata {
     uint32_t alignment;
     int32_t current_size;     // Current element count in this specific pool
 };
+static_assert(sizeof(ColumnMetadata) == 40, "ColumnMetadata packing violated!");
 
 /**
  * MemoryBufferPOD
- * The definitive DOD structure.
+ * The definitive DOD structure defining a sliced buffer from the Master Block.
  */
 struct MemoryBufferPOD {
-    // --- Core Header ---
+    // --- 8-Byte Alignment Block ---
     uint8_t* master_block_ptr;
     size_t memory_offset;
     size_t capacity_bytes;
@@ -51,8 +56,8 @@ struct MemoryBufferPOD {
     int64_t max_elements;    
     int64_t current_count;  
 
-     // --- Layout-Specific Metadata ---
-    union {
+    // --- Layout-Specific Metadata ---
+    union ExtraData {
         // TILED_SOA: Size of one block of elements before the next attribute starts
         struct {
             uint32_t elements_per_tile; 
@@ -72,21 +77,27 @@ struct MemoryBufferPOD {
             uint32_t page_count;
             uint32_t page_size_bytes;
         } paged;
-    } extra;
+    } extra; // 24 bytes total, aligned to 8-byte boundary
     
+    // --- 4-Byte Alignment Block ---
     uint32_t buffer_id;
     uint32_t version;
     uint32_t element_stride; 
     uint32_t column_count;
 
+    // --- 1-Byte Alignment Block ---
     BufferLayoutType layout_type;
     BufferAlignmentMode alignment_mode;
     BufferLifecycleState lifecycle;
-
     bool needs_compaction;   // For SoA death_row logic
 
-    ColumnMetadata columns[MAX_BUFFER_COLUMNS];
+    // --- Explicit Padding ---
+    // Replaces the 4 bytes of implicit compiler padding that would normally exist 
+    // before the 8-byte aligned ColumnMetadata array begins.
+    uint8_t reserved_padding[4];
 
+    // --- Arrays (8-byte aligned by offset) ---
+    ColumnMetadata columns[MAX_BUFFER_COLUMNS];
 };
 
 } // namespace ideam::core

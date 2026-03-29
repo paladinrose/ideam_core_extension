@@ -6,6 +6,7 @@
 #include "view_traits.h"
 #include <cstdint>
 #include <type_traits>
+#include <cassert>
 
 namespace ideam::core {
 
@@ -14,8 +15,9 @@ namespace ideam::core {
  * Represents an "Array of Structures of Arrays" layout.
  * Optimized for SIMD kernels, balancing spatial locality with hardware alignment.
  * Access is strictly bound to the MemoryBufferSelectionPOD.
+ * * [C++26 Enabled]: Utilizes Multidimensional Subscripts and [[assume]] attributes.
  */
-template<typename T, uint32_t LaneWidth = 8, typename Strategy = FlatStrategy>
+template<typename T, uint32_t LaneWidth = 8, IsMemoryStrategy Strategy = FlatStrategy>
 struct AOSOAView {
     // --- 8-Byte Block ---
     T* head_ptr = nullptr;
@@ -25,6 +27,10 @@ struct AOSOAView {
     uint32_t grant_part_index = 0;
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
+
+    // --- Explicit Alignment Padding ---
+    // Locks the base members to exactly 32 bytes (half a cache line).
+    uint8_t reserved_padding[4] = {0};
 
     // --- Strategy Policy ---
     [[no_unique_address]] Strategy strategy;
@@ -43,7 +49,7 @@ struct AOSOAView {
      * is_valid
      * Standard reactive version check.
      */
-    [[nodiscard]] inline bool is_valid() const {
+    [[nodiscard]] inline bool is_valid() const noexcept {
         if (!grant || !grant->active) return false;
         if (grant_part_index >= grant->part_count) return false;
 
@@ -57,43 +63,46 @@ struct AOSOAView {
     /**
      * get_lane
      * Returns a pointer to the start of a SIMD lane.
-     * Access is strictly guarded by the Selection set. If the base coordinate 
-     * or lane start is not selected, returns head_ptr as an access violation guard.
+     * C++26 Optimizer Hinting ensures zero-cost execution and maximizes autovectorization.
      */
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    template<typename... Args>
-    inline T* get_lane(size_t p_lane_index, Args... p_coords) const {
+    template<typename... Coords>
+    inline T* get_lane(size_t p_lane_index, Coords... p_coords) const noexcept {
         const auto& part = grant->parts[grant_part_index];
         const auto& selection = part.selection;
         T* base_ptr = nullptr;
         int64_t base_flat_idx = 0;
 
         // Resolve base and logical index via Strategy
-        if constexpr (sizeof...(Args) == 0) {
+        if constexpr (sizeof...(Coords) == 0) {
             base_ptr = head_ptr;
             base_flat_idx = 0;
-        } else if constexpr (sizeof...(Args) == 2) {
+        } else if constexpr (sizeof...(Coords) == 2 && Strategy::is_spatial) {
             base_ptr = strategy.resolve_2d(head_ptr, p_coords..., part.element_stride);
             base_flat_idx = strategy.get_index_2d(p_coords..., part.element_stride);
-        } else if constexpr (sizeof...(Args) == 3) {
+        } else if constexpr (sizeof...(Coords) == 3 && Strategy::is_spatial) {
             base_ptr = strategy.resolve_3d(head_ptr, p_coords..., part.element_stride);
             base_flat_idx = strategy.get_index_3d(p_coords..., part.element_stride);
-        } else if constexpr (sizeof...(Args) == 4) {
+        } else if constexpr (sizeof...(Coords) == 4 && Strategy::is_spatial) {
             base_ptr = strategy.resolve_4d(head_ptr, p_coords..., part.element_stride);
             base_flat_idx = strategy.get_index_4d(p_coords..., part.element_stride);
+        } else {
+            static_assert(sizeof...(Coords) < 0, "Invalid coordinates provided to get_lane for this Strategy!");
         }
 
         // The effective flat index for the start of the SIMD lane
         int64_t effective_idx = base_flat_idx + static_cast<int64_t>(p_lane_index * LaneWidth);
 
-        // Strict Selection Guard
-        if (!selection.is_selected(effective_idx)) {
-            return head_ptr;
-        }
+        // C++26 Optimizer Hinting: Forces the compiler to trust the memory boundaries
+        #ifdef NDEBUG
+            [[assume(selection.is_selected(effective_idx))]];
+        #else
+            assert(selection.is_selected(effective_idx) && "SIMD get_lane accessed unselected or out-of-bounds memory!");
+        #endif
 
         return base_ptr + (p_lane_index * LaneWidth);
     }
@@ -102,54 +111,94 @@ struct AOSOAView {
      * lane_count
      * Returns the number of complete hardware lanes available within the selection.
      */
-    [[nodiscard]] inline size_t lane_count() const {
+    [[nodiscard]] inline size_t lane_count() const noexcept {
         return static_cast<size_t>(grant->parts[grant_part_index].selection.element_count) / LaneWidth;
     }
 
     /**
-     * operator[]
-     * Selection-Relative Linear Access.
-     * Maps p_selection_index to the buffer index via MemoryBufferSelectionPOD.
+     * operator[] (C++23/26 Multidimensional Subscript)
+     * Unified scalar fallback access for tail-loops or debugging.
      */
+    template<typename... Coords>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline T& operator[](size_t p_selection_index) const {
+    inline T& operator[](Coords... p_coords) const noexcept {
         const auto& part = grant->parts[grant_part_index];
         const auto& selection = part.selection;
 
-        if (p_selection_index >= static_cast<size_t>(selection.element_count)) {
-            return *head_ptr;
-        }
+        // --- 1D LINEAR ACCESS PATH ---
+        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+            size_t p_selection_index = static_cast<size_t>((p_coords)...);
+            
+            #ifdef NDEBUG
+                [[assume(p_selection_index < static_cast<size_t>(selection.element_count))]];
+            #else
+                assert(p_selection_index < static_cast<size_t>(selection.element_count) && "AOSOAView out of bounds!");
+            #endif
 
-        size_t actual_buffer_index = 0;
-        switch (selection.mode) {
-            case SelectionMode::SPARSE: {
-                actual_buffer_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
-                break;
-            }
-            case SelectionMode::DENSE: {
-                if (!selection.is_selected(static_cast<int64_t>(p_selection_index))) {
-                    return *head_ptr;
+            size_t actual_buffer_index = 0;
+            switch (selection.mode) {
+                case SelectionMode::SPARSE: {
+                    actual_buffer_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
+                    break;
                 }
-                actual_buffer_index = p_selection_index;
-                break;
+                case SelectionMode::DENSE: {
+                    #ifdef NDEBUG
+                        [[assume(selection.is_selected(static_cast<int64_t>(p_selection_index)))]];
+                    #else
+                        assert(selection.is_selected(static_cast<int64_t>(p_selection_index)) && "Accessed unselected DENSE index!");
+                    #endif
+                    actual_buffer_index = p_selection_index;
+                    break;
+                }
+                case SelectionMode::RANGE: {
+                    actual_buffer_index = static_cast<size_t>(selection.start_index) + p_selection_index;
+                    break;
+                }
             }
-            case SelectionMode::RANGE: {
-                actual_buffer_index = static_cast<size_t>(selection.start_index) + p_selection_index;
-                break;
-            }
-        }
 
-        if constexpr (std::is_empty_v<Strategy>) {
-            return *Strategy::template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
-        } else {
-            return *strategy.template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+            if constexpr (std::is_empty_v<Strategy>) {
+                return *Strategy::template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+            } else {
+                return *strategy.template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+            }
+        } 
+        // --- N-DIMENSIONAL SPATIAL ACCESS PATH ---
+        else if constexpr (sizeof...(Coords) > 1 && Strategy::is_spatial) {
+            int64_t flat_idx = 0;
+            
+            if constexpr (sizeof...(Coords) == 2) {
+                flat_idx = strategy.get_index_2d(p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 3) {
+                flat_idx = strategy.get_index_3d(p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 4) {
+                flat_idx = strategy.get_index_4d(p_coords..., part.element_stride);
+            }
+
+            #ifdef NDEBUG
+                [[assume(selection.is_selected(flat_idx))]];
+            #else
+                assert(selection.is_selected(flat_idx) && "Spatial access outside selection mask!");
+            #endif
+
+            if constexpr (sizeof...(Coords) == 2) {
+                return *strategy.resolve_2d(head_ptr, p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 3) {
+                return *strategy.resolve_3d(head_ptr, p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 4) {
+                return *strategy.resolve_4d(head_ptr, p_coords..., part.element_stride);
+            }
+        } 
+        else {
+            static_assert(sizeof...(Coords) < 0, "Invalid coordinate dimensions provided for the assigned View Strategy!");
         }
     }
 };
+
+static_assert(sizeof(AOSOAView<int, 8, FlatStrategy>) == 32, "AOSOAView base layout alignment failed!");
 
 } // namespace ideam::core
 

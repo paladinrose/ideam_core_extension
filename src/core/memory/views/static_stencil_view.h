@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <type_traits>
+#include <cassert>
 
 namespace ideam::core {
 
@@ -15,18 +16,25 @@ namespace ideam::core {
  * Optimized for fixed-pattern kernels (Blur, Erosion, Game of Life).
  * Pre-calculates byte-offsets for a specific neighbor set.
  * Access is strictly bound to the MemoryBufferSelectionPOD of the underlying view.
+ * * [C++26 Enabled]: Multidimensional Subscripts, [[assume]] attributes, and `mutable` cursors.
  */
-template<typename T, typename Strategy, size_t PointCount>
+template<typename T, IsMemoryStrategy Strategy, size_t PointCount>
 struct StaticStencilView {
-    // --- 8-Byte Block ---
+    // --- 8-Byte Block (24 Bytes) ---
     T* head_ptr = nullptr;
     const MemoryGrantPOD* grant = nullptr;
-    uint8_t* center_ptr = nullptr;
+    
+    // Mutable allows the cursor to move while maintaining a const-correct View API
+    mutable uint8_t* center_ptr = nullptr;
 
-    // --- 4-Byte Block ---
+    // --- 4-Byte Block (12 Bytes) ---
     uint32_t grant_part_index = 0;
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
+
+    // --- Explicit Alignment Padding (4 Bytes) ---
+    // Locks the base members to exactly 40 bytes before the offset array begins.
+    uint8_t reserved_padding[4] = {0};
 
     // --- Array Block ---
     std::array<intptr_t, PointCount> baked_offsets;
@@ -46,9 +54,8 @@ struct StaticStencilView {
 
     /**
      * is_valid
-     * Standard reactive version check.
      */
-    [[nodiscard]] inline bool is_valid() const {
+    [[nodiscard]] inline bool is_valid() const noexcept {
         if (!grant || !grant->active) return false;
         if (grant_part_index >= grant->part_count) return false;
 
@@ -60,127 +67,117 @@ struct StaticStencilView {
     }
 
     /**
-     * bake_pattern
-     * Calculates the byte-jumps for a set of relative coordinates based on strategy strides.
+     * operator[] (C++23/26 Multidimensional Subscript)
+     * Sets the "Center" focus of the stencil to the specified coordinates.
+     * Returns a reference to the center element.
      */
-    template<typename... Args>
-    void bake_pattern(size_t p_point_idx, Args... p_relative_coords) {
-        if (p_point_idx >= PointCount) return;
-
-        const auto& part = grant->parts[grant_part_index];
-        const size_t stride = part.element_stride;
-        auto coords = std::array<int64_t, sizeof...(Args)>{ static_cast<int64_t>(p_relative_coords)... };
-        
-        if constexpr (sizeof...(Args) == 1) {
-            baked_offsets[p_point_idx] = coords[0] * static_cast<intptr_t>(stride);
-        } else if constexpr (sizeof...(Args) == 2) {
-            baked_offsets[p_point_idx] = (coords[0] * static_cast<intptr_t>(stride)) + 
-                                         (coords[1] * static_cast<intptr_t>(strategy.stride_y));
-        } else if constexpr (sizeof...(Args) == 3) {
-            baked_offsets[p_point_idx] = (coords[0] * static_cast<intptr_t>(stride)) + 
-                                         (coords[1] * static_cast<intptr_t>(strategy.stride_y)) + 
-                                         (coords[2] * static_cast<intptr_t>(strategy.stride_z));
-        } else if constexpr (sizeof...(Args) == 4) {
-            baked_offsets[p_point_idx] = (coords[0] * static_cast<intptr_t>(stride)) + 
-                                         (coords[1] * static_cast<intptr_t>(strategy.stride_y)) + 
-                                         (coords[2] * static_cast<intptr_t>(strategy.stride_z)) +
-                                         (coords[3] * static_cast<intptr_t>(strategy.stride_w));
-        }
-    }
-
-    /**
-     * focus
-     * Sets the center of the stencil. Guarded by selection.
-     */
-    template<typename... Args>
+    template<typename... Coords>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline void focus(Args... p_coords) {
-        const auto& part = grant->parts[grant_part_index];
-        int64_t flat_idx = 0;
-
-        if constexpr (sizeof...(Args) == 1) {
-            flat_idx = static_cast<int64_t>(p_coords...);
-            center_ptr = reinterpret_cast<uint8_t*>(strategy.resolve(head_ptr, static_cast<size_t>(flat_idx), part.element_stride, part.capacity_bytes));
-        } else if constexpr (sizeof...(Args) == 2) {
-            flat_idx = strategy.get_index_2d(p_coords..., part.element_stride);
-            center_ptr = reinterpret_cast<uint8_t*>(strategy.resolve_2d(head_ptr, p_coords..., part.element_stride));
-        } else if constexpr (sizeof...(Args) == 3) {
-            flat_idx = strategy.get_index_3d(p_coords..., part.element_stride);
-            center_ptr = reinterpret_cast<uint8_t*>(strategy.resolve_3d(head_ptr, p_coords..., part.element_stride));
-        } else if constexpr (sizeof...(Args) == 4) {
-            flat_idx = strategy.get_index_4d(p_coords..., part.element_stride);
-            center_ptr = reinterpret_cast<uint8_t*>(strategy.resolve_4d(head_ptr, p_coords..., part.element_stride));
-        }
-
-        // If not selected, point to head_ptr (safe violation zone)
-        if (!part.selection.is_selected(flat_idx)) {
-            center_ptr = reinterpret_cast<uint8_t*>(head_ptr);
-        }
-    }
-
-    /**
-     * get_neighbor
-     * Zero-math neighbor access using pre-baked offsets.
-     */
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T& get_neighbor(size_t p_point_idx) const {
-        // Performance note: We do not selection-check individual neighbors for 
-        // speed in stencil kernels. Kernel must handle boundary conditions.
-        return *reinterpret_cast<T*>(center_ptr + baked_offsets[p_point_idx]);
-    }
-
-    /**
-     * operator[]
-     * Selection-Relative Linear Access.
-     * Moves the focus to the selection index and returns the center reference.
-     */
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T& operator[](size_t p_selection_index) const {
+    inline T& operator[](Coords... p_coords) const noexcept {
         const auto& part = grant->parts[grant_part_index];
         const auto& selection = part.selection;
 
-        if (p_selection_index >= static_cast<size_t>(selection.element_count)) {
-            return *head_ptr;
+        T* resolved = nullptr;
+
+        // --- 1D LINEAR ACCESS PATH ---
+        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+            size_t p_selection_index = static_cast<size_t>((p_coords)...);
+            
+            #ifdef NDEBUG
+                [[assume(p_selection_index < static_cast<size_t>(selection.element_count))]];
+            #else
+                assert(p_selection_index < static_cast<size_t>(selection.element_count) && "StaticStencilView out of bounds!");
+            #endif
+
+            size_t actual_buffer_index = 0;
+            switch (selection.mode) {
+                case SelectionMode::SPARSE:
+                    actual_buffer_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
+                    break;
+                case SelectionMode::DENSE:
+                    #ifdef NDEBUG
+                        [[assume(selection.is_selected(static_cast<int64_t>(p_selection_index)))]];
+                    #else
+                        assert(selection.is_selected(static_cast<int64_t>(p_selection_index)) && "Accessed unselected DENSE index!");
+                    #endif
+                    actual_buffer_index = p_selection_index;
+                    break;
+                case SelectionMode::RANGE:
+                    actual_buffer_index = static_cast<size_t>(selection.start_index) + p_selection_index;
+                    break;
+            }
+
+            if constexpr (std::is_empty_v<Strategy>) {
+                resolved = Strategy::template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+            } else {
+                resolved = strategy.template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+            }
+        } 
+        // --- N-DIMENSIONAL SPATIAL ACCESS PATH ---
+        else if constexpr (sizeof...(Coords) > 1 && Strategy::is_spatial) {
+            int64_t flat_idx = 0;
+            
+            if constexpr (sizeof...(Coords) == 2) {
+                flat_idx = strategy.get_index_2d(p_coords..., part.element_stride);
+                resolved = strategy.resolve_2d(head_ptr, p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 3) {
+                flat_idx = strategy.get_index_3d(p_coords..., part.element_stride);
+                resolved = strategy.resolve_3d(head_ptr, p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 4) {
+                flat_idx = strategy.get_index_4d(p_coords..., part.element_stride);
+                resolved = strategy.resolve_4d(head_ptr, p_coords..., part.element_stride);
+            }
+
+            #ifdef NDEBUG
+                [[assume(selection.is_selected(flat_idx))]];
+            #else
+                assert(selection.is_selected(flat_idx) && "Spatial Stencil focus outside selection mask!");
+            #endif
+        } 
+        else {
+            static_assert(sizeof...(Coords) < 0, "Invalid coordinate dimensions for Stencil Strategy!");
         }
 
-        size_t actual_buffer_index = 0;
-        switch (selection.mode) {
-            case SelectionMode::SPARSE:
-                actual_buffer_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
-                break;
-            case SelectionMode::DENSE:
-                actual_buffer_index = p_selection_index;
-                break;
-            case SelectionMode::RANGE:
-                actual_buffer_index = static_cast<size_t>(selection.start_index) + p_selection_index;
-                break;
-        }
-
-        // Internal focus update
-        T* resolved = strategy.resolve(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
-        const_cast<StaticStencilView*>(this)->center_ptr = reinterpret_cast<uint8_t*>(resolved);
-        
+        // Update the internal mutable cursor
+        center_ptr = reinterpret_cast<uint8_t*>(resolved);
         return *resolved;
     }
 
     /**
      * center
-     * Returns the currently focused element.
+     * Returns the currently focused element without recalculating its position.
      */
-    [[nodiscard]] inline T& center() const {
+    [[nodiscard]] inline T& center() const noexcept {
+        #ifndef NDEBUG
+            assert(center_ptr != nullptr && "StaticStencilView: Attempted to read center before focusing via operator[]!");
+        #endif
         return *reinterpret_cast<T*>(center_ptr);
+    }
+
+    /**
+     * neighbor
+     * Zero-cost relative access to a neighbor in the pre-baked pattern.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T& neighbor(size_t p_point_index) const noexcept {
+        #ifdef NDEBUG
+            // Highly aggressive compiler hint: Unrolls neighbor iteration loops
+            [[assume(p_point_index < PointCount)]];
+            [[assume(center_ptr != nullptr)]];
+        #else
+            assert(p_point_index < PointCount && "Stencil neighbor index out of bounds!");
+            assert(center_ptr != nullptr && "Stencil center_ptr is uninitialized!");
+        #endif
+
+        return *reinterpret_cast<T*>(center_ptr + baked_offsets[p_point_index]);
     }
 };
 

@@ -7,7 +7,7 @@ env = SConscript("godot-cpp/SConstruct")
 
 # --- DATA OWNERSHIP & IDENTITY ---
 project_folder = "godot-project" 
-out_filename   = "ideam_core"    # Change this for different tools
+out_filename   = "ideam_core_extension"    # Change this for different tools
 out_dir        = "#" + project_folder + "/addons/" + out_filename + "/lib/"
 
 # --- COMPILER & LANGUAGE STANDARDS ---

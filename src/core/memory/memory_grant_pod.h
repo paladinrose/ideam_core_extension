@@ -4,13 +4,21 @@
 #include "memory_common.h"
 #include "memory_buffer_selection_pod.h"
 #include <cstdint>
+#include <new>
+
+// Hardware alignment fallback for compilers lacking C++17 hardware_destructive_interference_size
+#ifdef __cpp_lib_hardware_interference_size
+    constexpr size_t GRANT_CACHE_LINE = std::hardware_destructive_interference_size;
+#else
+    constexpr size_t GRANT_CACHE_LINE = 64; 
+#endif
 
 namespace ideam::core {
 
 /**
  * GrantPartPOD
  * Represents a secured, pre-resolved claim to a specific MemoryBuffer's data.
- * The 'Selection' member defines WHICH elements within that buffer are accessible.
+ * Size forced to exactly 120 bytes to pack perfectly into Grant cache lines.
  */
 struct GrantPartPOD {
     // --- 8-Byte Alignment Block ---
@@ -26,16 +34,23 @@ struct GrantPartPOD {
     // --- 1-Byte Alignment Block ---
     BufferAccessMode access_mode = BufferAccessMode::READ;
     bool is_contiguous = false;          // SelectionMode::RANGE optimization flag
+
+    // --- Explicit Tail Padding ---
+// 6 bytes of padding brings the struct to exactly 128 bytes (2 cache lines).
+uint8_t reserved_padding[6] = {0};
 };
+
+static_assert(sizeof(GrantPartPOD) % 8 == 0, "GrantPartPOD is not properly padded!");
+static_assert(sizeof(GrantPartPOD) == 128, "GrantPartPOD size altered from expected 128 bytes!");
 
 /**
  * TMemoryGrant
- * A templated security and access token.
+ * A templated security and access token. Forced to hardware cache-line boundaries.
  * @tparam N The maximum number of buffer claims allowed in this grant.
  */
 template <uint32_t N>
-struct TMemoryGrant {
-    // Large array block (8-byte aligned)
+struct alignas(GRANT_CACHE_LINE) TMemoryGrant {
+    // Large array block (8-byte aligned base)
     GrantPartPOD parts[N];
 
     // --- Global Manager State (8-byte members) ---
@@ -49,6 +64,10 @@ struct TMemoryGrant {
     uint32_t part_count = 0;
     bool active = false;
 
+    // --- Explicit Tail Padding ---
+    // Guarantees the entire struct scales cleanly into exact cache line multiples.
+    uint8_t reserved_padding[35] = {0};
+
     /**
      * get_part
      */
@@ -59,7 +78,6 @@ struct TMemoryGrant {
     /**
      * is_valid
      * Validates the grant against global state and individual part staleness.
-     * The compiler can unroll this loop based on N for high performance.
      */
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -88,14 +106,15 @@ struct TMemoryGrant {
         return true;
     }
 };
-
 /**
  * Standard Aliases
- * Use MemoryGrantPOD (Lite) for standard simulation nodes to maximize cache density.
- * Use MemoryGrantHeavyPOD for complex world-state resolvers.
  */
-using MemoryGrantPOD      = TMemoryGrant<4>;  // ~504 bytes
-using MemoryGrantHeavyPOD = TMemoryGrant<8>;  // ~984 bytes
+using MemoryGrantPOD      = TMemoryGrant<4>;  // 576 bytes (Exactly 9 cache lines)
+using MemoryGrantHeavyPOD = TMemoryGrant<8>;  // 1088 bytes (Exactly 17 cache lines)
+
+// Compile-Time Defenses: Lock the exact memory footprints
+static_assert(sizeof(MemoryGrantPOD) == 576, "MemoryGrantPOD (Lite) broke 9-cache-line perfection!");
+static_assert(sizeof(MemoryGrantHeavyPOD) == 1088, "MemoryGrantHeavyPOD broke 17-cache-line perfection!");
 
 } // namespace ideam::core
 

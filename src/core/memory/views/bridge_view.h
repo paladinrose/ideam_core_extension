@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <type_traits>
+#include <cassert>
 
 namespace ideam::core {
 
@@ -24,9 +25,9 @@ struct BridgeMetadata {
 /**
  * BridgeView<TParent, TChild, DimCount, Strategy>
  * A composite view linking a Parent selection to a subdivided Child buffer.
- * Iteration (operator[]) drives through the Parent Selection.
+ * * [C++26 Enabled]: Hierarchical Multidimensional Subscripts and [[assume]] optimizations.
  */
-template<typename TParent, typename TChild, size_t DimCount, typename Strategy = Spatial2DStrategy>
+template<typename TParent, typename TChild, size_t DimCount, IsMemoryStrategy Strategy = Spatial2DStrategy>
 struct BridgeView {
     // --- 8-Byte Block ---
     TParent* parent_head = nullptr;
@@ -34,142 +35,120 @@ struct BridgeView {
     const MemoryGrantPOD* parent_grant = nullptr;
     const MemoryGrantPOD* child_grant = nullptr;
 
+    // --- Dynamic Block (Size depends on DimCount) ---
+    BridgeMetadata<DimCount> bridge_info;
+
     // --- 4-Byte Block ---
     uint32_t parent_part_idx = 0;
     uint32_t child_part_idx = 0;
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
 
-    // --- Policy & Metadata ---
+    // --- Strategy Policy ---
     [[no_unique_address]] Strategy strategy;
-    BridgeMetadata<DimCount> bridge_info;
 
     // --- Capability Traits ---
-    static constexpr ViewCapability capabilities = 
-        ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::RANDOM_ACCESS | 
-        ViewCapability::COMPOSITE_VIEW |
-        (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
-
-    static constexpr bool is_spatial = Strategy::is_spatial;
+    static constexpr ViewCapability capabilities = ViewCapability::SPATIAL_ACCESS;
+    static constexpr bool is_spatial = true;
     static constexpr bool is_simd = false;
+    static constexpr uint32_t lane_width = 1;
 
     /**
      * is_valid
-     * Validates both grants and their respective versions.
+     * Validates dual-buffer states and global manager alignment.
      */
-    [[nodiscard]] inline bool is_valid() const {
-        if (!parent_grant || !child_grant || !parent_grant->active || !child_grant->active) return false;
+    [[nodiscard]] inline bool is_valid() const noexcept {
+        if (!parent_grant || !parent_grant->active || !child_grant || !child_grant->active) return false;
         
         const auto& p_part = parent_grant->parts[parent_part_idx];
         const auto& c_part = child_grant->parts[child_part_idx];
 
-        return (p_part.buffer_version_at_issue == baked_buffer_version &&
-                c_part.buffer_version_at_issue == baked_buffer_version);
+        if (p_part.buffer_version_at_issue != baked_buffer_version || 
+            c_part.buffer_version_at_issue != baked_buffer_version) return false;
+
+        if (parent_grant->global_manager_version_ptr && 
+            *parent_grant->global_manager_version_ptr != baked_manager_version) return false;
+
+        return p_part.selection.is_valid() && c_part.selection.is_valid();
     }
 
     /**
-     * compose_child_selection
-     * Generates a new SelectionPOD for the child buffer based on the parent's current selection.
-     * Note: This only supports RANGE and DENSE parents for O(1) composition. 
-     * SPARSE parents require a heap allocation for the new index list (handled by BufferManager).
+     * operator[] (C++23/26 Multidimensional Hierarchical Subscript)
+     * Accesses a specific child element localized to a parent's block.
+     * Usage: view[parent_idx, child_local_x, child_local_y]
      */
-    [[nodiscard]] inline MemoryBufferSelectionPOD compose_child_selection() const {
-        const auto& p_sel = parent_grant->parts[parent_part_idx].selection;
-        MemoryBufferSelectionPOD c_sel;
-
-        c_sel.mode = p_sel.mode;
-        c_sel.element_count = p_sel.element_count * bridge_info.child_cells_per_parent;
-        
-        if (p_sel.mode == SelectionMode::RANGE) {
-            c_sel.start_index = p_sel.start_index * bridge_info.child_cells_per_parent;
-        } else if (p_sel.mode == SelectionMode::DENSE) {
-            // Bitmask scaling: This is technically a "block-mask". 
-            // We reuse the parent mask; the consumer must understand that 1 bit = 1 parent block.
-            c_sel.data.bitmask = p_sel.data.bitmask;
-        } else if (p_sel.mode == SelectionMode::SPARSE) {
-            // Logic Error: BridgeView cannot self-allocate a new sparse index list.
-            // This must be requested via the MemoryManager to ensure tracking.
-            c_sel.mode = SelectionMode::RANGE;
-            c_sel.start_index = 0;
-            c_sel.element_count = 0; 
-        }
-
-        return c_sel;
-    }
-
-    /**
-     * operator[]
-     * Linear Access to the Parent element via Parent Selection.
-     */
+    template<typename... Coords>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline TParent& operator[](size_t p_selection_index) const {
-        const auto& part = parent_grant->parts[parent_part_idx];
-        const auto& selection = part.selection;
+    inline TChild& operator[](size_t p_parent_selection_idx, Coords... p_child_coords) const noexcept {
+        static_assert(sizeof...(Coords) == DimCount, "Child coordinate dimensions must exactly match the BridgeView DimCount!");
+        static_assert(Strategy::is_spatial, "BridgeView requires a Spatial Strategy!");
 
-        if (p_selection_index >= static_cast<size_t>(selection.element_count)) {
-            return *parent_head;
-        }
-
-        size_t actual_idx = selection.get_absolute_index(p_selection_index);
-        return *strategy.resolve(parent_head, actual_idx, part.element_stride, part.capacity_bytes);
-    }
-
-    /**
-     * get_child_base
-     * Returns the raw base pointer for the child block associated with a parent index.
-     */
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline uint8_t* get_child_base(size_t p_parent_selection_idx) const {
         const auto& p_part = parent_grant->parts[parent_part_idx];
+        const auto& p_selection = p_part.selection;
         const auto& c_part = child_grant->parts[child_part_idx];
-        
-        size_t abs_parent_idx = p_part.selection.get_absolute_index(p_parent_selection_idx);
-        
-        const size_t block_byte_offset = abs_parent_idx * bridge_info.child_cells_per_parent * c_part.element_stride;
-        return reinterpret_cast<uint8_t*>(child_head) + block_byte_offset;
-    }
+        const auto& c_selection = c_part.selection;
 
-    /**
-     * at_child
-     * Access a specific child element within a parent's block using spatial coordinates.
-     */
-    template<typename... Args>
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline TChild& at_child(size_t p_parent_selection_idx, Args... p_coords) const {
-        static_assert(sizeof...(Args) == DimCount, "Coord count mismatch.");
-        
-        uint8_t* child_block_ptr = get_child_base(p_parent_selection_idx);
-        const auto& c_part = child_grant->parts[child_part_idx];
+        // --- Tier 1: Parent Bounds Guarantee ---
+        #ifdef NDEBUG
+            [[assume(p_parent_selection_idx < static_cast<size_t>(p_selection.element_count))]];
+        #else
+            assert(p_parent_selection_idx < static_cast<size_t>(p_selection.element_count) && "BridgeView parent index out of bounds!");
+        #endif
 
-        TChild* resolved = nullptr;
-        if constexpr (sizeof...(Args) == 2) {
-            resolved = strategy.resolve_2d(reinterpret_cast<TChild*>(child_block_ptr), p_coords..., c_part.element_stride);
-        } else if constexpr (sizeof...(Args) == 3) {
-            resolved = strategy.resolve_3d(reinterpret_cast<TChild*>(child_block_ptr), p_coords..., c_part.element_stride);
+        size_t actual_parent_idx = 0;
+        switch (p_selection.mode) {
+            case SelectionMode::SPARSE: {
+                actual_parent_idx = static_cast<size_t>(p_selection.data.indices[p_parent_selection_idx]);
+                break;
+            }
+            case SelectionMode::DENSE: {
+                #ifdef NDEBUG
+                    [[assume(p_selection.is_selected(static_cast<int64_t>(p_parent_selection_idx)))]];
+                #else
+                    assert(p_selection.is_selected(static_cast<int64_t>(p_parent_selection_idx)) && "Accessed unselected DENSE parent index!");
+                #endif
+                actual_parent_idx = p_parent_selection_idx;
+                break;
+            }
+            case SelectionMode::RANGE: {
+                actual_parent_idx = static_cast<size_t>(p_selection.start_index) + p_parent_selection_idx;
+                break;
+            }
         }
-        
-        return *resolved;
-    }
 
-    /**
-     * size
-     * Returns the count of selected Parent elements.
-     */
-    [[nodiscard]] inline size_t size() const {
-        return static_cast<size_t>(parent_grant->parts[parent_part_idx].selection.element_count);
+        // Fast-path block arithmetic: Skip the full index resolution if possible
+        size_t block_byte_offset = actual_parent_idx * bridge_info.child_cells_per_parent * c_part.element_stride;
+        uint8_t* child_block_ptr = reinterpret_cast<uint8_t*>(child_head) + block_byte_offset;
+
+        // --- Tier 2: Child Spatial Resolution ---
+        int64_t child_flat_local_idx = 0;
+        if constexpr (sizeof...(Coords) == 2) {
+            child_flat_local_idx = strategy.get_index_2d(p_child_coords..., c_part.element_stride);
+        } else if constexpr (sizeof...(Coords) == 3) {
+            child_flat_local_idx = strategy.get_index_3d(p_child_coords..., c_part.element_stride);
+        } else if constexpr (sizeof...(Coords) == 4) {
+            child_flat_local_idx = strategy.get_index_4d(p_child_coords..., c_part.element_stride);
+        }
+
+        int64_t global_child_flat_idx = static_cast<int64_t>(actual_parent_idx * bridge_info.child_cells_per_parent) + child_flat_local_idx;
+
+        #ifdef NDEBUG
+            [[assume(c_selection.is_selected(global_child_flat_idx))]];
+        #else
+            assert(c_selection.is_selected(global_child_flat_idx) && "Bridge child access outside child selection mask!");
+        #endif
+
+        if constexpr (sizeof...(Coords) == 2) {
+            return *strategy.resolve_2d(reinterpret_cast<TChild*>(child_block_ptr), p_child_coords..., c_part.element_stride);
+        } else if constexpr (sizeof...(Coords) == 3) {
+            return *strategy.resolve_3d(reinterpret_cast<TChild*>(child_block_ptr), p_child_coords..., c_part.element_stride);
+        } else if constexpr (sizeof...(Coords) == 4) {
+            return *strategy.resolve_4d(reinterpret_cast<TChild*>(child_block_ptr), p_child_coords..., c_part.element_stride);
+        }
     }
 };
 

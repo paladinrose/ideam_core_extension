@@ -6,6 +6,7 @@
 #include "view_traits.h"
 #include <cstdint>
 #include <type_traits>
+#include <cassert>
 
 namespace ideam::core {
 
@@ -13,20 +14,24 @@ namespace ideam::core {
  * SparseSetView<T, Strategy>
  * Hybrid ECS layout. O(1) ID lookups + Cache-Friendly O(N) iteration.
  * Access is strictly bound to the MemoryBufferSelectionPOD.
- * Selection logic is applied to the DENSE index for iteration and the SPARSE lookup for spatial/ID access.
+ * * [C++26 Enabled]: Multidimensional Subscripts and [[assume]] attributes.
  */
-template<typename T, typename Strategy = FlatStrategy>
+template<typename T, IsMemoryStrategy Strategy = FlatStrategy>
 struct SparseSetView {
-    // --- 8-Byte Block ---
+    // --- 8-Byte Block (32 Bytes) ---
     T* data_ptr = nullptr;           // Primary Data (Packed/Dense)
     uint32_t* sparse_ptr = nullptr;  // Secondary Index (Sparse)
     uint32_t* dense_ptr = nullptr;   // Tertiary ID List (Dense)
     const MemoryGrantPOD* grant = nullptr;
 
-    // --- 4-Byte Block ---
+    // --- 4-Byte Block (12 Bytes) ---
     uint32_t grant_part_index = 0;
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
+
+    // --- Explicit Alignment Padding (4 Bytes) ---
+    // Locks the base members to exactly 48 bytes (perfect 16-byte multiple).
+    uint8_t reserved_padding[4] = {0};
 
     // --- Strategy Policy ---
     [[no_unique_address]] Strategy strategy;
@@ -43,9 +48,8 @@ struct SparseSetView {
 
     /**
      * is_valid
-     * Standard reactive version check.
      */
-    [[nodiscard]] inline bool is_valid() const {
+    [[nodiscard]] inline bool is_valid() const noexcept {
         if (!grant || !grant->active) return false;
         if (grant_part_index >= grant->part_count) return false;
 
@@ -57,146 +61,137 @@ struct SparseSetView {
     }
 
     /**
-     * contains
-     * Checks if a global Entity ID exists within this sparse set and is selected.
+     * operator[] (C++23/26 Multidimensional Subscript)
+     * 1D: Cache-friendly Dense Iteration.
+     * ND: Spatial Entity ID Lookup.
      */
+    template<typename... Coords>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline bool contains(uint32_t p_entity_id) const {
-        const auto& part = grant->parts[grant_part_index];
-        const uint32_t dense_idx = sparse_ptr[p_entity_id];
-        
-        // Basic sparse set validation
-        bool exists = dense_idx < static_cast<uint32_t>(part.element_count) && dense_ptr[dense_idx] == p_entity_id;
-        if (!exists) return false;
-
-        // Selection validation: Is the dense index part of the current selection?
-        return part.selection.is_selected(static_cast<int64_t>(dense_idx));
-    }
-
-    /**
-     * at (Spatial Lookup)
-     * Translates coordinates to an ID via Strategy (applied to sparse array), then retrieves the data.
-     */
-    template<typename... Args>
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T& at(Args... p_coords) const {
-        const auto& part = grant->parts[grant_part_index];
-        
-        // 1. Resolve coordinates to a physical Entity ID via the strategy acting on the sparse array.
-        uint32_t* id_ptr = nullptr;
-        if constexpr (sizeof...(Args) == 1) {
-            id_ptr = strategy.resolve(sparse_ptr, static_cast<size_t>(p_coords...), sizeof(uint32_t), part.capacity_bytes);
-        } else if constexpr (sizeof...(Args) == 2) {
-            id_ptr = strategy.resolve_2d(sparse_ptr, p_coords..., sizeof(uint32_t));
-        } else if constexpr (sizeof...(Args) == 3) {
-            id_ptr = strategy.resolve_3d(sparse_ptr, p_coords..., sizeof(uint32_t));
-        } else if constexpr (sizeof...(Args) == 4) {
-            id_ptr = strategy.resolve_4d(sparse_ptr, p_coords..., sizeof(uint32_t));
-        }
-
-        // 2. Retrieve via the Entity ID found at that location
-        return get_by_id(*id_ptr);
-    }
-
-    /**
-     * get_by_id
-     * Returns the data for a specific Entity ID, guarded by Selection.
-     */
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T& get_by_id(uint32_t p_entity_id) const {
-        const auto& part = grant->parts[grant_part_index];
-        const uint32_t dense_idx = sparse_ptr[p_entity_id];
-
-        if (!part.selection.is_selected(static_cast<int64_t>(dense_idx))) {
-            return *data_ptr;
-        }
-
-        return data_ptr[dense_idx];
-    }
-
-    /**
-     * operator[]
-     * Selection-Relative Linear Access.
-     * Accesses data by its DENSE index relative to the SelectionPOD.
-     */
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T& operator[](size_t p_selection_index) const {
+    inline T& operator[](Coords... p_coords) const noexcept {
         const auto& part = grant->parts[grant_part_index];
         const auto& selection = part.selection;
 
-        if (p_selection_index >= static_cast<size_t>(selection.element_count)) {
-            return *data_ptr;
-        }
+        // --- 1D LINEAR (DENSE ITERATION) ---
+        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+            size_t p_selection_index = static_cast<size_t>((p_coords)...);
 
-        size_t actual_dense_index = 0;
-        switch (selection.mode) {
-            case SelectionMode::SPARSE:
-                actual_dense_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
-                break;
-            case SelectionMode::DENSE:
-                actual_dense_index = p_selection_index;
-                break;
-            case SelectionMode::RANGE:
-                actual_dense_index = static_cast<size_t>(selection.start_index) + p_selection_index;
-                break;
-        }
+            #ifdef NDEBUG
+                [[assume(p_selection_index < static_cast<size_t>(selection.element_count))]];
+            #else
+                assert(p_selection_index < static_cast<size_t>(selection.element_count) && "SparseSetView out of bounds!");
+            #endif
 
-        // Redundant check for DENSE mode to ensure selection bitmask compliance
-        if (!selection.is_selected(static_cast<int64_t>(actual_dense_index))) {
-            return *data_ptr;
-        }
+            size_t actual_dense_index = 0;
+            switch (selection.mode) {
+                case SelectionMode::SPARSE:
+                    actual_dense_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
+                    break;
+                case SelectionMode::DENSE:
+                    #ifdef NDEBUG
+                        [[assume(selection.is_selected(static_cast<int64_t>(p_selection_index)))]];
+                    #else
+                        assert(selection.is_selected(static_cast<int64_t>(p_selection_index)) && "Accessed unselected DENSE index!");
+                    #endif
+                    actual_dense_index = p_selection_index;
+                    break;
+                case SelectionMode::RANGE:
+                    actual_dense_index = static_cast<size_t>(selection.start_index) + p_selection_index;
+                    break;
+            }
 
-        return data_ptr[actual_dense_index];
+            if constexpr (std::is_empty_v<Strategy>) {
+                return *Strategy::template resolve<T>(data_ptr, actual_dense_index, part.element_stride, part.capacity_bytes);
+            } else {
+                return *strategy.template resolve<T>(data_ptr, actual_dense_index, part.element_stride, part.capacity_bytes);
+            }
+        }
+        // --- N-DIMENSIONAL SPATIAL ACCESS (SPARSE LOOKUP) ---
+        else if constexpr (sizeof...(Coords) > 1 && Strategy::is_spatial) {
+            int64_t spatial_entity_id = 0;
+            
+            if constexpr (sizeof...(Coords) == 2) {
+                spatial_entity_id = strategy.get_index_2d(p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 3) {
+                spatial_entity_id = strategy.get_index_3d(p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 4) {
+                spatial_entity_id = strategy.get_index_4d(p_coords..., part.element_stride);
+            }
+
+            // O(1) Lookup: Map spatial Entity ID to Dense Index
+            uint32_t dense_idx = sparse_ptr[spatial_entity_id];
+
+            #ifdef NDEBUG
+                [[assume(selection.is_selected(dense_idx))]];
+            #else
+                assert(selection.is_selected(dense_idx) && "Spatial ID is not within the current selection!");
+            #endif
+
+            if constexpr (std::is_empty_v<Strategy>) {
+                return *Strategy::template resolve<T>(data_ptr, dense_idx, part.element_stride, part.capacity_bytes);
+            } else {
+                return *strategy.template resolve<T>(data_ptr, dense_idx, part.element_stride, part.capacity_bytes);
+            }
+        }
+        else {
+            static_assert(sizeof...(Coords) < 0, "Invalid coordinate dimensions for SparseSetView Strategy!");
+        }
+    }
+
+    /**
+     * by_id
+     * Direct O(1) Sparse Lookup for a specific Entity ID.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T& by_id(uint32_t p_entity_id) const noexcept {
+        uint32_t dense_idx = sparse_ptr[p_entity_id];
+        const auto& part = grant->parts[grant_part_index];
+
+        #ifdef NDEBUG
+            [[assume(part.selection.is_selected(dense_idx))]];
+        #else
+            assert(part.selection.is_selected(dense_idx) && "Entity ID is not in the active selection!");
+        #endif
+
+        if constexpr (std::is_empty_v<Strategy>) {
+            return *Strategy::template resolve<T>(data_ptr, dense_idx, part.element_stride, part.capacity_bytes);
+        } else {
+            return *strategy.template resolve<T>(data_ptr, dense_idx, part.element_stride, part.capacity_bytes);
+        }
     }
 
     /**
      * get_entity_at
-     * Returns the global Entity ID at a specific selection index.
+     * Returns the global Entity ID at a specific selection index (useful during dense iteration).
      */
-    inline uint32_t get_entity_at(size_t p_selection_index) const {
-        const auto& part = grant->parts[grant_part_index];
-        const auto& selection = part.selection;
-
-        if (p_selection_index >= static_cast<size_t>(selection.element_count)) {
-            return 0; // Reserved/Null ID
-        }
+    inline uint32_t get_entity_at(size_t p_selection_index) const noexcept {
+        const auto& selection = grant->parts[grant_part_index].selection;
+        
+        #ifdef NDEBUG
+            [[assume(p_selection_index < static_cast<size_t>(selection.element_count))]];
+        #else
+            assert(p_selection_index < static_cast<size_t>(selection.element_count) && "Out of bounds entity lookup!");
+        #endif
 
         size_t actual_dense_index = 0;
-        if (selection.mode == SelectionMode::SPARSE) {
-            actual_dense_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
-        } else if (selection.mode == SelectionMode::RANGE) {
-            actual_dense_index = static_cast<size_t>(selection.start_index) + p_selection_index;
-        } else {
-            actual_dense_index = p_selection_index;
+        switch (selection.mode) {
+            case SelectionMode::SPARSE: actual_dense_index = static_cast<size_t>(selection.data.indices[p_selection_index]); break;
+            case SelectionMode::DENSE:  actual_dense_index = p_selection_index; break;
+            case SelectionMode::RANGE:  actual_dense_index = static_cast<size_t>(selection.start_index) + p_selection_index; break;
         }
 
         return dense_ptr[actual_dense_index];
     }
-
-    /**
-     * size
-     * Returns the number of selected elements currently visible.
-     */
-    [[nodiscard]] inline size_t size() const {
-        return static_cast<size_t>(grant->parts[grant_part_index].selection.element_count);
-    }
 };
+
+static_assert(sizeof(SparseSetView<int, FlatStrategy>) == 48, "SparseSetView base layout alignment failed!");
 
 } // namespace ideam::core
 

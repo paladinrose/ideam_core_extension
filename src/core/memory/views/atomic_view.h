@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 #include <type_traits>
+#include <cassert>
 
 namespace ideam::core {
 
@@ -14,9 +15,10 @@ namespace ideam::core {
  * AtomicView<T, Strategy>
  * A thread-safe accessor for shared buffers.
  * Access is strictly bound to the MemoryBufferSelectionPOD.
- * Only supports types valid for std::atomic (trivially copyable).
+ * Only supports types valid for std::atomic_ref (trivially copyable).
+ * * [C++26 Enabled]: Utilizes Multidimensional Subscripts and [[assume]] attributes.
  */
-template<typename T, typename Strategy = FlatStrategy>
+template<typename T, IsMemoryStrategy Strategy = FlatStrategy>
 struct AtomicView {
     static_assert(std::is_trivially_copyable_v<T>, "AtomicView requires trivially copyable types.");
 
@@ -28,6 +30,10 @@ struct AtomicView {
     uint32_t grant_part_index = 0;
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
+
+    // --- Explicit Alignment Padding ---
+    // Locks the base members to exactly 32 bytes (half a cache line).
+    uint8_t reserved_padding[4] = {0};
 
     // --- Strategy Policy ---
     [[no_unique_address]] Strategy strategy;
@@ -46,7 +52,7 @@ struct AtomicView {
      * is_valid
      * Reactive version check.
      */
-    [[nodiscard]] inline bool is_valid() const {
+    [[nodiscard]] inline bool is_valid() const noexcept {
         if (!grant || !grant->active) return false;
         if (grant_part_index >= grant->part_count) return false;
 
@@ -58,135 +64,97 @@ struct AtomicView {
     }
 
     /**
-     * operator[]
-     * Selection-Relative Linear Access.
-     * Provides a standard reference to the atomic element for linear processing.
+     * operator[] (C++23/26 Multidimensional Subscript)
+     * Unified access for both 1D Linear arrays and ND Spatial Grids.
+     * Returns a C++20 std::atomic_ref for safe, zero-overhead atomic operations on raw memory.
      */
+    template<typename... Coords>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline std::atomic<T>& operator[](size_t p_selection_index) const {
+    inline std::atomic_ref<T> operator[](Coords... p_coords) const noexcept {
         const auto& part = grant->parts[grant_part_index];
         const auto& selection = part.selection;
 
-        if (p_selection_index >= static_cast<size_t>(selection.element_count)) {
-            return *reinterpret_cast<std::atomic<T>*>(head_ptr);
-        }
+        // --- 1D LINEAR ACCESS PATH ---
+        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+            size_t p_selection_index = static_cast<size_t>((p_coords)...);
+            
+            #ifdef NDEBUG
+                [[assume(p_selection_index < static_cast<size_t>(selection.element_count))]];
+            #else
+                assert(p_selection_index < static_cast<size_t>(selection.element_count) && "AtomicView out of bounds!");
+            #endif
 
-        size_t actual_buffer_index = 0;
-        switch (selection.mode) {
-            case SelectionMode::SPARSE: {
-                actual_buffer_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
-                break;
-            }
-            case SelectionMode::DENSE: {
-                if (!selection.is_selected(static_cast<int64_t>(p_selection_index))) {
-                    return *reinterpret_cast<std::atomic<T>*>(head_ptr);
+            size_t actual_buffer_index = 0;
+            switch (selection.mode) {
+                case SelectionMode::SPARSE: {
+                    actual_buffer_index = static_cast<size_t>(selection.data.indices[p_selection_index]);
+                    break;
                 }
-                actual_buffer_index = p_selection_index;
-                break;
+                case SelectionMode::DENSE: {
+                    #ifdef NDEBUG
+                        [[assume(selection.is_selected(static_cast<int64_t>(p_selection_index)))]];
+                    #else
+                        assert(selection.is_selected(static_cast<int64_t>(p_selection_index)) && "Accessed unselected DENSE index!");
+                    #endif
+                    actual_buffer_index = p_selection_index;
+                    break;
+                }
+                case SelectionMode::RANGE: {
+                    actual_buffer_index = static_cast<size_t>(selection.start_index) + p_selection_index;
+                    break;
+                }
             }
-            case SelectionMode::RANGE: {
-                actual_buffer_index = static_cast<size_t>(selection.start_index) + p_selection_index;
-                break;
+
+            T* resolved = nullptr;
+            if constexpr (std::is_empty_v<Strategy>) {
+                resolved = Strategy::template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
+            } else {
+                resolved = strategy.template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
             }
+            
+            return std::atomic_ref<T>(*resolved);
+        } 
+        // --- N-DIMENSIONAL SPATIAL ACCESS PATH ---
+        else if constexpr (sizeof...(Coords) > 1 && Strategy::is_spatial) {
+            int64_t flat_idx = 0;
+            
+            if constexpr (sizeof...(Coords) == 2) {
+                flat_idx = strategy.get_index_2d(p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 3) {
+                flat_idx = strategy.get_index_3d(p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 4) {
+                flat_idx = strategy.get_index_4d(p_coords..., part.element_stride);
+            }
+
+            // C++26 Optimizer Hinting
+            #ifdef NDEBUG
+                [[assume(selection.is_selected(flat_idx))]];
+            #else
+                assert(selection.is_selected(flat_idx) && "Spatial Atomic access outside selection mask!");
+            #endif
+
+            T* resolved = nullptr;
+            if constexpr (sizeof...(Coords) == 2) {
+                resolved = strategy.resolve_2d(head_ptr, p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 3) {
+                resolved = strategy.resolve_3d(head_ptr, p_coords..., part.element_stride);
+            } else if constexpr (sizeof...(Coords) == 4) {
+                resolved = strategy.resolve_4d(head_ptr, p_coords..., part.element_stride);
+            }
+
+            return std::atomic_ref<T>(*resolved);
+        } 
+        else {
+            static_assert(sizeof...(Coords) < 0, "Invalid coordinate dimensions provided for the assigned View Strategy!");
         }
-
-        T* resolved = nullptr;
-        if constexpr (std::is_empty_v<Strategy>) {
-            resolved = Strategy::template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
-        } else {
-            resolved = strategy.template resolve<T>(head_ptr, actual_buffer_index, part.element_stride, part.capacity_bytes);
-        }
-        return *reinterpret_cast<std::atomic<T>*>(resolved);
-    }
-
-    /**
-     * add
-     * Atomically adds a value to the element at the specified coordinates/index.
-     */
-    template<typename... Args>
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline void add(T p_value, Args... p_coords) const {
-        auto* atom = _get_atomic(p_coords...);
-        if (atom) atom->fetch_add(p_value, std::memory_order_relaxed);
-    }
-
-    /**
-     * store
-     * Atomic set operation.
-     */
-    template<typename... Args>
-    inline void store(T p_value, Args... p_coords) const {
-        auto* atom = _get_atomic(p_coords...);
-        if (atom) atom->store(p_value, std::memory_order_release);
-    }
-
-    /**
-     * load
-     * Atomic get operation.
-     */
-    template<typename... Args>
-    inline T load(Args... p_coords) const {
-        auto* atom = _get_atomic(p_coords...);
-        return atom ? atom->load(std::memory_order_acquire) : T{};
-    }
-
-    /**
-     * compare_exchange
-     * Strong atomic swap/check.
-     */
-    template<typename... Args>
-    inline bool compare_exchange(T& r_expected, T p_desired, Args... p_coords) const {
-        auto* atom = _get_atomic(p_coords...);
-        return atom ? atom->compare_exchange_strong(r_expected, p_desired) : false;
-    }
-
-private:
-    /**
-     * _get_atomic
-     * Internal helper to resolve strategy-based pointer and verify selection.
-     * Returns nullptr if the requested coordinate is outside the selection grant.
-     */
-    template<typename... Args>
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline std::atomic<T>* _get_atomic(Args... p_coords) const {
-        const auto& part = grant->parts[grant_part_index];
-        const auto& selection = part.selection;
-        T* ptr = nullptr;
-        int64_t flat_idx = 0;
-
-        if constexpr (sizeof...(Args) == 1) {
-            flat_idx = static_cast<int64_t>((p_coords)...);
-            ptr = strategy.resolve(head_ptr, static_cast<size_t>(flat_idx), part.element_stride, part.capacity_bytes);
-        } else if constexpr (sizeof...(Args) == 2) {
-            flat_idx = strategy.get_index_2d(p_coords..., part.element_stride);
-            ptr = strategy.resolve_2d(head_ptr, p_coords..., part.element_stride);
-        } else if constexpr (sizeof...(Args) == 3) {
-            flat_idx = strategy.get_index_3d(p_coords..., part.element_stride);
-            ptr = strategy.resolve_3d(head_ptr, p_coords..., part.element_stride);
-        } else if constexpr (sizeof...(Args) == 4) {
-            flat_idx = strategy.get_index_4d(p_coords..., part.element_stride);
-            ptr = strategy.resolve_4d(head_ptr, p_coords..., part.element_stride);
-        }
-
-        if (!selection.is_selected(flat_idx)) {
-            return nullptr;
-        }
-
-        return reinterpret_cast<std::atomic<T>*>(ptr);
     }
 };
+
+static_assert(sizeof(AtomicView<int, FlatStrategy>) == 32, "AtomicView base layout alignment failed!");
 
 } // namespace ideam::core
 

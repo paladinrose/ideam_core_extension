@@ -2,6 +2,7 @@
 #define IDEAM_CORE_MEMORY_BUFFER_SELECTION_POD_H
 
 #include "memory_common.h"
+#include <cstdint>
 
 namespace ideam::core {
 
@@ -19,11 +20,11 @@ enum class SelectionMode : uint8_t {
  * MemoryBufferSelectionPOD
  * A synthesized DOD handle. Represents a filtered subset of a MemoryBuffer.
  * Designed for SIMD-aligned bitset collision and Reactive Graph propagation.
+ * Fixed at exactly 96 bytes to ensure parent Grants align to CPU cache lines.
  */
 struct MemoryBufferSelectionPOD {
     // --- 8-Byte Alignment Block (Pointers & 64-bit Ints) ---
-    // These are grouped at the top to ensure no padding is required between members.
-    
+    // Total: 88 bytes. Grouped to prevent internal structure fragmentation.
     uint64_t buffer_version = 0;     // Snapshot of BufferPOD.version
     uint64_t manager_version = 0;    // Snapshot of Manager.version (detects rebases)
     uint64_t selection_version = 0;  // Self-version for downstream memoization
@@ -36,25 +37,29 @@ struct MemoryBufferSelectionPOD {
     // These pointers are volatile; validity is tied to manager_version.
     union {
         void* raw_data;
-        int64_t* indices;  // Valid if mode == SPARSE
+        int64_t* indices;   // Valid if mode == SPARSE
         uint64_t* bitset;   // Valid if mode == DENSE (SIMD padded)
-    } data;
+    } data = {nullptr};
 
     // --- Metadata SoA (Parallel Streams) ---
-    // All pointers are 8 bytes on x64; grouping them maintains cache locality for the handle itself.
+    // All pointers are 8 bytes on x64; grouping them maintains cache locality.
     int64_t* partition_ids = nullptr;
     uint32_t* group_masks  = nullptr;
-    uint32_t* version_tags  = nullptr;
+    uint32_t* version_tags = nullptr;
     uint8_t* lod_levels    = nullptr;
 
     // --- 4-Byte Alignment Block ---
+    // Total: 4 bytes.
     uint32_t target_buffer_id = 0;   // The buffer this selection targets
 
     // --- 1-Byte Alignment Block ---
-    // These are placed at the end to minimize the trailing padding required 
-    // to round the struct size to the nearest 8-byte multiple.
+    // Total: 2 bytes. 
     SelectionMode mode = SelectionMode::SPARSE;
     BufferAlignmentMode alignment = BufferAlignmentMode::STD430;
+
+    // --- Explicit Tail Padding ---
+    // Replaces 2 bytes of implicit compiler padding to cap the struct at exactly 96 bytes.
+    uint8_t reserved_padding[2] = {0};
 
     /**
      * is_selected
@@ -72,7 +77,7 @@ struct MemoryBufferSelectionPOD {
             }
             case SelectionMode::SPARSE: {
                 // O(N) search: Not recommended for hot-path 'is_selected' checks.
-                // Use a View for linear iteration instead.
+                // Use a SparseSetView for linear iteration instead.
                 return false; 
             }
         }
@@ -87,6 +92,10 @@ struct MemoryBufferSelectionPOD {
         return (mode == SelectionMode::RANGE || data.raw_data != nullptr) && target_buffer_id != 0;
     }
 };
+
+// Compile-Time Defenses: Lock the exact memory footprints
+static_assert(sizeof(MemoryBufferSelectionPOD) % 8 == 0, "MemoryBufferSelectionPOD alignment violated!");
+static_assert(sizeof(MemoryBufferSelectionPOD) == 96, "MemoryBufferSelectionPOD size altered from expected 96 bytes!");
 
 } // namespace ideam::core
 
