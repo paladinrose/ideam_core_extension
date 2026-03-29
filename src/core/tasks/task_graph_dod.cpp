@@ -1,6 +1,7 @@
 #include "task_graph_dod.h"
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <cstring>
+#include <array>
 
 namespace ideam::core {
 
@@ -15,9 +16,10 @@ NodeID TaskGraphDOD::add_task_node(TaskTypeDOD p_type) {
         task_types.resize(id + 1);
         cpu_metadata.resize(id + 1);
         gpu_metadata.resize(id + 1);
-        input_port_map.resize(id + 1);
-        output_port_map.resize(id + 1);
-        port_constants.resize(id + 1);
+        
+        input_port_meta.resize(id + 1);
+        output_port_meta.resize(id + 1);
+        constant_port_meta.resize(id + 1);
         baked_connections.resize(id + 1);
     }
 
@@ -25,16 +27,10 @@ NodeID TaskGraphDOD::add_task_node(TaskTypeDOD p_type) {
     return id;
 }
 
-void TaskGraphDOD::configure_cpu_task(NodeID p_id, godot::Object* p_target, const std::string& p_method) {
+void TaskGraphDOD::configure_cpu_task(NodeID p_id, godot::Object* p_target, const godot::StringName& p_method) {
     if (p_id < cpu_metadata.size()) {
         cpu_metadata[p_id].reflection_target = p_target;
         cpu_metadata[p_id].execution_method = p_method;
-    }
-}
-
-void TaskGraphDOD::configure_native_interface(NodeID p_id, INativeTask* p_interface) {
-    if (p_id < cpu_metadata.size()) {
-        cpu_metadata[p_id].native_interface = static_cast<void*>(p_interface);
     }
 }
 
@@ -47,21 +43,36 @@ void TaskGraphDOD::configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32
     }
 }
 
-void TaskGraphDOD::set_port_mapping(NodeID p_id, bool p_input, uint32_t p_port_idx, DataType p_type, uint32_t p_buffer_id) {
-    auto& map = p_input ? input_port_map[p_id] : output_port_map[p_id];
-    if (p_port_idx >= map.size()) map.resize(p_port_idx + 1);
+void TaskGraphDOD::configure_native_interface(NodeID p_id, INativeTask* p_interface) {
+    if (p_id < cpu_metadata.size()) {
+        cpu_metadata[p_id].native_interface = p_interface;
+    }
+}
+
+void TaskGraphDOD::set_port_mappings(NodeID p_id, bool p_input, std::span<const TaskPortMetadata> p_mappings) {
+    if (p_id >= build_nodes.size() || build_nodes.id[p_id] == INVALID_ID) return;
+
+    auto& meta_array = p_input ? input_port_meta : output_port_meta;
+    auto& data_array = p_input ? input_port_data : output_port_data;
+
+    if (p_id >= meta_array.size()) meta_array.resize(build_nodes.size());
+
+    meta_array[p_id].offset = static_cast<uint32_t>(data_array.size());
+    meta_array[p_id].count = static_cast<uint32_t>(p_mappings.size());
     
-    map[p_port_idx].type = p_type;
-    map[p_port_idx].buffer_id = p_buffer_id;
-    map[p_port_idx].byte_size = MemoryUtilities::get_type_byte_size(p_type, BufferAlignmentMode::TIGHT);
-    
+    data_array.insert(data_array.end(), p_mappings.begin(), p_mappings.end());
     dirty_flags |= RESOURCES;
 }
 
-void TaskGraphDOD::set_port_constant(NodeID p_id, uint32_t p_port_idx, const godot::Variant& p_value) {
-    if (p_id >= port_constants.size()) return;
-    if (p_port_idx >= port_constants[p_id].size()) port_constants[p_id].resize(p_port_idx + 1);
-    port_constants[p_id][p_port_idx] = p_value;
+void TaskGraphDOD::set_port_constants(NodeID p_id, std::span<const godot::Variant> p_constants) {
+    if (p_id >= build_nodes.size() || build_nodes.id[p_id] == INVALID_ID) return;
+
+    if (p_id >= constant_port_meta.size()) constant_port_meta.resize(build_nodes.size());
+
+    constant_port_meta[p_id].offset = static_cast<uint32_t>(constant_port_data.size());
+    constant_port_meta[p_id].count = static_cast<uint32_t>(p_constants.size());
+    
+    constant_port_data.insert(constant_port_data.end(), p_constants.begin(), p_constants.end());
 }
 
 MemoryGrantPOD* TaskGraphDOD::get_grant_mutable(NodeID p_id) {
@@ -88,33 +99,42 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
 
     manager->flush_gpu_updates();
 
-    // Access wave topology
+    // Access wave topology using branchless PagedViews
     MemoryGrantPOD wave_grant;
-    if (!manager->bake_grant(wave_grant, {
+    std::array<GrantPartPOD, 2> wave_reqs = {{
         {.buffer_id = wave_node_id, .access_mode = BufferAccessMode::READ},
         {.buffer_id = wave_meta_id, .access_mode = BufferAccessMode::READ}
-    })) return;
+    }};
 
-    NodeID* all_nodes = reinterpret_cast<NodeID*>(wave_grant.parts[0].raw_base_ptr);
-    WaveInfo* wave_meta = reinterpret_cast<WaveInfo*>(wave_grant.parts[1].raw_base_ptr);
+    if (!manager->bake_grant(wave_grant, wave_reqs)) return;
+
+    auto n_view = _get_paged_view<NodeID, FlatStrategy>(wave_grant, 0);
+    auto m_view = _get_paged_view<WaveInfo, FlatStrategy>(wave_grant, 1);
     
-    // Derive wave count from buffer size
     const MemoryBufferPOD* m_buf = manager->get_buffer(wave_meta_id);
     uint32_t wave_count = (m_buf) ? static_cast<uint32_t>(m_buf->capacity_bytes / sizeof(WaveInfo)) : 0;
 
+    std::vector<NodeID> current_wave_nodes;
+
     for (uint32_t w = 0; w < wave_count; ++w) {
-        NodeID* wave_nodes = all_nodes + wave_meta[w].offset;
-        uint32_t count = wave_meta[w].count;
+        WaveInfo wave = m_view[w];
+        if (wave.count == 0) break; 
+
+        // Extract nodes from PagedView to a contiguous buffer for batch processing
+        current_wave_nodes.resize(wave.count);
+        for (uint32_t i = 0; i < wave.count; ++i) {
+            current_wave_nodes[i] = n_view[wave.offset + i];
+        }
 
         // Step 2: Clean selections for the whole wave before execution
-        for (uint32_t i = 0; i < count; ++i) {
-            _clean_selections(wave_nodes[i]);
+        for (uint32_t i = 0; i < wave.count; ++i) {
+            _clean_selections(current_wave_nodes[i]);
         }
 
         // 3-Phase Process
-        _batch_setup_wave(wave_nodes, count);
-        _batch_execute_wave(wave_nodes, count, p_delta);
-        _batch_resolve_wave(wave_nodes, count);
+        _batch_setup_wave(current_wave_nodes.data(), wave.count);
+        _batch_execute_wave(current_wave_nodes.data(), wave.count, p_delta);
+        _batch_resolve_wave(current_wave_nodes.data(), wave.count);
     }
 
     manager->release_grant(wave_grant);
@@ -129,20 +149,14 @@ void TaskGraphDOD::_clean_selections(NodeID p_id) {
 
     TaskTypeDOD type = task_types[p_id];
     
-    // Only Native CPU or Query Culler tasks can perform selection cleaning
     if (type == TaskTypeDOD::NATIVE_CPU || type == TaskTypeDOD::QUERY_CULLER) {
         TaskCPUMetadata& cpu_meta = cpu_metadata[p_id];
         if (cpu_meta.native_interface) {
-            INativeTask* task = static_cast<INativeTask*>(cpu_meta.native_interface);
-            
-            // Phase 0: Culling. The task uses dirty_parts_mask to know which 
-            // GrantParts' MemoryBufferSelectionPODs need refinement.
-            TaskContextPOD ctx{ 0.0, grant }; 
-            task->cull_selections(ctx, meta->dirty_parts_mask);
+            TaskContextPOD ctx{ 0.0, grant, manager }; 
+            cpu_meta.native_interface->cull_selections(ctx, meta->dirty_parts_mask);
         }
     }
 
-    // Mark as clean so we don't re-run query kernels until next fork or invalidation
     meta->dirty_parts_mask = 0;
 }
 
@@ -156,11 +170,16 @@ void TaskGraphDOD::_bake_port_connections() {
         const MemoryGrantPOD* dst_grant = get_grant(edge.to_node);
         if (!src_grant || !dst_grant) continue;
 
-        if (edge.from_port >= output_port_map[edge.from_node].size() || 
-            edge.to_port >= input_port_map[edge.to_node].size()) continue;
+        if (edge.from_node >= output_port_meta.size() || edge.to_node >= input_port_meta.size()) continue;
 
-        TaskPortMetadata& out_meta = output_port_map[edge.from_node][edge.from_port];
-        TaskPortMetadata& in_meta = input_port_map[edge.to_node][edge.to_port];
+        TaskPortOffsets out_offsets = output_port_meta[edge.from_node];
+        TaskPortOffsets in_offsets = input_port_meta[edge.to_node];
+
+        if (edge.from_port >= out_offsets.count || edge.to_port >= in_offsets.count) continue;
+
+        // Extract data using CSR offsets
+        TaskPortMetadata& out_meta = output_port_data[out_offsets.offset + edge.from_port];
+        TaskPortMetadata& in_meta = input_port_data[in_offsets.offset + edge.to_port];
 
         TaskPortConnectionDOD conn;
         conn.byte_size = in_meta.byte_size;
@@ -180,6 +199,7 @@ void TaskGraphDOD::_bake_port_connections() {
         }
 
         if (conn.src_ptr && conn.dst_ptr) {
+            if (edge.to_node >= baked_connections.size()) baked_connections.resize(edge.to_node + 1);
             baked_connections[edge.to_node].push_back(conn);
         }
     }
@@ -189,22 +209,31 @@ void TaskGraphDOD::_batch_setup_wave(const NodeID* p_nodes, uint32_t p_count) {
     for (uint32_t i = 0; i < p_count; ++i) {
         NodeID id = p_nodes[i];
         
-        for (const auto& conn : baked_connections[id]) {
-            std::memcpy(conn.dst_ptr, conn.src_ptr, conn.byte_size);
+        if (id < baked_connections.size()) {
+            for (const auto& conn : baked_connections[id]) {
+                std::memcpy(conn.dst_ptr, conn.src_ptr, conn.byte_size);
+            }
         }
 
         const MemoryGrantPOD* grant = get_grant(id);
         if (!grant) continue;
 
-        const auto& ports = input_port_map[id];
-        const auto& constants = port_constants[id];
+        if (id >= input_port_meta.size() || id >= constant_port_meta.size()) continue;
 
-        for (uint32_t p_idx = 0; p_idx < ports.size(); ++p_idx) {
-            if (p_idx >= constants.size() || constants[p_idx].get_type() == godot::Variant::NIL) continue;
+        TaskPortOffsets in_meta = input_port_meta[id];
+        TaskPortOffsets const_meta = constant_port_meta[id];
+
+        for (uint32_t p_idx = 0; p_idx < in_meta.count; ++p_idx) {
+            if (p_idx >= const_meta.count) break;
+
+            const godot::Variant& var = constant_port_data[const_meta.offset + p_idx];
+            if (var.get_type() == godot::Variant::NIL) continue;
             
+            const TaskPortMetadata& port = input_port_data[in_meta.offset + p_idx];
+
             for (uint32_t g_part = 0; g_part < grant->part_count; ++g_part) {
-                if (grant->parts[g_part].buffer_id == ports[p_idx].buffer_id) {
-                    _variant_to_raw(constants[p_idx], grant->parts[g_part].raw_base_ptr, ports[p_idx].type);
+                if (grant->parts[g_part].buffer_id == port.buffer_id) {
+                    _variant_to_raw(var, grant->parts[g_part].raw_base_ptr, port.type);
                     break;
                 }
             }
@@ -226,9 +255,8 @@ void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, 
             case TaskTypeDOD::NATIVE_CPU: {
                 TaskCPUMetadata& meta = cpu_metadata[id];
                 if (meta.native_interface) {
-                    INativeTask* task = static_cast<INativeTask*>(meta.native_interface);
-                    TaskContextPOD ctx{ p_delta, grant };
-                    task->execute(ctx);
+                    TaskContextPOD ctx{ p_delta, grant, manager };
+                    meta.native_interface->execute(ctx);
                 }
             } break;
 
@@ -248,8 +276,8 @@ void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, 
 
             case TaskTypeDOD::GODOT_REFLECTION: {
                 TaskCPUMetadata& meta = cpu_metadata[id];
-                if (meta.reflection_target) {
-                    meta.reflection_target->call(meta.execution_method.c_str(), p_delta);
+                if (meta.reflection_target && meta.execution_method != godot::StringName()) {
+                    meta.reflection_target->call(meta.execution_method, p_delta);
                 }
             } break;
         }
@@ -264,22 +292,28 @@ void TaskGraphDOD::_batch_resolve_wave(const NodeID* p_nodes, uint32_t p_count) 
     for (uint32_t i = 0; i < p_count; ++i) {
         NodeID id = p_nodes[i];
         const MemoryGrantPOD* grant = get_grant(id);
-        if (!grant) continue;
+        if (!grant || id >= output_port_meta.size()) continue;
 
-        const auto& ports = output_port_map[id];
-        if (ports.empty()) continue;
+        TaskPortOffsets out_meta = output_port_meta[id];
+        if (out_meta.count == 0) continue;
 
-        if (port_constants[id].size() < ports.size()) {
-            port_constants[id].resize(ports.size());
+        if (id >= constant_port_meta.size()) constant_port_meta.resize(build_nodes.size());
+
+        // Ensure we have space for extracted variables in the constant block
+        if (constant_port_meta[id].count < out_meta.count) {
+            constant_port_meta[id].offset = static_cast<uint32_t>(constant_port_data.size());
+            constant_port_meta[id].count = out_meta.count;
+            constant_port_data.resize(constant_port_data.size() + out_meta.count);
         }
 
-        for (uint32_t port_idx = 0; port_idx < ports.size(); ++port_idx) {
-            const TaskPortMetadata& meta = ports[port_idx];
+        for (uint32_t port_idx = 0; port_idx < out_meta.count; ++port_idx) {
+            const TaskPortMetadata& meta = output_port_data[out_meta.offset + port_idx];
+            
             for (uint32_t p = 0; p < grant->part_count; ++p) {
                 const GrantPartPOD& part = grant->parts[p];
                 if (part.buffer_id == meta.buffer_id) {
                     void* src_addr = static_cast<uint8_t*>(part.raw_base_ptr);
-                    port_constants[id][port_idx] = _raw_to_variant(src_addr, meta.type);
+                    constant_port_data[constant_port_meta[id].offset + port_idx] = _raw_to_variant(src_addr, meta.type);
                     break;
                 }
             }
@@ -322,9 +356,19 @@ void TaskGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std::
     std::vector<TaskTypeDOD> p_types(new_size);
     std::vector<TaskCPUMetadata> p_cpu(new_size);
     std::vector<TaskGPUMetadata> p_gpu(new_size);
-    std::vector<std::vector<TaskPortMetadata>> p_in(new_size);
-    std::vector<std::vector<TaskPortMetadata>> p_out(new_size);
-    std::vector<std::vector<godot::Variant>> p_const(new_size);
+    
+    // CSR Compaction vectors
+    std::vector<TaskPortOffsets> p_in_meta(new_size);
+    std::vector<TaskPortMetadata> p_in_data;
+    p_in_data.reserve(input_port_data.size());
+
+    std::vector<TaskPortOffsets> p_out_meta(new_size);
+    std::vector<TaskPortMetadata> p_out_data;
+    p_out_data.reserve(output_port_data.size());
+
+    std::vector<TaskPortOffsets> p_const_meta(new_size);
+    std::vector<godot::Variant> p_const_data;
+    p_const_data.reserve(constant_port_data.size());
 
     for (uint32_t i = 0; i < p_node_lut.size(); ++i) {
         NodeID n = p_node_lut[i];
@@ -332,25 +376,51 @@ void TaskGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std::
             p_types[n] = task_types[i];
             p_cpu[n] = std::move(cpu_metadata[i]);
             p_gpu[n] = std::move(gpu_metadata[i]);
-            p_in[n] = std::move(input_port_map[i]);
-            p_out[n] = std::move(output_port_map[i]);
-            p_const[n] = std::move(port_constants[i]);
+            
+            if (i < input_port_meta.size() && input_port_meta[i].count > 0) {
+                p_in_meta[n].offset = static_cast<uint32_t>(p_in_data.size());
+                p_in_meta[n].count = input_port_meta[i].count;
+                auto it = input_port_data.begin() + input_port_meta[i].offset;
+                p_in_data.insert(p_in_data.end(), it, it + input_port_meta[i].count);
+            }
+            
+            if (i < output_port_meta.size() && output_port_meta[i].count > 0) {
+                p_out_meta[n].offset = static_cast<uint32_t>(p_out_data.size());
+                p_out_meta[n].count = output_port_meta[i].count;
+                auto it = output_port_data.begin() + output_port_meta[i].offset;
+                p_out_data.insert(p_out_data.end(), it, it + output_port_meta[i].count);
+            }
+            
+            if (i < constant_port_meta.size() && constant_port_meta[i].count > 0) {
+                p_const_meta[n].offset = static_cast<uint32_t>(p_const_data.size());
+                p_const_meta[n].count = constant_port_meta[i].count;
+                auto it = constant_port_data.begin() + constant_port_meta[i].offset;
+                p_const_data.insert(p_const_data.end(), it, it + constant_port_meta[i].count);
+            }
         }
     }
 
     task_types = std::move(p_types);
     cpu_metadata = std::move(p_cpu);
     gpu_metadata = std::move(p_gpu);
-    input_port_map = std::move(p_in);
-    output_port_map = std::move(p_out);
-    port_constants = std::move(p_const);
-    dirty_flags |= RESOURCES;
+    
+    input_port_meta = std::move(p_in_meta);
+    input_port_data = std::move(p_in_data);
+    output_port_meta = std::move(p_out_meta);
+    output_port_data = std::move(p_out_data);
+    constant_port_meta = std::move(p_const_meta);
+    constant_port_data = std::move(p_const_data);
+    
+    baked_connections.assign(new_size, std::vector<TaskPortConnectionDOD>());
 }
 
 void TaskGraphDOD::defragment() { MemoryGraphDOD::defragment(); }
 void TaskGraphDOD::clear() {
     task_types.clear(); cpu_metadata.clear(); gpu_metadata.clear();
-    input_port_map.clear(); output_port_map.clear(); port_constants.clear();
+    input_port_meta.clear(); input_port_data.clear();
+    output_port_meta.clear(); output_port_data.clear();
+    constant_port_meta.clear(); constant_port_data.clear();
+    baked_connections.clear();
     MemoryGraphDOD::clear();
 }
 

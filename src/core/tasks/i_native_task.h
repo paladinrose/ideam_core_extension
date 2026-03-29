@@ -2,19 +2,34 @@
 #define IDEAM_CORE_I_NATIVE_TASK_H
 
 #include "../memory/memory_grant_pod.h"
+#include "../memory/memory_manager_dod.h"
 #include <godot_cpp/variant/variant.hpp>
 
 namespace ideam::core {
 
 /**
  * TaskContextPOD
- * Passed to native tasks to provide access to their pre-baked memory.
+ * Passed to native tasks to provide raw access to their pre-baked memory.
+ * Augments standard pointers with direct access to the Manager and GrantParts 
+ * so custom T_Logic operations can instantiate lightweight DOD Views directly on the stack.
  */
 struct TaskContextPOD {
     double delta;
     MemoryGrantPOD* grant;
+    MemoryManagerDOD* manager; // Injected for hardware page lookups
 
-    // Helper to get a specific buffer's raw pointer quickly
+    // --- View Instantiation Resources (DOD Fast Path) ---
+    [[nodiscard]] const GrantPartPOD* get_grant_part(uint32_t p_buffer_id) const {
+        if (!grant) return nullptr;
+        for (uint32_t i = 0; i < grant->part_count; ++i) {
+            if (grant->parts[i].buffer_id == p_buffer_id) {
+                return &grant->parts[i];
+            }
+        }
+        return nullptr;
+    }
+
+    // --- Legacy / Raw Contiguous Access ---
     [[nodiscard]] void* get_buffer_ptr(uint32_t p_buffer_id) const {
         if (!grant) return nullptr;
         for (uint32_t i = 0; i < grant->part_count; ++i) {
@@ -25,7 +40,6 @@ struct TaskContextPOD {
         return nullptr;
     }
 
-    // Helper to get the selection metadata for a specific part
     [[nodiscard]] MemoryBufferSelectionPOD* get_selection(uint32_t p_buffer_id) const {
         if (!grant) return nullptr;
         for (uint32_t i = 0; i < grant->part_count; ++i) {
@@ -51,15 +65,8 @@ public:
     /**
      * execute
      * The hot-loop entry point. No Variants, no String names.
-     * Should assume selections are already culled/valid.
      */
     virtual void execute(const TaskContextPOD& p_context) = 0;
-    
-    /**
-     * get_task_name
-     * For debugging/profiling.
-     */
-    virtual const char* get_task_name() const = 0;
 };
 
 } // namespace ideam::core

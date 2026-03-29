@@ -142,6 +142,13 @@ public:
      */
     void configure_paged(uint32_t p_id, uint32_t p_page_size_bytes);
 
+    /**
+     * expand_paged_buffer
+     * Seamlessly appends new hardware pages to a PAGED buffer's table pointer without moving existing data.
+     * Prevents master block fragmentation.
+     */
+    bool expand_paged_buffer(uint32_t p_id, size_t p_new_size_bytes);
+
     // --- Ring Operations ---
     bool ring_push(uint32_t p_id, const void* p_data, size_t p_size);
     bool ring_pop(uint32_t p_id, void* r_dest, size_t p_size);

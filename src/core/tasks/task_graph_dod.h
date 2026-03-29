@@ -8,7 +8,7 @@
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/classes/rendering_device.hpp>
 #include <vector>
-#include <string>
+#include <span>
 
 namespace ideam::core {
 
@@ -20,7 +20,7 @@ enum class TaskTypeDOD : uint8_t {
     GODOT_REFLECTION, 
     NATIVE_CPU,       
     COMPUTE_GPU,
-    QUERY_CULLER      // New: Specialized type for logical selection filtering
+    QUERY_CULLER
 };
 
 /**
@@ -41,20 +41,22 @@ struct TaskPortMetadata {
 struct TaskPortConnectionDOD {
     void* src_ptr = nullptr;
     void* dst_ptr = nullptr;
-    size_t byte_size = 0;
+    uint32_t byte_size = 0;
 };
 
 /**
- * TaskCPUMetadata (Parallel Component)
+ * TaskCPUMetadata
+ * Caches reflection handles or direct native interface pointers.
  */
 struct TaskCPUMetadata {
-    std::string execution_method; 
-    void* native_interface = nullptr; 
     godot::Object* reflection_target = nullptr;
+    godot::StringName execution_method; 
+    INativeTask* native_interface = nullptr;
 };
 
 /**
- * TaskGPUMetadata (Parallel Component)
+ * TaskGPUMetadata
+ * Caches compute shader dispatch dimensions.
  */
 struct TaskGPUMetadata {
     godot::RID pipeline_rid;
@@ -64,40 +66,43 @@ struct TaskGPUMetadata {
 };
 
 /**
- * TaskGraphDOD
- * Data-Oriented Task Execution Engine.
+ * TaskPortOffsets
+ * SoA Tracker for append-only positions in the flattened port data vectors (CSR format).
  */
+struct TaskPortOffsets {
+    uint32_t offset = 0;
+    uint32_t count = 0;
+};
+
 class TaskGraphDOD : public MemoryGraphDOD {
 protected:
-    godot::RenderingDevice* rd = nullptr;
-    
-    // --- Component Storage (Parallel Arrays) ---
     std::vector<TaskTypeDOD> task_types;
     std::vector<TaskCPUMetadata> cpu_metadata;
     std::vector<TaskGPUMetadata> gpu_metadata;
-    
-    // Port mappings for automatic Memory Setup/Resolve
-    std::vector<std::vector<TaskPortMetadata>> input_port_map;
-    std::vector<std::vector<TaskPortMetadata>> output_port_map;
 
-    // Fast-path connections (Bypasses Variants)
+    // --- CSR Flattened Port Mappings ---
+    std::vector<TaskPortOffsets> input_port_meta;
+    std::vector<TaskPortMetadata> input_port_data;
+
+    std::vector<TaskPortOffsets> output_port_meta;
+    std::vector<TaskPortMetadata> output_port_data;
+
+    std::vector<TaskPortOffsets> constant_port_meta;
+    std::vector<godot::Variant> constant_port_data;
+
     std::vector<std::vector<TaskPortConnectionDOD>> baked_connections;
 
-    // Cache for results/constants indexed by [NodeID][PortIndex]
-    std::vector<std::vector<godot::Variant>> port_constants;
+    godot::RenderingDevice* rd = nullptr;
 
-    // --- Internal Helpers ---
+    // --- Internal Execution Pipeline ---
     void _bake_port_connections();
+    void _clean_selections(NodeID p_id);
     
-    // 3-Phase Execution Cycle
     void _batch_setup_wave(const NodeID* p_nodes, uint32_t p_count);
     void _batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta);
     void _batch_resolve_wave(const NodeID* p_nodes, uint32_t p_count);
 
-    // Selection Maintenance
-    void _clean_selections(NodeID p_id);
-
-    // Marshalling
+    // --- Data Converters ---
     void _variant_to_raw(const godot::Variant& p_var, void* p_dest, DataType p_type);
     godot::Variant _raw_to_variant(const void* p_src, DataType p_type);
 
@@ -110,35 +115,31 @@ public:
 
     // --- Configuration ---
     NodeID add_task_node(TaskTypeDOD p_type);
-    void configure_cpu_task(NodeID p_id, godot::Object* p_target, const std::string& p_method);
+    
+    void configure_cpu_task(NodeID p_id, godot::Object* p_target, const godot::StringName& p_method);
     void configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32_t x, uint32_t y, uint32_t z);
     void configure_native_interface(NodeID p_id, INativeTask* p_interface);
     
-    void set_port_mapping(NodeID p_id, bool p_input, uint32_t p_port_idx, DataType p_type, uint32_t p_buffer_id);
-    void set_port_constant(NodeID p_id, uint32_t p_port_idx, const godot::Variant& p_value);
+    // Upgraded CSR configurations
+    void set_port_mappings(NodeID p_id, bool p_input, std::span<const TaskPortMetadata> p_mappings);
+    void set_port_constants(NodeID p_id, std::span<const godot::Variant> p_constants);
 
-    /**
-     * sync_with_manager
-     * Refreshes internal pointers and RenderingDevice from the attached manager.
-     */
+    MemoryGrantPOD* get_grant_mutable(NodeID p_id);
+
     void sync_with_manager() {
         if (manager) {
             rd = manager->get_rendering_device();
-            if (is_manager_version_dirty) {
+            if (is_manager_version_dirty()) {
                 defragment(); 
                 last_synced_version = *global_version_ptr;
             }
         }
     }
-
-    // --- Execution ---
+    
     void execute_graph_dod(double p_delta);
-
+    
     virtual void defragment() override;
     void clear();
-
-    // Grant access for execution logic
-    [[nodiscard]] MemoryGrantPOD* get_grant_mutable(NodeID p_id);
 };
 
 } // namespace ideam::core

@@ -1,6 +1,7 @@
 #include "memory_graph_dod.h"
 #include <cstring>
 #include <algorithm>
+#include <array>
 
 namespace ideam::core {
 
@@ -26,19 +27,19 @@ void MemoryGraphDOD::validate_grants() {
 
     MemoryGrantPOD reg_grant;
     bool reg_available = false;
-    GrantPartPOD* reg_base = nullptr;
 
     if (registry_buffer_id != INVALID_ID) {
-        reg_available = manager->bake_grant(reg_grant, { 
+        std::array<GrantPartPOD, 1> reg_req = {{ 
             GrantPartPOD{ .buffer_id = registry_buffer_id, .access_mode = BufferAccessMode::READ } 
-        });
-        if (reg_available) {
-            reg_base = reinterpret_cast<GrantPartPOD*>(reg_grant.parts[0].raw_base_ptr);
-        }
+        }};
+        reg_available = manager->bake_grant(reg_grant, reg_req);
     }
 
-    for (uint32_t i = 0; i < build_nodes.size(); ++i) {
-        if (build_nodes[i].id == INVALID_ID) continue;
+    // Branchless hardware-aware extraction via PagedView
+    auto reg_view = reg_available ? _get_paged_view<GrantPartPOD, FlatStrategy>(reg_grant, 0) : PagedView<GrantPartPOD, FlatStrategy>{};
+
+    for (size_t i = 0; i < build_nodes.size(); ++i) {
+        if (build_nodes.id[i] == INVALID_ID) continue;
 
         MemoryGrantPOD& grant = active_grants[i];
 
@@ -50,12 +51,15 @@ void MemoryGraphDOD::validate_grants() {
                 manager->release_grant(grant);
             }
 
+            if (i >= node_metadata.size()) continue; 
             const MemoryNodeMetadata& meta = node_metadata[i];
             if (meta.req_count == 0 || !reg_available) continue;
 
-            const GrantPartPOD* node_reqs_start = reg_base + meta.req_offset;
-            std::vector<GrantPartPOD> reqs;
-            reqs.assign(node_reqs_start, node_reqs_start + meta.req_count);
+            // Extract requests securely across potential Virtual Page boundaries
+            std::vector<GrantPartPOD> reqs(meta.req_count);
+            for(uint32_t r = 0; r < meta.req_count; ++r) {
+                reqs[r] = reg_view[meta.req_offset + r];
+            }
             
             if (manager->bake_grant(grant, reqs)) {
                 // On fresh acquisition, all selections are considered dirty.
@@ -102,18 +106,23 @@ SelectionMetadata* MemoryGraphDOD::get_selection_meta(NodeID p_id) {
     return (p_id < selection_metadata.size()) ? &selection_metadata[p_id] : nullptr;
 }
 
-void MemoryGraphDOD::set_node_requirements(NodeID p_id, const std::vector<GrantPartPOD>& p_parts) {
-    if (p_id >= build_nodes.size() || build_nodes[p_id].id == INVALID_ID) return;
+void MemoryGraphDOD::set_node_requirements(NodeID p_id, std::span<const GrantPartPOD> p_parts) {
+    if (p_id >= build_nodes.size() || build_nodes.id[p_id] == INVALID_ID) return;
 
     if (p_id < active_grants.size() && active_grants[p_id].active) {
         manager->release_grant(active_grants[p_id]);
     }
 
-    if (p_id >= staging_requirements.size()) {
-        staging_requirements.resize(build_nodes.size());
+    if (p_id >= staging_meta.size()) {
+        staging_meta.resize(build_nodes.size());
     }
 
-    staging_requirements[p_id] = p_parts;
+    // DOD Append-Only Staging: Pushes strictly to the back of the flat data vector
+    staging_meta[p_id].offset = static_cast<uint32_t>(staging_data.size());
+    staging_meta[p_id].count = static_cast<uint32_t>(p_parts.size());
+    
+    staging_data.insert(staging_data.end(), p_parts.begin(), p_parts.end());
+    
     dirty_flags |= RESOURCES;
 }
 
@@ -133,14 +142,24 @@ void MemoryGraphDOD::on_topology_changed() {
 }
 
 void MemoryGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std::vector<EdgeID>& p_edge_lut) {
-    std::vector<std::vector<GrantPartPOD>> packed_staging(build_nodes.size());
+    std::vector<StagingReqMetadata> packed_staging_meta(build_nodes.size());
+    std::vector<GrantPartPOD> packed_staging_data;
+    packed_staging_data.reserve(staging_data.size()); // Pre-allocate max possible capacity
+    
     std::vector<MemoryGrantPOD> packed_grants(build_nodes.size());
     std::vector<SelectionMetadata> packed_meta(build_nodes.size());
 
     for (uint32_t i = 0; i < p_node_lut.size(); ++i) {
         NodeID new_idx = p_node_lut[i];
         if (new_idx != INVALID_ID) {
-            if (i < staging_requirements.size()) packed_staging[new_idx] = std::move(staging_requirements[i]);
+            // Compact the staging data log, abandoning overwritten/orphaned requirements
+            if (i < staging_meta.size() && staging_meta[i].count > 0) {
+                packed_staging_meta[new_idx].offset = static_cast<uint32_t>(packed_staging_data.size());
+                packed_staging_meta[new_idx].count = staging_meta[i].count;
+                
+                auto start_it = staging_data.begin() + staging_meta[i].offset;
+                packed_staging_data.insert(packed_staging_data.end(), start_it, start_it + staging_meta[i].count);
+            }
             if (i < active_grants.size()) packed_grants[new_idx] = active_grants[i];
             if (i < selection_metadata.size()) packed_meta[new_idx] = selection_metadata[i];
         } else {
@@ -150,7 +169,8 @@ void MemoryGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std
         }
     }
 
-    staging_requirements = std::move(packed_staging);
+    staging_meta = std::move(packed_staging_meta);
+    staging_data = std::move(packed_staging_data);
     active_grants = std::move(packed_grants);
     selection_metadata = std::move(packed_meta);
     dirty_flags |= RESOURCES;
@@ -158,36 +178,35 @@ void MemoryGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std
 
 void MemoryGraphDOD::_bake_requirements() {
     uint32_t total_parts = 0;
-    for (uint32_t i = 0; i < build_nodes.size(); ++i) {
-        if (build_nodes[i].id != INVALID_ID && i < staging_requirements.size()) {
-            total_parts += static_cast<uint32_t>(staging_requirements[i].size());
+    for (size_t i = 0; i < build_nodes.size(); ++i) {
+        if (build_nodes.id[i] != INVALID_ID && i < staging_meta.size()) {
+            total_parts += staging_meta[i].count;
         }
     }
 
     _ensure_buffer(registry_buffer_id, total_parts * sizeof(GrantPartPOD));
     
     MemoryGrantPOD reg_write_grant;
-    bool bake_ok = manager->bake_grant(reg_write_grant, { 
+    std::array<GrantPartPOD, 1> reg_req = {{ 
         GrantPartPOD{ .buffer_id = registry_buffer_id, .access_mode = BufferAccessMode::WRITE } 
-    });
+    }};
+    
+    if (!manager->bake_grant(reg_write_grant, reg_req)) return;
 
-    if (!bake_ok) return;
-
-    GrantPartPOD* reg_ptr = reinterpret_cast<GrantPartPOD*>(reg_write_grant.parts[0].raw_base_ptr);
+    // Secure, boundary-aware writing across virtual pages via PagedView
+    auto reg_view = _get_paged_view<GrantPartPOD, FlatStrategy>(reg_write_grant, 0);
     node_metadata.assign(build_nodes.size(), {0, 0});
     
     uint32_t current_offset = 0;
-    for (uint32_t i = 0; i < build_nodes.size(); ++i) {
-        if (build_nodes[i].id == INVALID_ID) continue;
+    for (size_t i = 0; i < build_nodes.size(); ++i) {
+        if (build_nodes.id[i] == INVALID_ID) continue;
 
-        if (i < staging_requirements.size()) {
-            const auto& reqs = staging_requirements[i];
+        if (i < staging_meta.size() && staging_meta[i].count > 0) {
             node_metadata[i].req_offset = current_offset;
-            node_metadata[i].req_count = static_cast<uint32_t>(reqs.size());
+            node_metadata[i].req_count = staging_meta[i].count;
 
-            if (!reqs.empty()) {
-                std::memcpy(reg_ptr + current_offset, reqs.data(), reqs.size() * sizeof(GrantPartPOD));
-                current_offset += node_metadata[i].req_count;
+            for (uint32_t r = 0; r < staging_meta[i].count; ++r) {
+                reg_view[current_offset++] = staging_data[staging_meta[i].offset + r];
             }
         }
     }
@@ -196,81 +215,12 @@ void MemoryGraphDOD::_bake_requirements() {
     dirty_flags &= ~RESOURCES;
 }
 
-void MemoryGraphDOD::_sort_kahn_waves() {
-    if (build_nodes.empty()) return;
-
-    std::vector<int32_t> in_degree(build_nodes.size(), 0);
-    std::vector<std::vector<NodeID>> wave_list;
-    std::vector<NodeID> current_wave;
-
-    for (const auto& edge : build_edges) {
-        if (edge.id != INVALID_ID) in_degree[edge.to_node]++;
-    }
-
-    for (uint32_t i = 0; i < build_nodes.size(); ++i) {
-        if (build_nodes[i].id != INVALID_ID && in_degree[i] == 0) current_wave.push_back(i);
-    }
-
-    MemoryGrantPOD out_reg_grant;
-    bool out_reg_ok = manager->bake_grant(out_reg_grant, {
-        GrantPartPOD{ .buffer_id = output_registry_id, .access_mode = BufferAccessMode::READ } 
-    });
-    EdgeID* out_edge_ptr = out_reg_ok ? reinterpret_cast<EdgeID*>(out_reg_grant.parts[0].raw_base_ptr) : nullptr;
-
-    size_t total_node_count = 0;
-    while (!current_wave.empty()) {
-        std::sort(current_wave.begin(), current_wave.end(), [this](NodeID a, NodeID b) {
-            if (build_nodes[a].execution_priority != build_nodes[b].execution_priority) {
-                return build_nodes[a].execution_priority > build_nodes[b].execution_priority;
-            }
-            return a < b;
-        });
-
-        total_node_count += current_wave.size();
-        wave_list.push_back(current_wave);
-        std::vector<NodeID> next_wave;
-
-        for (NodeID u : current_wave) {
-            const GraphNodeData& node = build_nodes[u];
-            if (!out_edge_ptr) continue;
-
-            for (uint32_t i = 0; i < node.output_edge_count; ++i) {
-                EdgeID eid = out_edge_ptr[node.output_edge_offset + i];
-                NodeID v = build_edges[eid].to_node;
-                if (--in_degree[v] == 0) next_wave.push_back(v);
-            }
-        }
-        current_wave = std::move(next_wave);
-    }
-
-    if (out_reg_ok) manager->release_grant(out_reg_grant);
-
-    _ensure_buffer(wave_node_id, total_node_count * sizeof(NodeID));
-    _ensure_buffer(wave_meta_id, wave_list.size() * sizeof(WaveInfo));
-
-    MemoryGrantPOD n_grant, m_grant;
-    manager->bake_grant(n_grant, { GrantPartPOD{ .buffer_id = wave_node_id, .access_mode = BufferAccessMode::WRITE } });
-    manager->bake_grant(m_grant, { GrantPartPOD{ .buffer_id = wave_meta_id, .access_mode = BufferAccessMode::WRITE } });
-    
-    NodeID* n_ptr = reinterpret_cast<NodeID*>(n_grant.parts[0].raw_base_ptr);
-    WaveInfo* m_ptr = reinterpret_cast<WaveInfo*>(m_grant.parts[0].raw_base_ptr);
-
-    uint32_t write_ptr = 0;
-    for (uint32_t w = 0; w < wave_list.size(); ++w) {
-        m_ptr[w] = { write_ptr, static_cast<uint32_t>(wave_list[w].size()) };
-        for (NodeID id : wave_list[w]) {
-            n_ptr[write_ptr++] = id;
-        }
-    }
-    manager->release_grant(n_grant);
-    manager->release_grant(m_grant);
-}
-
 void MemoryGraphDOD::clear() {
     release_all_grants();
     node_metadata.clear();
     selection_metadata.clear();
-    staging_requirements.clear();
+    staging_meta.clear();
+    staging_data.clear();
     IdeamGraphDOD::clear();
 }
 

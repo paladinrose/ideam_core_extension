@@ -4,6 +4,7 @@
 #include "../graphs/ideam_graph_dod.h"
 #include "memory_manager_dod.h"
 #include <vector>
+#include <span>
 
 namespace ideam::core {
 
@@ -15,6 +16,15 @@ namespace ideam::core {
 struct MemoryNodeMetadata {
     uint32_t req_offset = 0;
     uint32_t req_count = 0;
+};
+
+/**
+ * StagingReqMetadata
+ * Tracks append-only positions in the staging data vector before baking.
+ */
+struct StagingReqMetadata {
+    uint32_t offset = 0;
+    uint32_t count = 0;
 };
 
 /**
@@ -37,8 +47,10 @@ struct SelectionMetadata {
  */
 class MemoryGraphDOD : public IdeamGraphDOD {
 protected:
-    // --- Build Phase Storage ---
-    std::vector<std::vector<GrantPartPOD>> staging_requirements;
+    // --- Build Phase Storage (DOD Append-Only Log) ---
+    // Replaced fragmented vector-of-vectors with a contiguous CSR-style staging log.
+    std::vector<StagingReqMetadata> staging_meta;
+    std::vector<GrantPartPOD> staging_data;
     
     // --- Execution Phase Data ---
     uint32_t registry_buffer_id = INVALID_ID;
@@ -54,12 +66,6 @@ protected:
     // Internal Helpers
     void _bake_requirements();
     
-    /**
-     * _sort_kahn_waves
-     * Orders nodes by priority and ID for deterministic wave execution.
-     */
-    virtual void _sort_kahn_waves() override;
-
     // --- Overrides ---
     virtual void _remap_ids(const std::vector<NodeID>& p_node_lut, const std::vector<EdgeID>& p_edge_lut) override;
     virtual void on_topology_changed() override;
@@ -71,7 +77,7 @@ public:
     /**
      * validate_grants
      * Audits leases. Handles physical re-acquisition (manager-side) 
-     * and logical selection-dirtying (graph-side).
+     * and logical selection-dirtying (graph-side) across Virtual Pages.
      */
     void validate_grants();
 
@@ -88,7 +94,11 @@ public:
      */
     void mark_selection_dirty(NodeID p_id, uint32_t p_part_mask = 0xFF);
 
-    void set_node_requirements(NodeID p_id, const std::vector<GrantPartPOD>& p_parts);
+    /**
+     * set_node_requirements
+     * Appends node requirements to the staging log using zero-copy C++20 spans.
+     */
+    void set_node_requirements(NodeID p_id, std::span<const GrantPartPOD> p_parts);
 
     [[nodiscard]] const MemoryGrantPOD* get_grant(NodeID p_id) const;
     [[nodiscard]] SelectionMetadata* get_selection_meta(NodeID p_id);

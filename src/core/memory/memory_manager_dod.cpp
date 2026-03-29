@@ -229,6 +229,45 @@ void MemoryManagerDOD::configure_paged(uint32_t p_id, uint32_t p_page_size_bytes
     buf.version++;
 }
 
+bool MemoryManagerDOD::expand_paged_buffer(uint32_t p_id, size_t p_new_size_bytes) {
+    std::unique_lock<std::shared_mutex> lock(manager_rw_lock);
+    if (p_id >= id_to_index.size() || id_to_index[p_id] == 0xFFFFFFFF) return false;
+    
+    MemoryBufferPOD& buf = buffers[id_to_index[p_id]];
+    if (buf.layout_type != BufferLayoutType::PAGED) return false;
+    if (p_new_size_bytes <= buf.capacity_bytes) return true;
+
+    uint32_t page_size = buf.extra.paged.page_size_bytes;
+    uint32_t new_page_count = static_cast<uint32_t>((p_new_size_bytes + page_size - 1) / page_size);
+    uint32_t pages_to_add = new_page_count - buf.extra.paged.page_count;
+
+    size_t allocation_size = pages_to_add * page_size;
+
+    size_t padding = MemoryUtilities::align_to(master_used, buf.alignment_requirement) - master_used;
+    if (master_used + padding + allocation_size > master_capacity) return false;
+
+    master_used += padding;
+    uint8_t* new_memory_start = master_block_ptr + master_used;
+    master_used += allocation_size;
+
+    // Zero-copy expansion of the virtual page table
+    uint8_t** new_table = static_cast<uint8_t**>(std::realloc(buf.extra.paged.table_ptr, new_page_count * sizeof(uint8_t*)));
+    if (!new_table) return false;
+    
+    buf.extra.paged.table_ptr = new_table;
+
+    // Wire up the new blocks
+    for (uint32_t i = 0; i < pages_to_add; ++i) {
+        buf.extra.paged.table_ptr[buf.extra.paged.page_count + i] = new_memory_start + (i * page_size);
+    }
+
+    buf.capacity_bytes = new_page_count * page_size;
+    buf.extra.paged.page_count = new_page_count;
+    buf.version++; // Automatically invalidates active grants safely
+    
+    return true;
+}
+
 void MemoryManagerDOD::configure_buffer_columns(uint32_t p_id, const std::vector<ColumnMetadata>& p_columns) {
     std::unique_lock<std::shared_mutex> lock(manager_rw_lock);
     if (p_id >= id_to_index.size() || id_to_index[p_id] == 0xFFFFFFFF) return;
