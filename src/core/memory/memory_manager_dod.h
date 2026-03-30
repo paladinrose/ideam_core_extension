@@ -153,6 +153,31 @@ public:
     bool ring_push(uint32_t p_id, const void* p_data, size_t p_size);
     bool ring_pop(uint32_t p_id, void* r_dest, size_t p_size);
 
+    // --- Topological & Semantic Queries ---
+    
+    // Sparse Set Utilities
+    [[nodiscard]] bool buffer_contains_id(uint32_t p_buffer_id, uint32_t p_entity_id) const;
+    [[nodiscard]] int32_t get_dense_index(uint32_t p_buffer_id, uint32_t p_entity_id) const;
+
+    // Semantic & Layout Utilities
+    [[nodiscard]] bool buffer_has_column(uint32_t p_buffer_id, uint32_t p_column_id) const;
+    [[nodiscard]] bool buffer_has_data_type(uint32_t p_buffer_id, DataType p_type) const;
+    [[nodiscard]] int32_t get_column_offset(uint32_t p_buffer_id, uint32_t p_column_id) const;
+
+    // Ring Buffer Utilities
+    [[nodiscard]] size_t get_ring_available_read_bytes(uint32_t p_buffer_id) const;
+    [[nodiscard]] size_t get_ring_available_write_bytes(uint32_t p_buffer_id) const;
+    [[nodiscard]] bool is_ring_full(uint32_t p_buffer_id) const;
+    [[nodiscard]] bool is_ring_empty(uint32_t p_buffer_id) const;
+
+    // Paged Buffer Utilities
+    [[nodiscard]] uint32_t get_paged_allocated_page_count(uint32_t p_buffer_id) const;
+    [[nodiscard]] bool is_page_allocated_for_index(uint32_t p_buffer_id, size_t p_flat_index) const;
+
+    // Tiled SoA Utilities
+    [[nodiscard]] uint32_t get_tile_count(uint32_t p_buffer_id) const;
+    [[nodiscard]] uint32_t get_elements_per_tile(uint32_t p_buffer_id) const;
+
     // --- Grant & Synchronization ---
     /**
      * bake_grant

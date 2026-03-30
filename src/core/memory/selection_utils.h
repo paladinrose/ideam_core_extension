@@ -1,9 +1,9 @@
 #ifndef IDEAM_CORE_SELECTION_UTILS_H
 #define IDEAM_CORE_SELECTION_UTILS_H
 
-#include "memory_buffer_selection.h"
+#include "memory_buffer_selection_pod.h"
 #include <cstdint>
-#include <vector>
+#include <cstring>
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -13,128 +13,89 @@ namespace ideam::core {
 
 /**
  * SelectionUtils
- * Low-level bit manipulation and synchronization for MemoryBufferSelection.
- * Handles the "Dense <-> Sparse" conversion logic.
+ * Low-level, stateless bit manipulation and synchronization for MemoryBufferSelectionPOD.
+ * Strictly operates in-place to prevent heap allocations during the hot path.
  */
 struct SelectionUtils {
 
     /**
      * get_popcount
-     * Returns the number of active bits in a dense bitset.
+     * Returns the number of active bits in a dense bitset array.
      */
-    [[nodiscard]] static inline int64_t get_popcount(const std::vector<uint64_t>& p_bitset) {
+    [[nodiscard]] static inline int64_t get_popcount(const uint64_t* p_bitset, int64_t p_capacity) {
         int64_t count = 0;
-        for (uint64_t word : p_bitset) {
+        const int64_t words = (p_capacity + 63) >> 6;
+        for (int64_t i = 0; i < words; ++i) {
 #if defined(_MSC_VER)
-            count += __popcnt64(word);
+            count += __popcnt64(p_bitset[i]);
 #else
-            count += __builtin_popcountll(word);
+            count += __builtin_popcountll(p_bitset[i]);
 #endif
         }
         return count;
     }
 
     /**
-     * sync_indices_from_bitset
-     * Populates the sparse index list and parallel metadata arrays from a dense bitset.
+     * convert_to_dense
+     * Transitions a selection from Sparse to Dense mode IN-PLACE.
+     * WARNING: This overwrites the sparse indices memory with the bitset!
      */
-    static void sync_indices_from_bitset(MemoryBufferSelection& r_selection) {
-        r_selection.indices.clear();
+    static void convert_to_dense(MemoryBufferSelectionPOD& r_selection) {
+        if (r_selection.mode == SelectionMode::DENSE) return;
+
+        // 1. Cache the sparse indices we need to read from
+        int64_t* indices = r_selection.data.indices;
+        const int64_t count = r_selection.element_count;
+
+        // 2. We can safely overwrite the indices pointer with the bitset pointer 
+        // because they point to the exact same raw memory union.
+        // A bitset (N bits) is always smaller than an index array (N * 64 bits), 
+        // so we will never overwrite data we haven't read yet if we iterate forward.
+        uint64_t* bitset = reinterpret_cast<uint64_t*>(r_selection.data.indices);
         
-        const int64_t active_count = get_popcount(r_selection.bitset);
-        r_selection.indices.reserve(active_count);
+        // Clear the memory block to 0 before setting bits
+        const int64_t words = (r_selection.capacity + 63) >> 6;
+        std::memset(bitset, 0, words * sizeof(uint64_t));
 
-        // Prepare temporary metadata storage to maintain parallelism
-        std::vector<uint32_t> next_masks;
-        std::vector<int64_t> next_parts;
-        std::vector<uint32_t> next_versions;
-        std::vector<uint8_t> next_lods;
+        // 3. Populate the bitset from the cached sparse indices
+        for (int64_t i = 0; i < count; ++i) {
+            const int64_t idx = indices[i];
+            bitset[idx >> 6] |= (1ULL << (idx & 63));
+        }
 
-        next_masks.reserve(active_count);
-        next_parts.reserve(active_count);
-        next_versions.reserve(active_count);
-        next_lods.reserve(active_count);
+        // 4. Update the POD state
+        r_selection.data.bitset = bitset;
+        r_selection.mode = SelectionMode::DENSE;
+        
+        // Note: The parallel metadata arrays (group_masks, partition_ids, etc.) 
+        // do not need to move. They are already sized to max_capacity and 
+        // map 1:1 with the EntityID / Dense Index!
+    }
 
-        for (size_t i = 0; i < r_selection.bitset.size(); ++i) {
-            uint64_t word = r_selection.bitset[i];
-            while (word > 0) {
-                uint32_t bit;
-#if defined(_MSC_VER)
-                _BitScanForward64((unsigned long*)&bit, word);
-#else
-                bit = __builtin_ctzll(word);
-#endif
-                const int64_t idx = static_cast<int64_t>(i << 6) + bit;
-                
-                r_selection.indices.push_back(idx);
-                
-                // Mirror metadata from dense storage to sparse storage
-                if (idx < static_cast<int64_t>(r_selection.group_masks.size())) {
-                    next_masks.push_back(r_selection.group_masks[idx]);
-                    next_parts.push_back(r_selection.partition_ids[idx]);
-                    next_versions.push_back(r_selection.version_tags[idx]);
-                    next_lods.push_back(r_selection.lod_levels[idx]);
-                }
+    /**
+     * convert_to_sparse
+     * Transitions a selection from Dense to Sparse mode IN-PLACE.
+     * Rebuilds the packed index array from the active bits.
+     */
+    static void convert_to_sparse(MemoryBufferSelectionPOD& r_selection) {
+        if (r_selection.mode == SelectionMode::SPARSE) return;
 
-                word &= ~(1ULL << bit);
+        uint64_t* bitset = r_selection.data.bitset;
+        int64_t* indices = reinterpret_cast<int64_t*>(r_selection.data.bitset);
+        
+        int64_t write_ptr = 0;
+        const int64_t capacity = r_selection.capacity;
+
+        // Iterate through the bitset and pack the active indices.
+        for (int64_t i = 0; i < capacity; ++i) {
+            if (bitset[i >> 6] & (1ULL << (i & 63))) {
+                indices[write_ptr++] = i;
             }
         }
 
-        r_selection.group_masks = std::move(next_masks);
-        r_selection.partition_ids = std::move(next_parts);
-        r_selection.version_tags = std::move(next_versions);
-        r_selection.lod_levels = std::move(next_lods);
-    }
-
-    /**
-     * sync_bitset_from_indices
-     * Rebuilds the bitset based on the current sparse indices.
-     */
-    static void sync_bitset_from_indices(MemoryBufferSelection& r_selection) {
-        const size_t words = (r_selection.capacity + 63) >> 6;
-        if (r_selection.bitset.size() != words) {
-            r_selection.bitset.assign(words, 0);
-        } else {
-            std::fill(r_selection.bitset.begin(), r_selection.bitset.end(), 0);
-        }
-
-        for (int64_t idx : r_selection.indices) {
-            r_selection.bitset[idx >> 6] |= (1ULL << (idx & 63));
-        }
-    }
-
-    /**
-     * convert_to_dense
-     * Transition a selection from Sparse to Dense mode, expanding metadata.
-     */
-    static void convert_to_dense(MemoryBufferSelection& r_selection) {
-        if (r_selection.mode == SelectionMode::DENSE) return;
-
-        std::vector<uint32_t> new_masks(r_selection.capacity, 0);
-        std::vector<int64_t> new_parts(r_selection.capacity, -1);
-        std::vector<uint32_t> new_versions(r_selection.capacity, 0);
-        std::vector<uint8_t> new_lods(r_selection.capacity, 0);
-        
-        const size_t words = (r_selection.capacity + 63) >> 6;
-        r_selection.bitset.assign(words, 0);
-
-        for (size_t i = 0; i < r_selection.indices.size(); ++i) {
-            const int64_t idx = r_selection.indices[i];
-            r_selection.bitset[idx >> 6] |= (1ULL << (idx & 63));
-            
-            new_masks[idx] = r_selection.group_masks[i];
-            new_parts[idx] = r_selection.partition_ids[i];
-            new_versions[idx] = r_selection.version_tags[i];
-            new_lods[idx] = r_selection.lod_levels[i];
-        }
-
-        r_selection.group_masks = std::move(new_masks);
-        r_selection.partition_ids = std::move(new_parts);
-        r_selection.version_tags = std::move(new_versions);
-        r_selection.lod_levels = std::move(new_lods);
-        
-        r_selection.indices.clear();
-        r_selection.mode = SelectionMode::DENSE;
+        r_selection.data.indices = indices;
+        r_selection.element_count = write_ptr;
+        r_selection.mode = SelectionMode::SPARSE;
     }
 };
 

@@ -16,18 +16,21 @@ constexpr uint32_t MAX_BUFFER_COLUMNS = 16;
  */
 enum class BufferLayoutType : uint16_t {
     NONE       = 0,
-    FLAT       = 1 << 0, // Single contiguous array
-    AOS        = 1 << 1, // Array of Structures (Interleaved)
-    SOA        = 1 << 2, // Structure of Arrays (Parallel Lanes)
-    SPARSE_SET = 1 << 3, // Sparse/Dense/Data arrays (ECS style)
-    TILED_SOA  = 1 << 4, // Blocks of SoA for cache locality
-    RING       = 1 << 5, // Circular buffer 
-    PAGED      = 1 << 6, // Virtualized buffer via pointer table
+    FLAT       = 1 << 0, // 0000000000000001
+    AOS        = 1 << 1, // 0000000000000010
+    SOA        = 1 << 2, // 0000000000000100
+    SPARSE_SET = 1 << 3, // 0000000000001000
+    TILED_SOA  = 1 << 4, // 0000000000010000
+    RING       = 1 << 5, // 0000000000100000
+    PAGED      = 1 << 6, // 0000000001000000
 
     // --- UI/Graph Helper Masks ---
     ANY_LINEAR   = FLAT | AOS | SOA | SPARSE_SET | TILED_SOA | RING | PAGED,
     ANY_PARALLEL = SOA | TILED_SOA,
-    ANY_SPATIAL  = FLAT | SOA | TILED_SOA | PAGED 
+    ANY_SPATIAL  = FLAT | SOA | TILED_SOA | PAGED,
+
+    // The Universal Mask: Matches any valid layout defined above.
+    ANY          = ANY_LINEAR 
 };
 
 constexpr BufferLayoutType operator|(BufferLayoutType a, BufferLayoutType b) noexcept {
@@ -48,15 +51,18 @@ constexpr bool has_layout(BufferLayoutType p_mask, BufferLayoutType p_layout) no
  * Strictly packed to 40 bytes.
  */
 struct ColumnMetadata {
-    size_t offset;            // Relative to raw_ptr
-    size_t secondary_offset;  // Used by SparseSet for Dense array
-    size_t tertiary_offset;   // Used by SparseSet for Data array
+    size_t offset;            
+    size_t secondary_offset;  
+    size_t tertiary_offset;   
+    DataType data_type;       // Semantic identification restored
     uint32_t id;
     uint32_t type_size;
     uint32_t alignment;
-    int32_t current_size;     // Current element count in this specific pool
+    int32_t current_size;     
 };
-static_assert(sizeof(ColumnMetadata) == 40, "ColumnMetadata packing violated!");
+
+// Update the compiler guard to ensure our cache-packing remains flawless
+static_assert(sizeof(ColumnMetadata) == 48, "ColumnMetadata packing violated!");
 
 /**
  * MemoryBufferPOD
@@ -110,7 +116,7 @@ struct MemoryBufferPOD {
     bool needs_compaction;   // For SoA death_row logic
 
     // --- Explicit Padding ---
-    // Replaces the 4 bytes of implicit compiler padding that would normally exist 
+    // Replaces the 3 bytes of implicit compiler padding that would normally exist 
     // before the 8-byte aligned ColumnMetadata array begins.
     uint8_t reserved_padding[3];
 

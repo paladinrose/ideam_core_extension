@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <cassert> // Required for DataType validation checks
 
 namespace ideam::core {
 
@@ -142,8 +143,7 @@ void MemoryManagerDOD::_resolve_selection_pointers(uint32_t p_data_buffer_id, Me
     uint8_t* base = s_buf.master_block_ptr + s_buf.memory_offset;
     int64_t count = s_buf.max_elements;
 
-    size_t selection_size = (r_selection.mode == SelectionMode::DENSE) ? 
-        ((count + 63) / 64) * sizeof(uint64_t) : count * sizeof(int64_t);
+    size_t selection_size = count * sizeof(int64_t);
 
     if (r_selection.mode == SelectionMode::DENSE) r_selection.data.bitset = reinterpret_cast<uint64_t*>(base);
     else r_selection.data.indices = reinterpret_cast<int64_t*>(base);
@@ -279,8 +279,12 @@ void MemoryManagerDOD::configure_buffer_columns(uint32_t p_id, const std::vector
     uint32_t total_element_size = 0;
 
     for (uint32_t i = 0; i < buf.column_count; ++i) {
+        // Trivial POD copy now includes 'DataType data_type' automatically
         buf.columns[i] = p_columns[i];
         total_element_size += p_columns[i].type_size;
+        
+        // DOD Safety: Ensure the UI layer didn't pass us uninitialized semantic data
+        assert(buf.columns[i].data_type != DataType::DATA_TYPE_MAX && "ColumnMetadata missing semantic DataType!");
         
         if (buf.layout_type == BufferLayoutType::SOA) {
             buf.columns[i].offset = current_offset;
@@ -347,6 +351,134 @@ bool MemoryManagerDOD::ring_pop(uint32_t p_id, void* r_dest, size_t p_size) {
     buf.extra.ring.is_full = false;
     return true;
 }
+
+// =================================================================================
+// --- Topological & Semantic Queries ---
+// =================================================================================
+
+bool MemoryManagerDOD::buffer_contains_id(uint32_t p_buffer_id, uint32_t p_entity_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return false;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    if (buf.layout_type != BufferLayoutType::SPARSE_SET || p_entity_id >= static_cast<uint32_t>(buf.max_elements)) return false;
+
+    const uint32_t* sparse_array = reinterpret_cast<const uint32_t*>(buf.master_block_ptr + buf.memory_offset);
+    return sparse_array[p_entity_id] < static_cast<uint32_t>(buf.current_count);
+}
+
+int32_t MemoryManagerDOD::get_dense_index(uint32_t p_buffer_id, uint32_t p_entity_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return -1;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    if (buf.layout_type != BufferLayoutType::SPARSE_SET || p_entity_id >= static_cast<uint32_t>(buf.max_elements)) return -1;
+
+    const uint32_t* sparse_array = reinterpret_cast<const uint32_t*>(buf.master_block_ptr + buf.memory_offset);
+    uint32_t dense_idx = sparse_array[p_entity_id];
+    
+    return (dense_idx < static_cast<uint32_t>(buf.current_count)) ? static_cast<int32_t>(dense_idx) : -1;
+}
+
+bool MemoryManagerDOD::buffer_has_column(uint32_t p_buffer_id, uint32_t p_column_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return false;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    for (uint32_t i = 0; i < buf.column_count; ++i) {
+        if (buf.columns[i].id == p_column_id) return true;
+    }
+    return false;
+}
+
+bool MemoryManagerDOD::buffer_has_data_type(uint32_t p_buffer_id, DataType p_type) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return false;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    for (uint32_t i = 0; i < buf.column_count; ++i) {
+        if (buf.columns[i].data_type == p_type) return true;
+    }
+    return false;
+}
+
+int32_t MemoryManagerDOD::get_column_offset(uint32_t p_buffer_id, uint32_t p_column_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return -1;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    for (uint32_t i = 0; i < buf.column_count; ++i) {
+        if (buf.columns[i].id == p_column_id) return static_cast<int32_t>(buf.columns[i].offset);
+    }
+    return -1;
+}
+
+size_t MemoryManagerDOD::get_ring_available_read_bytes(uint32_t p_buffer_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return 0;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    if (buf.layout_type != BufferLayoutType::RING) return 0;
+    
+    if (buf.extra.ring.is_full) return buf.capacity_bytes;
+    if (buf.extra.ring.head_offset >= buf.extra.ring.tail_offset) {
+        return buf.extra.ring.head_offset - buf.extra.ring.tail_offset;
+    }
+    return buf.capacity_bytes - buf.extra.ring.tail_offset + buf.extra.ring.head_offset;
+}
+
+size_t MemoryManagerDOD::get_ring_available_write_bytes(uint32_t p_buffer_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return 0;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    if (buf.layout_type != BufferLayoutType::RING) return 0;
+    
+    return buf.capacity_bytes - get_ring_available_read_bytes(p_buffer_id);
+}
+
+bool MemoryManagerDOD::is_ring_full(uint32_t p_buffer_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return false;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    return (buf.layout_type == BufferLayoutType::RING) && buf.extra.ring.is_full;
+}
+
+bool MemoryManagerDOD::is_ring_empty(uint32_t p_buffer_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return true;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    if (buf.layout_type != BufferLayoutType::RING) return true;
+    
+    return !buf.extra.ring.is_full && (buf.extra.ring.head_offset == buf.extra.ring.tail_offset);
+}
+
+uint32_t MemoryManagerDOD::get_paged_allocated_page_count(uint32_t p_buffer_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return 0;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    if (buf.layout_type != BufferLayoutType::PAGED) return 0;
+    return buf.extra.paged.page_count;
+}
+
+bool MemoryManagerDOD::is_page_allocated_for_index(uint32_t p_buffer_id, size_t p_flat_index) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return false;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    if (buf.layout_type != BufferLayoutType::PAGED) return false;
+    
+    size_t byte_offset = p_flat_index * buf.element_stride;
+    uint32_t target_page = static_cast<uint32_t>(byte_offset / buf.extra.paged.page_size_bytes);
+    
+    return target_page < buf.extra.paged.page_count && buf.extra.paged.table_ptr[target_page] != nullptr;
+}
+
+uint32_t MemoryManagerDOD::get_tile_count(uint32_t p_buffer_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return 0;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    if (buf.layout_type != BufferLayoutType::TILED_SOA || buf.extra.tiled.elements_per_tile == 0) return 0;
+    return static_cast<uint32_t>((buf.max_elements + buf.extra.tiled.elements_per_tile - 1) / buf.extra.tiled.elements_per_tile);
+}
+
+uint32_t MemoryManagerDOD::get_elements_per_tile(uint32_t p_buffer_id) const {
+    if (p_buffer_id >= id_to_index.size() || id_to_index[p_buffer_id] == 0xFFFFFFFF) return 0;
+    const MemoryBufferPOD& buf = buffers[id_to_index[p_buffer_id]];
+    
+    if (buf.layout_type != BufferLayoutType::TILED_SOA) return 0;
+    return buf.extra.tiled.elements_per_tile;
+}
+
+// =================================================================================
 
 bool MemoryManagerDOD::_bake_grant_core(GrantPartPOD* r_parts, uint32_t max_parts, uint32_t& r_part_count, uint64_t& r_uniform_handle, std::span<const GrantPartPOD> p_requirements, bool p_needs_gpu) {
     // Shared Lock: Permits thousands of spatial worker threads to bake simultaneously without blocking.
@@ -415,6 +547,8 @@ bool MemoryManagerDOD::_bake_grant_core(GrantPartPOD* r_parts, uint32_t max_part
             case BufferLayoutType::FLAT:
                 r_parts[i].raw_base_ptr = buffer_start;
                 r_parts[i].element_stride = buf.element_stride;
+                break;
+            case BufferLayoutType::NONE:
                 break;
         }
         r_part_count++;
