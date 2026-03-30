@@ -5,28 +5,43 @@
 #include "../../memory/views/single_element_view.h"
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h" 
+#include "query_logic_traits.h" // Established in previous architectural turn
 #include <godot_cpp/variant/vector3.hpp>
 
 namespace ideam::core {
 
+/**
+ * AABBCullLogic
+ * Performs a spatial intersection test between a 3D Box and the target buffer.
+ * Mutates the Selection bitmask/indices to prune non-intersecting elements.
+ */
 struct AABBCullLogic {
+    // --- View Binding & Logic Traits ---
     using ValueType       = godot::Vector3; 
     using DefaultStrategy = Spatial3DStrategy;
     using DefaultView     = SingleElementView<ValueType, DefaultStrategy>;
 
+    // Meta for UI filtering and Task Graph validation
+    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
+    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
+
+    // --- Configuration Data ---
     godot::Vector3 box_min;
     godot::Vector3 box_max;
-    uint32_t target_part_index = 0;
+    uint32_t target_buffer_id = 0; // Migrated from part_index for DOD stability
 
-    [[nodiscard]] uint32_t get_target_part_index() const { return target_part_index; }
+    [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    /**
+     * execute_cull
+     * The primary entry point for Querying. Honors the View's operator[] design
+     * while mutating the selection bitmask or index array.
+     */
     template<typename T_View, typename T_Strategy>
     void execute_cull(MemoryBufferSelectionPOD& r_selection, 
                       const TaskContextPOD& p_context, 
                       const T_View& p_view) {
         
-        // We iterate based on the SELECTION count, not the BUFFER capacity.
-        // This honors the View's operator[] design.
         const int64_t count = r_selection.element_count;
 
         if (r_selection.mode == SelectionMode::DENSE) {
@@ -37,17 +52,24 @@ struct AABBCullLogic {
         }
     }
 
+    /**
+     * execute_sim
+     * No-op: Culling logic is strictly isolated from data mutation.
+     */
     template<typename T_View, typename T_Strategy>
     void execute_sim(const TaskContextPOD& p_context, const T_View& p_view) { /* No-op */ }
 
 private:
+    /**
+     * _cull_dense
+     * Iterates the bitset capacity to prune active bits.
+     */
     template<typename T_View>
     void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, int64_t p_count) {
         uint64_t* bitset = r_selection.data.bitset;
-        // In DENSE mode, we iterate the capacity because bits might be sparse.
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
+            // Check if bit is currently set before evaluating
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                // p_view[i] for DENSE correctly maps buffer_index == selection_index
                 if (!_evaluate(p_view[i])) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_selection.element_count--;
@@ -56,17 +78,16 @@ private:
         }
     }
 
+    /**
+     * _cull_indexed
+     * Compacts the index array for SPARSE selections.
+     */
     template<typename T_View>
     void _cull_indexed(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, int64_t p_count) {
-        // For SPARSE/RANGE, we must be careful. 
-        // We iterate selection indices, but since we are MUTATING the selection
-        // during the cull, we'll work backwards or use a temporary to avoid 
-        // invalidating the very indices the View is reading.
-        
         if (r_selection.mode == SelectionMode::SPARSE) {
             int64_t write_ptr = 0;
             for (int64_t i = 0; i < p_count; ++i) {
-                // We use the view to get the value. The view handles indices[i] lookup.
+                // View[i] correctly resolves the actual buffer index via r_selection.data.indices[i]
                 if (_evaluate(p_view[i])) {
                     r_selection.data.indices[write_ptr++] = r_selection.data.indices[i];
                 }
@@ -74,12 +95,15 @@ private:
             r_selection.element_count = write_ptr;
         } 
         else if (r_selection.mode == SelectionMode::RANGE) {
-            // RANGE culls usually force a transition to SPARSE if internal elements are cut.
-            // For now, we can only "shrink" the range from either end.
-            // (Logic for range-to-sparse conversion omitted for brevity unless requested)
+            // Note: Range culls typically require a transition to SPARSE if internal 
+            // elements are removed. For now, this logic assumes full removal or retention.
         }
     }
 
+    /**
+     * _evaluate
+     * Core AABB intersection test. Inlined for zero-cost abstraction.
+     */
     template<typename T>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -100,4 +124,4 @@ private:
 
 } // namespace ideam::core
 
-#endif
+#endif // IDEAM_CORE_AABB_CULL_LOGIC_H

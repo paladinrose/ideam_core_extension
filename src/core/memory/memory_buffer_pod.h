@@ -14,15 +14,33 @@ constexpr uint32_t MAX_BUFFER_COLUMNS = 16;
  * BufferLayoutType
  * Identifies the structural strategy of the memory block.
  */
-enum class BufferLayoutType : uint8_t {
-    FLAT,       // Single contiguous array
-    AOS,        // Array of Structures (Interleaved)
-    SOA,        // Structure of Arrays (Parallel Lanes)
-    SPARSE_SET, // Sparse/Dense/Data arrays (ECS style)
-    TILED_SOA,  // Blocks of SoA for cache locality/spatial partitioning
-    RING,       // Circular buffer for producer/consumer streaming
-    PAGED       // Virtualized buffer via pointer table to non-contiguous blocks
+enum class BufferLayoutType : uint16_t {
+    NONE       = 0,
+    FLAT       = 1 << 0, // Single contiguous array
+    AOS        = 1 << 1, // Array of Structures (Interleaved)
+    SOA        = 1 << 2, // Structure of Arrays (Parallel Lanes)
+    SPARSE_SET = 1 << 3, // Sparse/Dense/Data arrays (ECS style)
+    TILED_SOA  = 1 << 4, // Blocks of SoA for cache locality
+    RING       = 1 << 5, // Circular buffer 
+    PAGED      = 1 << 6, // Virtualized buffer via pointer table
+
+    // --- UI/Graph Helper Masks ---
+    ANY_LINEAR   = FLAT | AOS | SOA | SPARSE_SET | TILED_SOA | RING | PAGED,
+    ANY_PARALLEL = SOA | TILED_SOA,
+    ANY_SPATIAL  = FLAT | SOA | TILED_SOA | PAGED 
 };
+
+constexpr BufferLayoutType operator|(BufferLayoutType a, BufferLayoutType b) noexcept {
+    return static_cast<BufferLayoutType>(static_cast<uint16_t>(a) | static_cast<uint16_t>(b));
+}
+
+constexpr BufferLayoutType operator&(BufferLayoutType a, BufferLayoutType b) noexcept {
+    return static_cast<BufferLayoutType>(static_cast<uint16_t>(a) & static_cast<uint16_t>(b));
+}
+
+constexpr bool has_layout(BufferLayoutType p_mask, BufferLayoutType p_layout) noexcept {
+    return (p_mask & p_layout) != BufferLayoutType::NONE;
+}
 
 /**
  * ColumnMetadata
@@ -94,7 +112,7 @@ struct MemoryBufferPOD {
     // --- Explicit Padding ---
     // Replaces the 4 bytes of implicit compiler padding that would normally exist 
     // before the 8-byte aligned ColumnMetadata array begins.
-    uint8_t reserved_padding[4];
+    uint8_t reserved_padding[3];
 
     // --- Arrays (8-byte aligned by offset) ---
     ColumnMetadata columns[MAX_BUFFER_COLUMNS];
