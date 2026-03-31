@@ -12,10 +12,6 @@
 
 namespace ideam::core {
 
-/**
- * TaskTypeDOD
- * Determines which system owns the execution of this node.
- */
 enum class TaskTypeDOD : uint8_t {
     GODOT_REFLECTION, 
     NATIVE_CPU,       
@@ -23,10 +19,6 @@ enum class TaskTypeDOD : uint8_t {
     QUERY_CULLER
 };
 
-/**
- * TaskPortMetadata
- * Maps a Graph Port to a specific DataType and alignment for Setup/Resolve.
- */
 struct TaskPortMetadata {
     DataType type = DataType::FLOAT32;
     uint32_t buffer_id = INVALID_ID;
@@ -34,30 +26,18 @@ struct TaskPortMetadata {
     uint32_t byte_size = 0;
 };
 
-/**
- * TaskPortConnectionDOD
- * Raw pointer-to-pointer link for high-speed inter-node data flow.
- */
 struct TaskPortConnectionDOD {
     void* src_ptr = nullptr;
     void* dst_ptr = nullptr;
     uint32_t byte_size = 0;
 };
 
-/**
- * TaskCPUMetadata
- * Caches reflection handles or direct native interface pointers.
- */
 struct TaskCPUMetadata {
     godot::Object* reflection_target = nullptr;
     godot::StringName execution_method; 
     INativeTask* native_interface = nullptr;
 };
 
-/**
- * TaskGPUMetadata
- * Caches compute shader dispatch dimensions.
- */
 struct TaskGPUMetadata {
     godot::RID pipeline_rid;
     uint32_t dispatch_x = 1;
@@ -65,10 +45,6 @@ struct TaskGPUMetadata {
     uint32_t dispatch_z = 1;
 };
 
-/**
- * TaskPortOffsets
- * SoA Tracker for append-only positions in the flattened port data vectors (CSR format).
- */
 struct TaskPortOffsets {
     uint32_t offset = 0;
     uint32_t count = 0;
@@ -94,6 +70,13 @@ protected:
 
     godot::RenderingDevice* rd = nullptr;
 
+    // --- Command Buffer Resources ---
+    uint32_t tier1_buffer_id = INVALID_ID;
+    uint32_t tier2_buffer_id = INVALID_ID;
+    
+    std::vector<TaskGraphCommandPOD> tier1_meta;
+    std::vector<TaskSelectionCommandPOD> tier2_meta;
+
     // --- Internal Execution Pipeline ---
     void _bake_port_connections();
     void _clean_selections(NodeID p_id);
@@ -101,6 +84,9 @@ protected:
     void _batch_setup_wave(const NodeID* p_nodes, uint32_t p_count);
     void _batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta);
     void _batch_resolve_wave(const NodeID* p_nodes, uint32_t p_count);
+    
+    void _process_tier2_commands(const NodeID* p_nodes, uint32_t p_count);
+    void _process_tier1_commands();
 
     // --- Data Converters ---
     void _variant_to_raw(const godot::Variant& p_var, void* p_dest, DataType p_type);
@@ -120,7 +106,6 @@ public:
     void configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32_t x, uint32_t y, uint32_t z);
     void configure_native_interface(NodeID p_id, INativeTask* p_interface);
     
-    // Upgraded CSR configurations
     void set_port_mappings(NodeID p_id, bool p_input, std::span<const TaskPortMetadata> p_mappings);
     void set_port_constants(NodeID p_id, std::span<const godot::Variant> p_constants);
 

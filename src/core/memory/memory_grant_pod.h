@@ -18,7 +18,7 @@ namespace ideam::core {
 /**
  * GrantPartPOD
  * Represents a secured, pre-resolved claim to a specific MemoryBuffer's data.
- * Size forced to exactly 120 bytes to pack perfectly into Grant cache lines.
+ * Size forced to exactly 128 bytes to pack perfectly into Grant cache lines.
  */
 struct GrantPartPOD {
     // --- 8-Byte Alignment Block ---
