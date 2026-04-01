@@ -125,6 +125,43 @@ struct CollisionUtils {
             r_target[i] &= ~p_source[i];
         }
     }
+
+    /**
+     * copy_inverse
+     * Performs r_target = ~p_source.
+     * Vectorized inversion to quickly flip global active masks into selection masks.
+     */
+    static inline void copy_inverse(uint64_t* r_target, const uint64_t* p_source, size_t p_count) {
+        size_t i = 0;
+
+#if defined(IDEAM_SIMD_AVX2)
+        const __m256i ones = _mm256_set1_epi32(-1);
+        for (; i + 3 < p_count; i += 4) {
+            __m256i vs = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&p_source[i]));
+            // _mm256_andnot_si256(a, b) computes (~a) & b. Since b is all 1s, it yields ~a.
+            _mm256_storeu_si256(reinterpret_cast<__m256i*>(&r_target[i]), _mm256_andnot_si256(vs, ones));
+        }
+#elif defined(IDEAM_SIMD_SSE)
+        const __m128i ones = _mm_set1_epi32(-1);
+        for (; i + 1 < p_count; i += 2) {
+            __m128i vs = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&p_source[i]));
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(&r_target[i]), _mm_andnot_si128(vs, ones));
+        }
+#endif
+
+        // Tail processing for trailing QWORDs
+        for (; i < p_count; ++i) {
+            r_target[i] = ~p_source[i];
+        }
+    }
+
+    /**
+     * fill_all
+     * High-speed raw memset for 0xFF fill.
+     */
+    static inline void fill_all(uint64_t* r_target, size_t p_count) {
+        std::memset(r_target, 0xFF, p_count * sizeof(uint64_t));
+    }
 };
 
 } // namespace ideam::core

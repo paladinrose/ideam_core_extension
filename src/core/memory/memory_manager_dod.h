@@ -213,6 +213,13 @@ public:
     }
 
     /**
+     * populate_inverse_selection
+     * Transforms an empty MemoryBufferSelectionPOD into a fully populated one by
+     * inverting the buffer's global bitset via SIMD operations.
+     */
+    void populate_inverse_selection(uint32_t p_buffer_id, MemoryBufferSelectionPOD& r_selection);
+    
+    /**
      * flush_gpu_updates
      * Manual trigger to push all "CPU-Dirty" buffers to VRAM in a batch.
      * Drains the internal Command Ring.

@@ -1,4 +1,6 @@
 #include "memory_manager_dod.h"
+#include "selection_utils.h"
+
 #include <godot_cpp/classes/rd_uniform.hpp>
 #include <cstdlib>
 #include <cstring>
@@ -603,6 +605,39 @@ void MemoryManagerDOD::_sync_buffer_to_vram(uint32_t p_index) {
     
     rd->buffer_update(rid, 0, buf.capacity_bytes, data);
     buffer_dirty_flags[p_index] &= ~0x1; 
+}
+
+
+void MemoryManagerDOD::populate_inverse_selection(uint32_t p_buffer_id, MemoryBufferSelectionPOD& r_selection) {
+    const MemoryBufferPOD* buffer = get_buffer(p_buffer_id);
+    if (!buffer) return;
+
+    // Force selection into DENSE mode for SIMD bitwise operations
+    r_selection.mode = SelectionMode::DENSE;
+    r_selection.capacity = buffer->max_elements;
+    r_selection.target_buffer_id = p_buffer_id;
+
+    const size_t qwords = (r_selection.capacity + 63) >> 6;
+    uint64_t* target_mask = r_selection.data.bitset;
+
+    // TODO: Replace with your actual global state mask tracker from the BufferPOD
+    const uint64_t* global_mask = nullptr; // e.g., buffer->global_active_mask;
+
+    if (global_mask) {
+        CollisionUtils::copy_inverse(target_mask, global_mask, qwords);
+    } else {
+        CollisionUtils::fill_all(target_mask, qwords);
+    }
+
+    // Mask out excess out-of-bounds bits in the final QWORD
+    const uint32_t tail_bits = r_selection.capacity & 63;
+    if (tail_bits != 0) {
+        target_mask[qwords - 1] &= (1ULL << tail_bits) - 1;
+    }
+
+    // Since we mutated the bitset, recalculate the true element count natively
+    r_selection.element_count = SelectionUtils::get_popcount(target_mask, r_selection.capacity);
+    r_selection.selection_version++;
 }
 
 void MemoryManagerDOD::flush_gpu_updates() {
