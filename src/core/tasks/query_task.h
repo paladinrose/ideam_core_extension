@@ -2,6 +2,7 @@
 #define IDEAM_CORE_QUERY_TASK_H
 
 #include "i_native_task.h"
+#include "query_logic/query_logic_traits.h"
 #include "../memory/views/single_element_view.h"
 #include "../memory/views/strategies.h"
 #include <cstddef> // Required for ptrdiff_t
@@ -10,10 +11,18 @@ namespace ideam::core {
 
 template<
     typename T_Logic, 
+    QueryOp Op          = QueryOp::CULL, 
     typename T_View     = typename T_Logic::DefaultView, 
     typename T_Strategy = typename T_Logic::DefaultStrategy
 >
 class QueryTask : public INativeTask {
+    // Compile-time safety check to prevent users from queueing an unsupported Op
+    static_assert(
+        (Op == QueryOp::CULL && T_Logic::supports_cull) ||
+        (Op == QueryOp::ADD && T_Logic::supports_addition),
+        "QueryTask instantiated with a QueryOp that the T_Logic does not support!"
+    );
+
     T_Logic logic;
     const char* task_name;
 
@@ -43,20 +52,18 @@ public:
             return; // Buffer ID not present in this grant's cache line
         }
 
-        // [DOD Update] Compute the spatial index via pointer arithmetic for the View.
-        // This avoids maintaining dual state (index + ID) while satisfying view constraints.
         const uint32_t actual_idx = static_cast<uint32_t>(part - p_context.grant->parts);
         
         T_View view = _create_view(p_context, actual_idx, part);
-        logic.template execute_cull<T_View, T_Strategy>(*selection, p_context, view);
+        
+        // Compile-time routing to the chosen flat path
+        logic.template execute_cull<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
 
     virtual void execute(const TaskContextPOD& p_context) override {
         const uint32_t target_id = logic.get_target_buffer_id();
         
-        // Leverage the newly injected context helper rather than the raw grant
         const GrantPartPOD* part = p_context.get_grant_part(target_id);
-
         if (!part) return;
 
         const uint32_t actual_idx = static_cast<uint32_t>(part - p_context.grant->parts);

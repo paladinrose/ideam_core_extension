@@ -73,16 +73,17 @@ protected:
     // --- Command Buffer Resources ---
     uint32_t tier1_buffer_id = INVALID_ID;
     uint32_t tier2_buffer_id = INVALID_ID;
+    uint32_t scratchpad_buffer_id = INVALID_ID;
     
     std::vector<TaskGraphCommandPOD> tier1_meta;
     std::vector<TaskSelectionCommandPOD> tier2_meta;
 
     // --- Internal Execution Pipeline ---
     void _bake_port_connections();
-    void _clean_selections(NodeID p_id);
+    void _clean_selections(NodeID p_id, uint64_t* p_scratchpad);
     
     void _batch_setup_wave(const NodeID* p_nodes, uint32_t p_count);
-    void _batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta);
+    void _batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, uint64_t* p_scratchpad);
     void _batch_resolve_wave(const NodeID* p_nodes, uint32_t p_count);
     
     void _process_tier2_commands(const NodeID* p_nodes, uint32_t p_count);

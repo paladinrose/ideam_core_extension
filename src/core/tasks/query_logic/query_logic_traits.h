@@ -13,6 +13,15 @@
 namespace ideam::core {
 
 /**
+ * QueryOp
+ * Compile-time router for T_Logic structs to ensure zero-cost flat paths.
+ */
+enum class QueryOp : uint8_t {
+    CULL, // Immediate bitwise pruning
+    ADD   // Deferred appending via Wave/Graph Command Buffers
+};
+
+/**
  * LogicRequirement
  * Bitmask defining the hardware or structural dependencies of a T_Logic.
  */
@@ -41,6 +50,10 @@ struct QueryLogicTraits {
     // Bitmask of BufferLayoutTypes this logic is physically capable of processing
     static constexpr BufferLayoutType supported_layouts = T_Logic::supported_layouts;
 
+    // Operation capabilities for Graph UI Command Queue filtering
+    static constexpr bool supports_cull = T_Logic::supports_cull;
+    static constexpr bool supports_addition = T_Logic::supports_addition;
+
     // SIMD Width requirement (0 if scalar)
     static constexpr uint32_t required_lane_width = []() {
         if constexpr (requires { T_Logic::required_lane_width; }) {
@@ -49,25 +62,17 @@ struct QueryLogicTraits {
         return 0;
     }();
 
-    /**
-     * is_compatible
-     * The primary filter for the Graph UI.
-     * Returns true if the provided View and Buffer Layout satisfy all Logic constraints.
-     */
     [[nodiscard]] static constexpr bool is_compatible(
         ViewCapability p_view_caps, 
         BufferLayoutType p_buffer_layout
     ) noexcept {
-        // 1. Check Physical Layout Compatibility
         if (!has_layout(supported_layouts, p_buffer_layout)) return false;
 
-        // 2. Check Spatial Constraint
         if ((static_cast<uint32_t>(requirements) & static_cast<uint32_t>(LogicRequirement::REQUIRES_SPATIAL)) &&
             !has_capability(p_view_caps, ViewCapability::SPATIAL_ACCESS)) {
             return false;
         }
 
-        // 3. Check SIMD Constraint
         if ((static_cast<uint32_t>(requirements) & static_cast<uint32_t>(LogicRequirement::REQUIRES_SIMD)) &&
             !has_capability(p_view_caps, ViewCapability::SIMD_ACCESS)) {
             return false;
@@ -89,10 +94,12 @@ concept IsQueryLogic = requires {
     
     { T::requirements } -> std::convertible_to<LogicRequirement>;
     { T::supported_layouts } -> std::convertible_to<BufferLayoutType>;
+    { T::supports_cull } -> std::convertible_to<bool>;
+    { T::supports_addition } -> std::convertible_to<bool>;
 
-    // Must implement execute_cull (The primary Query contract)
+    // Must implement templated execute_cull with QueryOp
     { 
-        std::declval<T>().template execute_cull<typename T::DefaultView, typename T::DefaultStrategy>(
+        std::declval<T>().template execute_cull<QueryOp::CULL, typename T::DefaultView, typename T::DefaultStrategy>(
             std::declval<MemoryBufferSelectionPOD&>(), 
             std::declval<const TaskContextPOD&>(), 
             std::declval<const typename T::DefaultView&>()

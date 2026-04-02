@@ -98,16 +98,18 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
 
     manager->flush_gpu_updates();
 
-    // Ensure Utility Command Buffers exist (4MB capacity each)
+    // Ensure Utility Command and Scratchpad Buffers exist (4MB capacity each)
     _ensure_buffer(tier1_buffer_id, 4194304, 64);
     _ensure_buffer(tier2_buffer_id, 4194304, 64);
+    _ensure_buffer(scratchpad_buffer_id, 4194304, 64);
 
     MemoryGrantPOD global_grant;
-    std::array<GrantPartPOD, 4> reqs = {{
+    std::array<GrantPartPOD, 5> reqs = {{
         {.buffer_id = wave_node_id, .access_mode = BufferAccessMode::READ},
         {.buffer_id = wave_meta_id, .access_mode = BufferAccessMode::READ},
         {.buffer_id = tier1_buffer_id, .access_mode = BufferAccessMode::WRITE},
-        {.buffer_id = tier2_buffer_id, .access_mode = BufferAccessMode::WRITE}
+        {.buffer_id = tier2_buffer_id, .access_mode = BufferAccessMode::WRITE},
+        {.buffer_id = scratchpad_buffer_id, .access_mode = BufferAccessMode::WRITE}
     }};
 
     if (!manager->bake_grant(global_grant, reqs)) return;
@@ -115,14 +117,12 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
     auto n_view = _get_paged_view<NodeID, FlatStrategy>(global_grant, 0);
     auto m_view = _get_paged_view<WaveInfo, FlatStrategy>(global_grant, 1);
     
-    // Fetch buffer metadata to get true byte capacities natively from the Manager
     const MemoryBufferPOD* t1_buf = manager->get_buffer(global_grant.parts[2].buffer_id);
     const MemoryBufferPOD* t2_buf = manager->get_buffer(global_grant.parts[3].buffer_id);
     const size_t t1_cap = t1_buf ? t1_buf->capacity_bytes : 0;
     const size_t t2_cap = t2_buf ? t2_buf->capacity_bytes : 0;
 
-    // Distribute Tier 1 Graph Command space across all nodes permanently for this execution
-    uint8_t* tier1_arena = global_grant.parts[2].raw_base_ptr; // natively uint8_t*, no cast needed
+    uint8_t* tier1_arena = global_grant.parts[2].raw_base_ptr;
     size_t t1_chunk = t1_cap / (build_nodes.size() > 0 ? build_nodes.size() : 1);
     
     tier1_meta.resize(build_nodes.size());
@@ -131,6 +131,8 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
         tier1_meta[i].capacity = static_cast<uint32_t>(t1_chunk);
         tier1_meta[i].reset();
     }
+
+    uint64_t* wave_scratchpad_ptr = reinterpret_cast<uint64_t*>(global_grant.parts[4].raw_base_ptr);
 
     const MemoryBufferPOD* m_buf = manager->get_buffer(wave_meta_id);
     uint32_t wave_count = (m_buf) ? static_cast<uint32_t>(m_buf->capacity_bytes / sizeof(WaveInfo)) : 0;
@@ -146,8 +148,6 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
             current_wave_nodes[i] = n_view[wave.offset + i];
         }
 
-        // Slice Tier 2 Wave Command space dynamically for active nodes in this wave
-        // reinterpret_cast strictly tells the compiler to treat the byte array as 64-bit ints
         int64_t* tier2_arena = reinterpret_cast<int64_t*>(global_grant.parts[3].raw_base_ptr);
         size_t t2_chunk = (t2_cap / sizeof(int64_t)) / wave.count;
         
@@ -159,25 +159,22 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
         }
 
         for (uint32_t i = 0; i < wave.count; ++i) {
-            _clean_selections(current_wave_nodes[i]);
+            _clean_selections(current_wave_nodes[i], wave_scratchpad_ptr);
         }
 
         _batch_setup_wave(current_wave_nodes.data(), wave.count);
-        _batch_execute_wave(current_wave_nodes.data(), wave.count, p_delta);
+        _batch_execute_wave(current_wave_nodes.data(), wave.count, p_delta, wave_scratchpad_ptr);
         
-        // Logical Mutation Phase
         _process_tier2_commands(current_wave_nodes.data(), wave.count);
-        
         _batch_resolve_wave(current_wave_nodes.data(), wave.count);
     }
 
-    // Physical Mutation Phase
     _process_tier1_commands();
 
     manager->release_grant(global_grant);
 }
 
-void TaskGraphDOD::_clean_selections(NodeID p_id) {
+void TaskGraphDOD::_clean_selections(NodeID p_id, uint64_t* p_scratchpad) {
     SelectionMetadata* meta = get_selection_meta(p_id);
     if (!meta || meta->dirty_parts_mask == 0) return;
 
@@ -189,7 +186,7 @@ void TaskGraphDOD::_clean_selections(NodeID p_id) {
     if (type == TaskTypeDOD::NATIVE_CPU || type == TaskTypeDOD::QUERY_CULLER) {
         TaskCPUMetadata& cpu_meta = cpu_metadata[p_id];
         if (cpu_meta.native_interface) {
-            TaskContextPOD ctx{ 0.0, grant, manager, nullptr, nullptr }; 
+            TaskContextPOD ctx{ 0.0, grant, manager, nullptr, nullptr, p_scratchpad }; 
             cpu_meta.native_interface->cull_selections(ctx, meta->dirty_parts_mask);
         }
     }
@@ -277,7 +274,7 @@ void TaskGraphDOD::_batch_setup_wave(const NodeID* p_nodes, uint32_t p_count) {
     }
 }
 
-void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta) {
+void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, uint64_t* p_scratchpad) {
     int64_t compute_list = -1;
 
     for (uint32_t i = 0; i < p_count; ++i) {
@@ -291,8 +288,7 @@ void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, 
             case TaskTypeDOD::NATIVE_CPU: {
                 TaskCPUMetadata& meta = cpu_metadata[id];
                 if (meta.native_interface) {
-                    // Injecting Thread-Safe Bump Allocators
-                    TaskContextPOD ctx{ p_delta, grant, manager, &tier1_meta[id], &tier2_meta[i] };
+                    TaskContextPOD ctx{ p_delta, grant, manager, &tier1_meta[id], &tier2_meta[i], p_scratchpad };
                     meta.native_interface->execute(ctx);
                 }
             } break;
@@ -337,7 +333,6 @@ void TaskGraphDOD::_process_tier2_commands(const NodeID* p_nodes, uint32_t p_cou
             if (grant->parts[p].buffer_id == cmd.target_buffer_id) {
                 MemoryBufferSelectionPOD& sel = grant->parts[p].selection;
                 
-                // Merge appended elements directly into the active topology
                 for (int64_t k = 0; k < cmd.count; ++k) {
                     const int64_t idx = cmd.queued_indices[k];
                     if (sel.mode == SelectionMode::DENSE) {
@@ -356,8 +351,6 @@ void TaskGraphDOD::_process_tier2_commands(const NodeID* p_nodes, uint32_t p_cou
 }
 
 void TaskGraphDOD::_process_tier1_commands() {
-    // Structural Extension point.
-    // Derived Graph Implementations will process raw SubGraph expansion triggers here.
     for (auto& meta : tier1_meta) {
         meta.reset(); 
     }
