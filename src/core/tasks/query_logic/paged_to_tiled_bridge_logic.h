@@ -1,8 +1,8 @@
-#ifndef IDEAM_CORE_COMPONENT_CULL_LOGIC_H
-#define IDEAM_CORE_COMPONENT_CULL_LOGIC_H
+#ifndef IDEAM_CORE_PAGED_TO_TILED_BRIDGE_LOGIC_H
+#define IDEAM_CORE_PAGED_TO_TILED_BRIDGE_LOGIC_H
 
 #include "../../memory/memory_buffer_selection_pod.h"
-#include "../../memory/views/sparse_set_view.h"
+#include "../../memory/views/paged_view.h"
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "query_logic_traits.h"
@@ -10,19 +10,27 @@
 
 namespace ideam::core {
 
-struct ComponentCullLogic {
-    using ValueType       = uint32_t; 
+/**
+ * PagedToTiledBridgeLogic
+ * Target: TILED_SOA (Micro-chunks). Source: PAGED (Macro-world).
+ * Maps active pages down to active processing tiles.
+ */
+struct PagedToTiledBridgeLogic {
+    using ValueType       = uint8_t; // Dummy type, operates on metadata
     using DefaultStrategy = FlatStrategy;
-    using DefaultView     = SparseSetView<ValueType, DefaultStrategy>;
+    using DefaultView     = PagedView<uint8_t, DefaultStrategy>;
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::SPARSE_SET;
+    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::TILED_SOA;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
-    uint32_t target_buffer_id = 0; 
-    uint32_t component_buffer_id = 0; 
+    const MemoryBufferSelectionPOD* source_selection = nullptr; 
+    uint32_t target_buffer_id = 0;
+    
+    // The ratio of TILED_SOA elements per PAGED table entry
+    int64_t elements_per_page = 1024; 
 
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
@@ -31,11 +39,12 @@ struct ComponentCullLogic {
                       const TaskContextPOD& p_context, 
                       const T_View& p_view) const {
         
+        if (!source_selection || source_selection->mode != SelectionMode::DENSE) return;
+
         if constexpr (Op == QueryOp::CULL) {
-            if (r_selection.mode == SelectionMode::DENSE) _cull_dense(r_selection, p_view, p_context);
-            else _cull_sparse(r_selection, p_view, p_context);
+            _cull_dense(r_selection);
         } else if constexpr (Op == QueryOp::ADD) {
-            _add_available(r_selection, p_view, p_context);
+            _add_available(r_selection, p_context);
         }
     }
 
@@ -48,16 +57,17 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline bool _evaluate(uint32_t p_entity_id, const TaskContextPOD& p_context) const {
-        return p_context.manager->buffer_contains_id(component_buffer_id, p_entity_id);
+    inline bool _is_page_active(int64_t target_idx) const {
+        int64_t page_idx = target_idx / elements_per_page;
+        if (page_idx < 0 || page_idx >= source_selection->capacity) return false;
+        return (source_selection->data.bitset[page_idx >> 6] & (1ULL << (page_idx & 63))) != 0;
     }
 
-    template <typename T_View>
-    void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, const TaskContextPOD& p_ctx) const {
+    void _cull_dense(MemoryBufferSelectionPOD& r_selection) const {
         uint64_t* bitset = r_selection.data.bitset;
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate(p_view[i], p_ctx)) {
+                if (!_is_page_active(i)) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_selection.element_count--;
                 }
@@ -65,19 +75,7 @@ private:
         }
     }
 
-    template <typename T_View>
-    void _cull_sparse(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, const TaskContextPOD& p_ctx) const {
-        int64_t write_ptr = 0;
-        for (int64_t i = 0; i < r_selection.element_count; ++i) {
-            if (_evaluate(p_view[i], p_ctx)) {
-                r_selection.data.indices[write_ptr++] = r_selection.data.indices[i];
-            }
-        }
-        r_selection.element_count = write_ptr;
-    }
-
-    template <typename T_View>
-    void _add_available(const MemoryBufferSelectionPOD& r_selection, const T_View& p_view, const TaskContextPOD& p_ctx) const {
+    void _add_available(const MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_ctx) const {
         const uint64_t* unclaimed = r_selection.unclaimed_mask;
         if (!unclaimed) return;
 
@@ -90,7 +88,7 @@ private:
                 
                 if (global_index >= r_selection.capacity) break;
 
-                if (_evaluate(p_view[global_index], p_ctx)) {
+                if (_is_page_active(global_index)) {
                     p_ctx.queue_selection_command(target_buffer_id, global_index);
                 }
                 mask &= (mask - 1); 
@@ -101,4 +99,4 @@ private:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_COMPONENT_CULL_LOGIC_H
+#endif // IDEAM_CORE_PAGED_TO_TILED_BRIDGE_LOGIC_H

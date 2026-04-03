@@ -1,8 +1,8 @@
-#ifndef IDEAM_CORE_COMPONENT_CULL_LOGIC_H
-#define IDEAM_CORE_COMPONENT_CULL_LOGIC_H
+#ifndef IDEAM_CORE_HIERARCHICAL_BRIDGE_LOGIC_H
+#define IDEAM_CORE_HIERARCHICAL_BRIDGE_LOGIC_H
 
 #include "../../memory/memory_buffer_selection_pod.h"
-#include "../../memory/views/sparse_set_view.h"
+#include "../../memory/views/bridge_view.h"
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "query_logic_traits.h"
@@ -10,19 +10,25 @@
 
 namespace ideam::core {
 
-struct ComponentCullLogic {
-    using ValueType       = uint32_t; 
+/**
+ * HierarchicalBridgeLogic
+ * Target: Micro-cells (FLAT). Source: Macro-cells (TILED_SOA).
+ * Expands a single parent selection into a block of active children.
+ */
+struct HierarchicalBridgeLogic {
+    using ValueType       = uint8_t; 
     using DefaultStrategy = FlatStrategy;
-    using DefaultView     = SparseSetView<ValueType, DefaultStrategy>;
+    // Assuming BridgeView binds a Parent type to a Child type
+    using DefaultView     = BridgeView<uint8_t, uint8_t, 1, DefaultStrategy>; 
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::SPARSE_SET;
+    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::FLAT;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
-    uint32_t target_buffer_id = 0; 
-    uint32_t component_buffer_id = 0; 
+    const MemoryBufferSelectionPOD* parent_selection = nullptr;
+    uint32_t target_buffer_id = 0;
 
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
@@ -31,9 +37,10 @@ struct ComponentCullLogic {
                       const TaskContextPOD& p_context, 
                       const T_View& p_view) const {
         
+        if (!parent_selection || parent_selection->mode != SelectionMode::DENSE) return;
+
         if constexpr (Op == QueryOp::CULL) {
-            if (r_selection.mode == SelectionMode::DENSE) _cull_dense(r_selection, p_view, p_context);
-            else _cull_sparse(r_selection, p_view, p_context);
+            _cull_dense(r_selection, p_view);
         } else if constexpr (Op == QueryOp::ADD) {
             _add_available(r_selection, p_view, p_context);
         }
@@ -43,37 +50,29 @@ struct ComponentCullLogic {
     void execute_sim(const TaskContextPOD& p_context, const T_View& p_view) const { /* No-op */ }
 
 private:
+    template <typename T_View>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline bool _evaluate(uint32_t p_entity_id, const TaskContextPOD& p_context) const {
-        return p_context.manager->buffer_contains_id(component_buffer_id, p_entity_id);
+    inline bool _has_active_parent(int64_t child_idx, const T_View& p_view) const {
+        int64_t parent_idx = p_view.get_parent_index(child_idx);
+        if (parent_idx < 0 || parent_idx >= parent_selection->capacity) return false;
+        return (parent_selection->data.bitset[parent_idx >> 6] & (1ULL << (parent_idx & 63))) != 0;
     }
 
     template <typename T_View>
-    void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, const TaskContextPOD& p_ctx) const {
+    void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view) const {
         uint64_t* bitset = r_selection.data.bitset;
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate(p_view[i], p_ctx)) {
+                if (!_has_active_parent(i, p_view)) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_selection.element_count--;
                 }
             }
         }
-    }
-
-    template <typename T_View>
-    void _cull_sparse(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, const TaskContextPOD& p_ctx) const {
-        int64_t write_ptr = 0;
-        for (int64_t i = 0; i < r_selection.element_count; ++i) {
-            if (_evaluate(p_view[i], p_ctx)) {
-                r_selection.data.indices[write_ptr++] = r_selection.data.indices[i];
-            }
-        }
-        r_selection.element_count = write_ptr;
     }
 
     template <typename T_View>
@@ -86,12 +85,12 @@ private:
             uint64_t mask = unclaimed[w];
             while (mask != 0) {
                 int bit_index = std::countr_zero(mask);
-                int64_t global_index = (w << 6) + bit_index;
+                int64_t child_idx = (w << 6) + bit_index;
                 
-                if (global_index >= r_selection.capacity) break;
+                if (child_idx >= r_selection.capacity) break;
 
-                if (_evaluate(p_view[global_index], p_ctx)) {
-                    p_ctx.queue_selection_command(target_buffer_id, global_index);
+                if (_has_active_parent(child_idx, p_view)) {
+                    p_ctx.queue_selection_command(target_buffer_id, child_idx);
                 }
                 mask &= (mask - 1); 
             }
@@ -101,4 +100,4 @@ private:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_COMPONENT_CULL_LOGIC_H
+#endif // IDEAM_CORE_HIERARCHICAL_BRIDGE_LOGIC_H

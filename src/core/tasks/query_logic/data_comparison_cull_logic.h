@@ -6,124 +6,111 @@
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "query_logic_traits.h"
+#include <bit>
 
 namespace ideam::core {
 
-/**
- * DataComparisonCullLogic<T>
- * Compares two properties against each other (e.g., A > B) for every element.
- * T: The data type being compared (int32, float, Vector3, etc).
- */
 template <typename T>
 struct DataComparisonCullLogic {
-    // --- View Binding & Logic Traits ---
     using ValueType       = T; 
     using DefaultStrategy = FlatStrategy;
-    // The primary view is for Property A
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
 
-    enum class Operator : uint8_t {
-        EQUAL,
-        NOT_EQUAL,
-        LESS_THAN,
-        LESS_EQUAL,
-        GREATER_THAN,
-        GREATER_EQUAL
-    };
+    static constexpr bool supports_cull = true;
+    static constexpr bool supports_addition = true;
 
-    // --- Configuration Data ---
-    uint32_t column_a_id = 0; 
-    uint32_t column_b_id = 0;
-    Operator op          = Operator::EQUAL;
+    enum class Operator : uint8_t { EQUAL, NOT_EQUAL, LESS_THAN, LESS_EQUAL, GREATER_THAN, GREATER_EQUAL };
 
-    /**
-     * execute_cull
-     * Compares two columns. Because this requires two views, we resolve 
-     * the second view (Property B) from the task context.
-     */
-    template <typename T_View>
-    void execute_cull(MemoryBufferSelectionPOD& r_selection, const T_View& p_view_a, const TaskContextPOD& p_context) const {
-        // Resolve the second view for Property B using the second GrantPart
-        // We assume the QueryTask has baked column_b into part 1 of the grant.
-        T_View view_b = p_context.get_view_for_part<T_View>(1);
+    uint32_t target_buffer_id = 0;
+    uint32_t column_id_a = 0;
+    
+    // Config for the secondary view
+    uint32_t comparison_buffer_id = 0;
+    uint32_t column_id_b = 0;
+    Operator op = Operator::EQUAL;
 
-        if (r_selection.mode == SelectionMode::DENSE) {
-            _cull_dense(r_selection, p_view_a, view_b);
-        } else {
-            _cull_sparse(r_selection, p_view_a, view_b);
+    [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
+
+    template <QueryOp Op, typename T_View, typename T_Strategy>
+    void execute_cull(MemoryBufferSelectionPOD& r_selection, 
+                      const TaskContextPOD& p_context, 
+                      const T_View& view_a, 
+                      const T_View& view_b) const { // Note: Dual view injection
+        
+        if constexpr (Op == QueryOp::CULL) {
+            if (r_selection.mode == SelectionMode::DENSE) _cull_dense(r_selection, view_a, view_b);
+            else _cull_sparse(r_selection, view_a, view_b);
+        } else if constexpr (Op == QueryOp::ADD) {
+            _add_available(r_selection, view_a, view_b, p_context);
         }
     }
 
+    template<typename T_View, typename T_Strategy>
+    void execute_sim(const TaskContextPOD& p_context, const T_View& p_view) const { /* No-op */ }
+
 private:
-    /**
-     * _evaluate
-     * Core comparison logic. Uses 'inline bool' as requested to clear compiler errors.
-     */
-    template <Operator O>
-    inline bool _evaluate(const T& p_a, const T& p_b) const {
-        if constexpr (O == Operator::EQUAL)         return p_a == p_b;
-        if constexpr (O == Operator::NOT_EQUAL)     return p_a != p_b;
-        if constexpr (O == Operator::LESS_THAN)      return p_a < p_b;
-        if constexpr (O == Operator::LESS_EQUAL)     return p_a <= p_b;
-        if constexpr (O == Operator::GREATER_THAN)   return p_a > p_b;
-        if constexpr (O == Operator::GREATER_EQUAL)  return p_a >= p_b;
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline bool _evaluate(const T& val_a, const T& val_b) const {
+        switch (op) {
+            case Operator::EQUAL:         return val_a == val_b;
+            case Operator::NOT_EQUAL:     return val_a != val_b;
+            case Operator::LESS_THAN:     return val_a < val_b;
+            case Operator::LESS_EQUAL:    return val_a <= val_b;
+            case Operator::GREATER_THAN:  return val_a > val_b;
+            case Operator::GREATER_EQUAL: return val_a >= val_b;
+        }
         return false;
     }
 
     template <typename T_View>
-    void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view_a, const T_View& p_view_b) const {
+    void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& view_a, const T_View& view_b) const {
         uint64_t* bitset = r_selection.data.bitset;
-        const int64_t count = r_selection.capacity;
-
-        // Dispatch based on Operator to keep the inner loop branchless
-        switch (op) {
-            case Operator::EQUAL:         _loop_dense<Operator::EQUAL>(bitset, count, p_view_a, p_view_b, r_selection.element_count); break;
-            case Operator::NOT_EQUAL:     _loop_dense<Operator::NOT_EQUAL>(bitset, count, p_view_a, p_view_b, r_selection.element_count); break;
-            case Operator::LESS_THAN:      _loop_dense<Operator::LESS_THAN>(bitset, count, p_view_a, p_view_b, r_selection.element_count); break;
-            case Operator::LESS_EQUAL:     _loop_dense<Operator::LESS_EQUAL>(bitset, count, p_view_a, p_view_b, r_selection.element_count); break;
-            case Operator::GREATER_THAN:   _loop_dense<Operator::GREATER_THAN>(bitset, count, p_view_a, p_view_b, r_selection.element_count); break;
-            case Operator::GREATER_EQUAL:  _loop_dense<Operator::GREATER_EQUAL>(bitset, count, p_view_a, p_view_b, r_selection.element_count); break;
-        }
-    }
-
-    template <Operator O, typename T_View>
-    inline void _loop_dense(uint64_t* p_bitset, int64_t p_cap, const T_View& p_view_a, const T_View& p_view_b, int64_t& r_count) const {
-        for (int64_t i = 0; i < p_cap; ++i) {
-            if (p_bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate<O>(p_view_a[i], p_view_b[i])) {
-                    p_bitset[i >> 6] &= ~(1ULL << (i & 63));
-                    r_count--;
+        for (int64_t i = 0; i < r_selection.capacity; ++i) {
+            if (bitset[i >> 6] & (1ULL << (i & 63))) {
+                if (!_evaluate(view_a[i], view_b[i])) {
+                    bitset[i >> 6] &= ~(1ULL << (i & 63));
+                    r_selection.element_count--;
                 }
             }
         }
     }
 
     template <typename T_View>
-    void _cull_sparse(MemoryBufferSelectionPOD& r_selection, const T_View& p_view_a, const T_View& p_view_b) const {
-        int64_t* indices = r_selection.data.indices;
+    void _cull_sparse(MemoryBufferSelectionPOD& r_selection, const T_View& view_a, const T_View& view_b) const {
         int64_t write_ptr = 0;
-        const int64_t count = r_selection.element_count;
-
-        switch (op) {
-            case Operator::EQUAL:         _loop_sparse<Operator::EQUAL>(indices, count, p_view_a, p_view_b, write_ptr); break;
-            case Operator::NOT_EQUAL:     _loop_sparse<Operator::NOT_EQUAL>(indices, count, p_view_a, p_view_b, write_ptr); break;
-            case Operator::LESS_THAN:      _loop_sparse<Operator::LESS_THAN>(indices, count, p_view_a, p_view_b, write_ptr); break;
-            case Operator::LESS_EQUAL:     _loop_sparse<Operator::LESS_EQUAL>(indices, count, p_view_a, p_view_b, write_ptr); break;
-            case Operator::GREATER_THAN:   _loop_sparse<Operator::GREATER_THAN>(indices, count, p_view_a, p_view_b, write_ptr); break;
-            case Operator::GREATER_EQUAL:  _loop_sparse<Operator::GREATER_EQUAL>(indices, count, p_view_a, p_view_b, write_ptr); break;
+        for (int64_t i = 0; i < r_selection.element_count; ++i) {
+            if (_evaluate(view_a[i], view_b[i])) {
+                r_selection.data.indices[write_ptr++] = r_selection.data.indices[i];
+            }
         }
         r_selection.element_count = write_ptr;
     }
 
-    template <Operator O, typename T_View>
-    inline void _loop_sparse(int64_t* p_indices, int64_t p_count, const T_View& p_view_a, const T_View& p_view_b, int64_t& r_write_ptr) const {
-        for (int64_t i = 0; i < p_count; ++i) {
-            const int64_t idx = p_indices[i];
-            if (_evaluate<O>(p_view_a[idx], p_view_b[idx])) {
-                p_indices[r_write_ptr++] = idx;
+    template <typename T_View>
+    void _add_available(const MemoryBufferSelectionPOD& r_selection, const T_View& view_a, const T_View& view_b, const TaskContextPOD& p_ctx) const {
+        const uint64_t* unclaimed = r_selection.unclaimed_mask;
+        if (!unclaimed) return;
+
+        const int64_t words = (r_selection.capacity + 63) >> 6;
+        for (int64_t w = 0; w < words; ++w) {
+            uint64_t mask = unclaimed[w];
+            while (mask != 0) {
+                int bit_index = std::countr_zero(mask);
+                int64_t global_index = (w << 6) + bit_index;
+                
+                if (global_index >= r_selection.capacity) break;
+
+                if (_evaluate(view_a[global_index], view_b[global_index])) {
+                    p_ctx.queue_selection_command(target_buffer_id, global_index);
+                }
+                mask &= (mask - 1); 
             }
         }
     }

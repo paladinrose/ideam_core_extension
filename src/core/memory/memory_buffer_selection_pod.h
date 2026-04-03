@@ -20,7 +20,7 @@ enum class SelectionMode : uint8_t {
  * MemoryBufferSelectionPOD
  * A synthesized DOD handle. Represents a filtered subset of a MemoryBuffer.
  * Designed for SIMD-aligned bitset collision and Reactive Graph propagation.
- * Fixed at exactly 96 bytes to ensure parent Grants align to CPU cache lines.
+ * Fixed at exactly 104 bytes to ensure parent Grants align to CPU cache lines.
  */
 struct MemoryBufferSelectionPOD {
     // --- 8-Byte Alignment Block (Pointers & 64-bit Ints) ---
@@ -43,10 +43,11 @@ struct MemoryBufferSelectionPOD {
 
     // --- Metadata SoA (Parallel Streams) ---
     // All pointers are 8 bytes on x64; grouping them maintains cache locality.
-    int64_t* partition_ids = nullptr;
-    uint32_t* group_masks  = nullptr;
-    uint32_t* version_tags = nullptr;
-    uint8_t* lod_levels    = nullptr;
+    int64_t* partition_ids  = nullptr;
+    uint32_t* group_masks   = nullptr;
+    uint32_t* version_tags  = nullptr;
+    uint8_t* lod_levels     = nullptr;
+    uint64_t* unclaimed_mask = nullptr; // Availability Mask (Anti-Grant Bitset)
 
     // --- 4-Byte Alignment Block ---
     // Total: 4 bytes.
@@ -58,7 +59,7 @@ struct MemoryBufferSelectionPOD {
     BufferAlignmentMode alignment = BufferAlignmentMode::STD430;
 
     // --- Explicit Tail Padding ---
-    // Replaces 2 bytes of implicit compiler padding to cap the struct at exactly 96 bytes.
+    // Replaces 2 bytes of implicit compiler padding to cap the struct at exactly 104 bytes.
     uint8_t reserved_padding[2] = {0};
 
     /**
@@ -95,7 +96,7 @@ struct MemoryBufferSelectionPOD {
 
 // Compile-Time Defenses: Lock the exact memory footprints
 static_assert(sizeof(MemoryBufferSelectionPOD) % 8 == 0, "MemoryBufferSelectionPOD alignment violated!");
-static_assert(sizeof(MemoryBufferSelectionPOD) == 96, "MemoryBufferSelectionPOD size altered from expected 96 bytes!");
+static_assert(sizeof(MemoryBufferSelectionPOD) == 104, "MemoryBufferSelectionPOD size altered from expected 104 bytes!");
 
 } // namespace ideam::core
 

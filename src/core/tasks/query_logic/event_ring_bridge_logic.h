@@ -1,0 +1,55 @@
+#ifndef IDEAM_CORE_EVENT_RING_BRIDGE_LOGIC_H
+#define IDEAM_CORE_EVENT_RING_BRIDGE_LOGIC_H
+
+#include "../../memory/memory_buffer_selection_pod.h"
+#include "../../memory/views/ring_view.h"
+#include "../../memory/views/strategies.h"
+#include "../i_native_task.h"
+#include "query_logic_traits.h"
+
+namespace ideam::core {
+
+/**
+ * EventRingBridgeLogic<T_Event>
+ * Target: ECS Entities (Sparse). Source: Event Queue (Ring).
+ * Drains a Ring buffer and translates the event payloads directly into Entity selections.
+ */
+template <typename T_Event>
+struct EventRingBridgeLogic {
+    using ValueType       = T_Event; 
+    using DefaultStrategy = FlatStrategy;
+    using DefaultView     = RingView<T_Event, DefaultStrategy>;
+
+    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
+    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::RING;
+
+    static constexpr bool supports_cull = false;
+    static constexpr bool supports_addition = true;
+
+    uint32_t target_buffer_id = 0; // The Sparse Set Entity Buffer
+
+    [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
+
+    template <QueryOp Op, typename T_View, typename T_Strategy>
+    void execute_cull(MemoryBufferSelectionPOD& r_selection, 
+                      const TaskContextPOD& p_context, 
+                      const T_View& p_view) const {
+        
+        // Ring bridges are strictly additive. You "pull" events to wake entities up.
+        if constexpr (Op == QueryOp::ADD) {
+            T_Event evt;
+            // Drain the Ring View and route the payloads
+            while (p_view.pop(evt)) {
+                // Assuming T_Event structs adhere to a standard DOD interface requiring `entity_id`
+                p_context.queue_selection_command(target_buffer_id, evt.entity_id);
+            }
+        }
+    }
+
+    template<typename T_View, typename T_Strategy>
+    void execute_sim(const TaskContextPOD& p_context, const T_View& p_view) const { /* No-op */ }
+};
+
+} // namespace ideam::core
+
+#endif // IDEAM_CORE_EVENT_RING_BRIDGE_LOGIC_H

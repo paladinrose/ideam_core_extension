@@ -5,11 +5,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
-#include <cassert> // Required for DataType validation checks
+#include <cassert>
 
 namespace ideam::core {
 
-// Fallback alignment for compilers that don't support C++17 hardware_destructive_interference_size yet
 #ifdef __cpp_lib_hardware_interference_size
     constexpr size_t CACHE_LINE_SIZE = std::hardware_destructive_interference_size;
 #else
@@ -19,7 +18,6 @@ namespace ideam::core {
 MemoryManagerDOD::MemoryManagerDOD(size_t p_initial_capacity) 
     : master_capacity(p_initial_capacity) {
         
-    // Hardware-Aware Contiguous Allocation to prevent cross-lane cache thrashing.
 #if defined(_MSC_VER)
     master_block_ptr = static_cast<uint8_t*>(_aligned_malloc(master_capacity, CACHE_LINE_SIZE));
 #else
@@ -28,13 +26,13 @@ MemoryManagerDOD::MemoryManagerDOD(size_t p_initial_capacity)
 
     std::memset(master_block_ptr, 0, master_capacity);
 
-    // Pre-reserve capacities to prevent vector reallocations invalidating MemoryBufferPOD pointers.
     buffers.reserve(1024);
     buffer_gpu_rids.reserve(1024);
     buffer_dirty_flags.reserve(1024);
     id_to_index.reserve(1024);
     data_to_shadow_map.reserve(1024);
     active_write_masks.reserve(1024);
+    global_unclaimed_masks.reserve(1024);
 
     _initialize_system_buffers();
 }
@@ -56,7 +54,6 @@ MemoryManagerDOD::~MemoryManagerDOD() {
 #endif
     }
 
-    // Clean up Page Tables for PAGED buffers
     for (auto& buf : buffers) {
         if (buf.layout_type == BufferLayoutType::PAGED && buf.extra.paged.table_ptr) {
             std::free(buf.extra.paged.table_ptr);
@@ -65,7 +62,6 @@ MemoryManagerDOD::~MemoryManagerDOD() {
 }
 
 void MemoryManagerDOD::_initialize_system_buffers() {
-    // Buffer 0: Internal GPU Command Ring (1MB for sync instructions)
     system_command_ring_id = create_buffer(BufferLayoutType::RING, 1024 * 1024, 64);
 }
 
@@ -78,7 +74,7 @@ uint32_t MemoryManagerDOD::create_buffer(BufferLayoutType p_layout, size_t p_siz
     }
 
     master_used += padding;
-    uint32_t id = static_cast<uint32_t>(buffers.size()) + 1; // 1-based IDs
+    uint32_t id = static_cast<uint32_t>(buffers.size()) + 1;
 
     MemoryBufferPOD buf{};
     buf.buffer_id = id;
@@ -101,11 +97,13 @@ uint32_t MemoryManagerDOD::create_buffer(BufferLayoutType p_layout, size_t p_siz
     buffer_gpu_rids.push_back(godot::RID());
     buffer_dirty_flags.push_back(0); 
     
-    // Flat Array Expansion
     if (id >= id_to_index.size()) id_to_index.resize(id + 1, 0xFFFFFFFF);
     id_to_index[id] = internal_idx;
     
-    if (id >= active_write_masks.size()) active_write_masks.resize(id + 1);
+    if (id >= active_write_masks.size()) {
+        active_write_masks.resize(id + 1);
+        global_unclaimed_masks.resize(id + 1);
+    }
 
     master_used += p_size_bytes;
     return id;
@@ -131,9 +129,11 @@ uint32_t MemoryManagerDOD::create_shadowed_buffer(BufferLayoutType p_layout, siz
         buffers[id_to_index[shadow_id]].max_elements = p_max_elements;
         buffers[id_to_index[data_id]].max_elements = p_max_elements;
 
-        // Pre-allocate the collision mask to ensure atomic_ref operations don't segfault on uninitialized space.
         size_t bitset_word_count = (p_max_elements + 63) / 64;
         active_write_masks[data_id].resize(bitset_word_count, 0);
+        
+        // Anti-Grant bitset is fundamentally fully available upon allocation
+        global_unclaimed_masks[data_id].resize(bitset_word_count, ~0ULL);
     }
     return data_id;
 }
@@ -150,17 +150,25 @@ void MemoryManagerDOD::_resolve_selection_pointers(uint32_t p_data_buffer_id, Me
     if (r_selection.mode == SelectionMode::DENSE) r_selection.data.bitset = reinterpret_cast<uint64_t*>(base);
     else r_selection.data.indices = reinterpret_cast<int64_t*>(base);
 
-    r_selection.group_masks  = reinterpret_cast<uint32_t*>(base + selection_size);
+    r_selection.group_masks   = reinterpret_cast<uint32_t*>(base + selection_size);
     r_selection.partition_ids = reinterpret_cast<int64_t*>(base + selection_size + (count * 4));
     r_selection.version_tags  = reinterpret_cast<uint32_t*>(base + selection_size + (count * 12));
     r_selection.lod_levels    = reinterpret_cast<uint8_t*>(base + selection_size + (count * 16));
+    
+    // Bind the unified anti-grant mask directly for O(1) query acceleration
+    if (p_data_buffer_id < global_unclaimed_masks.size()) {
+        r_selection.unclaimed_mask = global_unclaimed_masks[p_data_buffer_id].data();
+    }
+
     r_selection.target_buffer_id = p_data_buffer_id;
     r_selection.capacity = count;
     r_selection.manager_version = global_version;
 }
 
-bool MemoryManagerDOD::_check_and_apply_selection_to_mask(const MemoryBufferSelectionPOD& p_selection, uint64_t* p_mask, bool p_add) {
+bool MemoryManagerDOD::_check_and_apply_selection_to_mask(uint32_t p_buffer_id, const MemoryBufferSelectionPOD& p_selection, bool p_add) {
     bool conflict = false;
+    uint64_t* write_mask = active_write_masks[p_buffer_id].data();
+    uint64_t* unclaimed_mask = global_unclaimed_masks[p_buffer_id].data();
 
     if (p_selection.mode == SelectionMode::DENSE && p_selection.data.bitset) {
         size_t words = (p_selection.capacity + 63) / 64;
@@ -168,34 +176,42 @@ bool MemoryManagerDOD::_check_and_apply_selection_to_mask(const MemoryBufferSele
             uint64_t target_bits = p_selection.data.bitset[i];
             if (target_bits == 0) continue;
 
-            std::atomic_ref<uint64_t> atomic_word(p_mask[i]);
+            std::atomic_ref<uint64_t> atomic_write(write_mask[i]);
+            std::atomic_ref<uint64_t> atomic_unclaimed(unclaimed_mask[i]);
 
             if (p_add) {
-                uint64_t expected = atomic_word.load(std::memory_order_relaxed);
+                uint64_t expected = atomic_write.load(std::memory_order_relaxed);
                 do {
                     if (expected & target_bits) return true; // Collision
-                } while (!atomic_word.compare_exchange_weak(expected, expected | target_bits, std::memory_order_acquire, std::memory_order_relaxed));
+                } while (!atomic_write.compare_exchange_weak(expected, expected | target_bits, std::memory_order_acquire, std::memory_order_relaxed));
+                
+                // Cede availability atomicity
+                atomic_unclaimed.fetch_and(~target_bits, std::memory_order_release);
             } else {
-                atomic_word.fetch_and(~target_bits, std::memory_order_release);
+                atomic_write.fetch_and(~target_bits, std::memory_order_release);
+                // Restore availability atomicity
+                atomic_unclaimed.fetch_or(target_bits, std::memory_order_release);
             }
         }
     } else if (p_selection.mode == SelectionMode::SPARSE && p_selection.data.indices) {
-        // Spatial Check Phase
         if (p_add) {
             for (int64_t i = 0; i < p_selection.element_count; ++i) {
                 int64_t idx = p_selection.data.indices[i];
-                std::atomic_ref<uint64_t> atomic_word(p_mask[idx >> 6]);
-                if (atomic_word.load(std::memory_order_relaxed) & (1ULL << (idx & 63))) return true; 
+                std::atomic_ref<uint64_t> atomic_write(write_mask[idx >> 6]);
+                if (atomic_write.load(std::memory_order_relaxed) & (1ULL << (idx & 63))) return true; 
             }
         }
-        // Application Phase
         for (int64_t i = 0; i < p_selection.element_count; ++i) {
             int64_t idx = p_selection.data.indices[i];
-            std::atomic_ref<uint64_t> atomic_word(p_mask[idx >> 6]);
+            std::atomic_ref<uint64_t> atomic_write(write_mask[idx >> 6]);
+            std::atomic_ref<uint64_t> atomic_unclaimed(unclaimed_mask[idx >> 6]);
+            
             if (p_add) {
-                atomic_word.fetch_or(1ULL << (idx & 63), std::memory_order_release);
+                atomic_write.fetch_or(1ULL << (idx & 63), std::memory_order_release);
+                atomic_unclaimed.fetch_and(~(1ULL << (idx & 63)), std::memory_order_release);
             } else {
-                atomic_word.fetch_and(~(1ULL << (idx & 63)), std::memory_order_release);
+                atomic_write.fetch_and(~(1ULL << (idx & 63)), std::memory_order_release);
+                atomic_unclaimed.fetch_or(1ULL << (idx & 63), std::memory_order_release);
             }
         }
     }
@@ -252,20 +268,18 @@ bool MemoryManagerDOD::expand_paged_buffer(uint32_t p_id, size_t p_new_size_byte
     uint8_t* new_memory_start = master_block_ptr + master_used;
     master_used += allocation_size;
 
-    // Zero-copy expansion of the virtual page table
     uint8_t** new_table = static_cast<uint8_t**>(std::realloc(buf.extra.paged.table_ptr, new_page_count * sizeof(uint8_t*)));
     if (!new_table) return false;
     
     buf.extra.paged.table_ptr = new_table;
 
-    // Wire up the new blocks
     for (uint32_t i = 0; i < pages_to_add; ++i) {
         buf.extra.paged.table_ptr[buf.extra.paged.page_count + i] = new_memory_start + (i * page_size);
     }
 
     buf.capacity_bytes = new_page_count * page_size;
     buf.extra.paged.page_count = new_page_count;
-    buf.version++; // Automatically invalidates active grants safely
+    buf.version++; 
     
     return true;
 }
@@ -281,11 +295,9 @@ void MemoryManagerDOD::configure_buffer_columns(uint32_t p_id, const std::vector
     uint32_t total_element_size = 0;
 
     for (uint32_t i = 0; i < buf.column_count; ++i) {
-        // Trivial POD copy now includes 'DataType data_type' automatically
         buf.columns[i] = p_columns[i];
         total_element_size += p_columns[i].type_size;
         
-        // DOD Safety: Ensure the UI layer didn't pass us uninitialized semantic data
         assert(buf.columns[i].data_type != DataType::DATA_TYPE_MAX && "ColumnMetadata missing semantic DataType!");
         
         if (buf.layout_type == BufferLayoutType::SOA) {
@@ -315,7 +327,7 @@ void MemoryManagerDOD::configure_buffer_columns(uint32_t p_id, const std::vector
 }
 
 bool MemoryManagerDOD::ring_push(uint32_t p_id, const void* p_data, size_t p_size) {
-    std::lock_guard<std::mutex> lock(command_ring_mutex); // Fine-grained lock for streaming buffers.
+    std::lock_guard<std::mutex> lock(command_ring_mutex); 
     if (p_id >= id_to_index.size() || id_to_index[p_id] == 0xFFFFFFFF) return false;
     
     MemoryBufferPOD& buf = buffers[id_to_index[p_id]];
@@ -343,7 +355,7 @@ bool MemoryManagerDOD::ring_pop(uint32_t p_id, void* r_dest, size_t p_size) {
     if (buf.layout_type != BufferLayoutType::RING) return false;
 
     if (buf.extra.ring.tail_offset == buf.extra.ring.head_offset && !buf.extra.ring.is_full) {
-        return false; // Empty
+        return false; 
     }
 
     uint8_t* buffer_start = buf.master_block_ptr + buf.memory_offset;
@@ -483,7 +495,6 @@ uint32_t MemoryManagerDOD::get_elements_per_tile(uint32_t p_buffer_id) const {
 // =================================================================================
 
 bool MemoryManagerDOD::_bake_grant_core(GrantPartPOD* r_parts, uint32_t max_parts, uint32_t& r_part_count, uint64_t& r_uniform_handle, std::span<const GrantPartPOD> p_requirements, bool p_needs_gpu) {
-    // Shared Lock: Permits thousands of spatial worker threads to bake simultaneously without blocking.
     std::shared_lock<std::shared_mutex> lock(manager_rw_lock);
 
     godot::Array uniforms;
@@ -495,11 +506,12 @@ bool MemoryManagerDOD::_bake_grant_core(GrantPartPOD* r_parts, uint32_t max_part
         uint32_t idx = id_to_index[req.buffer_id];
         MemoryBufferPOD& buf = buffers[idx];
         MemoryBufferSelectionPOD selection = req.selection;
+        
+        // This binds the new anti-grant pointers
         _resolve_selection_pointers(req.buffer_id, selection);
 
         if (req.access_mode != BufferAccessMode::READ) {
-            auto& mask = active_write_masks[req.buffer_id];
-            if (_check_and_apply_selection_to_mask(selection, mask.data(), true)) return false; 
+            if (_check_and_apply_selection_to_mask(req.buffer_id, selection, true)) return false; 
         }
 
         if (p_needs_gpu && rd) {
@@ -581,7 +593,6 @@ void MemoryManagerDOD::_release_grant_core(GrantPartPOD* p_parts, uint32_t p_par
             
             GpuSyncCommand cmd { part.buffer_id, 0, buffers[idx].capacity_bytes };
             
-            // Backpressure Handling: If the ring saturates, trigger a JIT flush before retrying.
             if (!ring_push(system_command_ring_id, &cmd, sizeof(GpuSyncCommand))) {
                 flush_gpu_updates();
                 ring_push(system_command_ring_id, &cmd, sizeof(GpuSyncCommand)); 
@@ -589,7 +600,7 @@ void MemoryManagerDOD::_release_grant_core(GrantPartPOD* p_parts, uint32_t p_par
             
             buffer_dirty_flags[idx] |= 0x1;
 
-            _check_and_apply_selection_to_mask(part.selection, active_write_masks[part.buffer_id].data(), false);
+            _check_and_apply_selection_to_mask(part.buffer_id, part.selection, false);
         }
     }
 }
@@ -612,7 +623,6 @@ void MemoryManagerDOD::populate_inverse_selection(uint32_t p_buffer_id, MemoryBu
     const MemoryBufferPOD* buffer = get_buffer(p_buffer_id);
     if (!buffer) return;
 
-    // Force selection into DENSE mode for SIMD bitwise operations
     r_selection.mode = SelectionMode::DENSE;
     r_selection.capacity = buffer->max_elements;
     r_selection.target_buffer_id = p_buffer_id;
@@ -620,8 +630,11 @@ void MemoryManagerDOD::populate_inverse_selection(uint32_t p_buffer_id, MemoryBu
     const size_t qwords = (r_selection.capacity + 63) >> 6;
     uint64_t* target_mask = r_selection.data.bitset;
 
-    // TODO: Replace with your actual global state mask tracker from the BufferPOD
-    const uint64_t* global_mask = nullptr; // e.g., buffer->global_active_mask;
+    // The availability mask tracks what is completely free.
+    const uint64_t* global_mask = nullptr;
+    if (p_buffer_id < global_unclaimed_masks.size()) {
+        global_mask = global_unclaimed_masks[p_buffer_id].data();
+    }
 
     if (global_mask) {
         CollisionUtils::copy_inverse(target_mask, global_mask, qwords);
@@ -629,19 +642,17 @@ void MemoryManagerDOD::populate_inverse_selection(uint32_t p_buffer_id, MemoryBu
         CollisionUtils::fill_all(target_mask, qwords);
     }
 
-    // Mask out excess out-of-bounds bits in the final QWORD
     const uint32_t tail_bits = r_selection.capacity & 63;
     if (tail_bits != 0) {
         target_mask[qwords - 1] &= (1ULL << tail_bits) - 1;
     }
 
-    // Since we mutated the bitset, recalculate the true element count natively
     r_selection.element_count = SelectionUtils::get_popcount(target_mask, r_selection.capacity);
     r_selection.selection_version++;
 }
 
 void MemoryManagerDOD::flush_gpu_updates() {
-    std::unique_lock<std::shared_mutex> lock(manager_rw_lock); // Exclusive lock ensures safety during a massive frame-end flush.
+    std::unique_lock<std::shared_mutex> lock(manager_rw_lock); 
     if (!rd) return;
 
     GpuSyncCommand cmd;
@@ -692,8 +703,6 @@ void MemoryManagerDOD::rebase_master_block(size_t p_new_capacity) {
 }
 
 MemoryBufferPOD* MemoryManagerDOD::get_buffer(uint32_t p_id) {
-    // Vector capacity is reserved upfront, so it's safer to return pointers, 
-    // but the consuming architecture should ideally copy the POD or hold an ID.
     if (p_id >= id_to_index.size() || id_to_index[p_id] == 0xFFFFFFFF) return nullptr;
     return &buffers[id_to_index[p_id]];
 }

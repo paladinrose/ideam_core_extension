@@ -63,9 +63,11 @@ private:
 
     // --- Concurrency Tracking ---
     // Tracks active writers via bitset collision to prevent data races.
-    // Flat array of vectors. Evaluated via C++20 std::atomic_ref.
     std::vector<std::vector<uint64_t>> active_write_masks;
     
+    // Tracks active availability (Anti-Grant). 1 = Unclaimed, 0 = Claimed.
+    std::vector<std::vector<uint64_t>> global_unclaimed_masks;
+
     // --- Internal System Buffers ---
     uint32_t system_command_ring_id = 0xFFFFFFFF;
 
@@ -86,10 +88,11 @@ private:
     
     /**
      * _check_and_apply_selection_to_mask
-     * Performs lock-free intersection checks for WRITE access and updates the active mask.
+     * Performs lock-free intersection checks for WRITE access and atomically updates 
+     * both the active_write_mask and the global_unclaimed_mask.
      * @return true if a collision was detected (for p_add = true), false otherwise.
      */
-    bool _check_and_apply_selection_to_mask(const MemoryBufferSelectionPOD& p_selection, uint64_t* p_mask, bool p_add);
+    bool _check_and_apply_selection_to_mask(uint32_t p_buffer_id, const MemoryBufferSelectionPOD& p_selection, bool p_add);
 
     /**
      * _bake_grant_core
@@ -110,43 +113,11 @@ public:
     void set_rendering_device(godot::RenderingDevice* p_rd) { rd = p_rd; }
 
     // --- Buffer Lifecycle ---
-    /**
-     * create_buffer
-     * Carves a slice out of the master block.
-     * @return Unique ID for the buffer, or 0xFFFFFFFF on failure.
-     */
     uint32_t create_buffer(BufferLayoutType p_layout, size_t p_size_bytes, uint32_t p_alignment = 64);
-    
-    /**
-     * create_shadowed_buffer
-     * Creates a primary buffer and a shadow buffer for metadata/selection storage.
-     * @return Unique ID for the PRIMARY buffer.
-     */
     uint32_t create_shadowed_buffer(BufferLayoutType p_layout, size_t p_size_bytes, int64_t p_max_elements, SelectionMode p_selection_mode);
-
-    /**
-     * configure_buffer_columns
-     * Defines the internal structure of a buffer (AoS strides or SoA offsets).
-     */
     void configure_buffer_columns(uint32_t p_id, const std::vector<ColumnMetadata>& p_columns);
-
-    /**
-     * configure_tiled_soa
-     * Sets tile parameters for TILED_SOA layouts.
-     */
     void configure_tiled_soa(uint32_t p_id, uint32_t p_elements_per_tile);
-
-    /**
-     * configure_paged
-     * Initializes the page table for PAGED layouts.
-     */
     void configure_paged(uint32_t p_id, uint32_t p_page_size_bytes);
-
-    /**
-     * expand_paged_buffer
-     * Seamlessly appends new hardware pages to a PAGED buffer's table pointer without moving existing data.
-     * Prevents master block fragmentation.
-     */
     bool expand_paged_buffer(uint32_t p_id, size_t p_new_size_bytes);
 
     // --- Ring Operations ---
@@ -154,36 +125,21 @@ public:
     bool ring_pop(uint32_t p_id, void* r_dest, size_t p_size);
 
     // --- Topological & Semantic Queries ---
-    
-    // Sparse Set Utilities
     [[nodiscard]] bool buffer_contains_id(uint32_t p_buffer_id, uint32_t p_entity_id) const;
     [[nodiscard]] int32_t get_dense_index(uint32_t p_buffer_id, uint32_t p_entity_id) const;
-
-    // Semantic & Layout Utilities
     [[nodiscard]] bool buffer_has_column(uint32_t p_buffer_id, uint32_t p_column_id) const;
     [[nodiscard]] bool buffer_has_data_type(uint32_t p_buffer_id, DataType p_type) const;
     [[nodiscard]] int32_t get_column_offset(uint32_t p_buffer_id, uint32_t p_column_id) const;
-
-    // Ring Buffer Utilities
     [[nodiscard]] size_t get_ring_available_read_bytes(uint32_t p_buffer_id) const;
     [[nodiscard]] size_t get_ring_available_write_bytes(uint32_t p_buffer_id) const;
     [[nodiscard]] bool is_ring_full(uint32_t p_buffer_id) const;
     [[nodiscard]] bool is_ring_empty(uint32_t p_buffer_id) const;
-
-    // Paged Buffer Utilities
     [[nodiscard]] uint32_t get_paged_allocated_page_count(uint32_t p_buffer_id) const;
     [[nodiscard]] bool is_page_allocated_for_index(uint32_t p_buffer_id, size_t p_flat_index) const;
-
-    // Tiled SoA Utilities
     [[nodiscard]] uint32_t get_tile_count(uint32_t p_buffer_id) const;
     [[nodiscard]] uint32_t get_elements_per_tile(uint32_t p_buffer_id) const;
 
     // --- Grant & Synchronization ---
-    /**
-     * bake_grant
-     * Resolves requirements into high-performance pointers. 
-     * Performs JIT GPU sync if p_needs_gpu is true.
-     */
     template <IsMemoryGrant TGrant>
     bool bake_grant(TGrant& r_grant, std::span<const GrantPartPOD> p_requirements, bool p_needs_gpu = false) {
         constexpr uint32_t max_parts = sizeof(r_grant.parts) / sizeof(GrantPartPOD);
@@ -201,10 +157,6 @@ public:
         return false;
     }
     
-    /**
-     * release_grant
-     * Clears write masks and marks data as dirty for future GPU syncs.
-     */
     template <IsMemoryGrant TGrant>
     void release_grant(TGrant& r_grant) {
         if (!r_grant.active) return;
@@ -212,24 +164,12 @@ public:
         r_grant.active = false;
     }
 
-    /**
-     * populate_inverse_selection
-     * Transforms an empty MemoryBufferSelectionPOD into a fully populated one by
-     * inverting the buffer's global bitset via SIMD operations.
-     */
     void populate_inverse_selection(uint32_t p_buffer_id, MemoryBufferSelectionPOD& r_selection);
-    
-    /**
-     * flush_gpu_updates
-     * Manual trigger to push all "CPU-Dirty" buffers to VRAM in a batch.
-     * Drains the internal Command Ring.
-     */
     void flush_gpu_updates();
 
     // --- System Logic ---
     void rebase_master_block(size_t p_new_capacity);
     
-    // Getters
     [[nodiscard]] const uint64_t* get_global_version_ptr() const { return &global_version; }
     [[nodiscard]] MemoryBufferPOD* get_buffer(uint32_t p_id);
     [[nodiscard]] godot::RenderingDevice* get_rendering_device() const { return rd; }
