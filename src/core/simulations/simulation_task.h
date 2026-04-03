@@ -20,7 +20,7 @@ class alignas(64) SimulationTask final : public INativeTask {
             T_Logic::requirements, 
             T_Logic::supported_layouts, 
             ViewTraits<T_View>::capabilities, 
-            BufferLayoutType::FLAT // Or extract from T_Strategy if available
+            BufferLayoutType::NONE // Layout validation happens dynamically or via graph bounds
         ),
         "SimulationTask instantiation failed: The selected T_View or T_Strategy does not fulfill the hardware/layout requirements of the T_Logic!"
     );
@@ -37,7 +37,6 @@ public:
     virtual ~SimulationTask() override = default;
 
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {
-        // Optional reactive mask updating, just like QueryTask
         if constexpr (requires { logic.cull_selections(p_context, p_dirty_mask); }) {
             logic.cull_selections(p_context, p_dirty_mask);
         }
@@ -67,7 +66,7 @@ private:
         using VType = typename T_View::ValueType;
         
         view.head_ptr = reinterpret_cast<VType*>(p_part->raw_base_ptr);
-        view.count    = p_part->selection.count;
+        view.count    = p_part->selection.capacity; // Bind to capacity to respect dense bitsets
         
         // Allow the logic to inject shadow buffers/metadata if the view needs it
         if constexpr (requires { logic.configure_view(view, p_context, p_part); }) {

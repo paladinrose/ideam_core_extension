@@ -32,10 +32,6 @@ constexpr bool has_sim_requirement(SimulationRequirement p_mask, SimulationRequi
     return (static_cast<uint32_t>(p_mask) & static_cast<uint32_t>(p_req)) != 0;
 }
 
-/**
- * SimulationLogicValidator
- * Helper to validate T_Logic constraints against the chosen T_View capabilities.
- */
 struct SimulationLogicValidator {
     static constexpr bool validate(SimulationRequirement requirements, BufferLayoutType supported_layouts, ViewCapability view_caps, BufferLayoutType buffer_layout) {
         
@@ -67,6 +63,9 @@ concept IsSimulationLogic = requires {
     
     { T::requirements } -> std::convertible_to<SimulationRequirement>;
     { T::supported_layouts } -> std::convertible_to<BufferLayoutType>;
+    
+    // NEW: Forces the simulation to declare its transient footprint
+    { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
 
     // Must implement templated execute_sim handling the injected Context and View
     { 
