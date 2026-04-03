@@ -27,47 +27,23 @@ enum class QueryOp : uint8_t {
  */
 enum class LogicRequirement : uint32_t {
     NONE               = 0,
-    REQUIRES_SPATIAL   = 1 << 0, // Logic uses at(x,y,z) or neighbor stencils
-    REQUIRES_SIMD      = 1 << 1, // Logic requires AOSOAView/get_lane()
-    REQUIRES_ATOMIC    = 1 << 2, // Logic performs thread-safe aggregation
-    REQUIRES_PAGED     = 1 << 3, // Logic optimized for virtualized memory
-    READ_ONLY_DATA     = 1 << 4  // Hint for the scheduler: no write-back needed
+    REQUIRES_SPATIAL   = 1 << 0, 
+    REQUIRES_SIMD      = 1 << 1, 
+    REQUIRES_ATOMIC    = 1 << 2, 
+    REQUIRES_PAGED     = 1 << 3, 
+    READ_ONLY_DATA     = 1 << 4  
 };
 
 constexpr LogicRequirement operator|(LogicRequirement a, LogicRequirement b) noexcept {
     return static_cast<LogicRequirement>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
 
-/**
- * QueryLogicTraits<T_Logic>
- * The definitive metadata provider for the Task Graph UI and Compiler.
- */
-template<typename T_Logic>
-struct QueryLogicTraits {
-    // Basic structural requirements
-    static constexpr LogicRequirement requirements = T_Logic::requirements;
-    
-    // Bitmask of BufferLayoutTypes this logic is physically capable of processing
-    static constexpr BufferLayoutType supported_layouts = T_Logic::supported_layouts;
+constexpr bool has_logic_requirement(LogicRequirement p_mask, LogicRequirement p_req) noexcept {
+    return (static_cast<uint32_t>(p_mask) & static_cast<uint32_t>(p_req)) != 0;
+}
 
-    // Operation capabilities for Graph UI Command Queue filtering
-    static constexpr bool supports_cull = T_Logic::supports_cull;
-    static constexpr bool supports_addition = T_Logic::supports_addition;
-
-    // SIMD Width requirement (0 if scalar)
-    static constexpr uint32_t required_lane_width = []() {
-        if constexpr (requires { T_Logic::required_lane_width; }) {
-            return T_Logic::required_lane_width;
-        }
-        return 0;
-    }();
-
-    [[nodiscard]] static constexpr bool is_compatible(
-        ViewCapability p_view_caps, 
-        BufferLayoutType p_buffer_layout
-    ) noexcept {
-        if (!has_layout(supported_layouts, p_buffer_layout)) return false;
-
+struct QueryLogicValidator {
+    static constexpr bool validate(LogicRequirement requirements, BufferLayoutType supported_layouts, ViewCapability p_view_caps, BufferLayoutType p_buffer_layout) {
         if ((static_cast<uint32_t>(requirements) & static_cast<uint32_t>(LogicRequirement::REQUIRES_SPATIAL)) &&
             !has_capability(p_view_caps, ViewCapability::SPATIAL_ACCESS)) {
             return false;
@@ -84,7 +60,7 @@ struct QueryLogicTraits {
 
 /**
  * IsQueryLogic Concept (C++20)
- * Enforces the contract for any T_Logic used in a QueryTask.
+ * Enforces the strict contract for bitwise Selection manipulators.
  */
 template <typename T>
 concept IsQueryLogic = requires {
@@ -97,16 +73,16 @@ concept IsQueryLogic = requires {
     { T::supports_cull } -> std::convertible_to<bool>;
     { T::supports_addition } -> std::convertible_to<bool>;
 
-    // Must implement templated execute_cull with QueryOp
+    // Must implement pure 'execute' handling the selection mutation.
     { 
-        std::declval<T>().template execute_cull<QueryOp::CULL, typename T::DefaultView, typename T::DefaultStrategy>(
-            std::declval<MemoryBufferSelectionPOD&>(), 
+        std::declval<T>().template execute<QueryOp::CULL, typename T::DefaultView, typename T::DefaultStrategy>(
+            std::declval<MemoryBufferSelectionPOD&>(),
             std::declval<const TaskContextPOD&>(), 
-            std::declval<const typename T::DefaultView&>()
-        )
-    };
-};
+            std::declval<typename T::DefaultView&>()
+        ) 
+    } -> std::same_as<void>;
+} && std::is_trivially_copyable_v<T>;
 
 } // namespace ideam::core
 
-#endif
+#endif // IDEAM_CORE_QUERY_LOGIC_TRAITS_H

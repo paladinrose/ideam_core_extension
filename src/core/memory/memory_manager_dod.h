@@ -44,6 +44,14 @@ private:
     size_t master_capacity = 0;
     size_t master_used = 0;
 
+    // --- Transient Arena (Workspace Memory) ---
+    uint8_t* transient_block_ptr = nullptr;
+    size_t transient_capacity = 0;
+    
+    // Lock-free bump allocator offset. 
+    // Atomic so multiple Tasks in a Wave can grab workspace simultaneously.
+    std::atomic<size_t> transient_used{0};
+
     // --- Versioning ---
     // Incremented on every rebase/reallocation to invalidate pointers globally.
     uint64_t global_version = 0;
@@ -107,7 +115,7 @@ private:
     void _release_grant_core(GrantPartPOD* p_parts, uint32_t p_part_count, uint64_t& r_uniform_handle);
 
 public:
-    MemoryManagerDOD(size_t p_initial_capacity);
+    MemoryManagerDOD(size_t p_initial_capacity, size_t p_initial_transient = 0);
     ~MemoryManagerDOD();
 
     void set_rendering_device(godot::RenderingDevice* p_rd) { rd = p_rd; }
@@ -119,6 +127,27 @@ public:
     void configure_tiled_soa(uint32_t p_id, uint32_t p_elements_per_tile);
     void configure_paged(uint32_t p_id, uint32_t p_page_size_bytes);
     bool expand_paged_buffer(uint32_t p_id, size_t p_new_size_bytes);
+
+    // --- Transient Allocator ---
+    /**
+     * allocate_transient
+     * Thread-safe, lock-free bump allocation from the Transient Arena.
+     * Guaranteed to be available only until the next `reset_transient()` call.
+     */
+    void* allocate_transient(size_t p_size_bytes, size_t p_alignment = 64);
+
+    /**
+     * reset_transient
+     * Flushes the entire transient workspace. Costs exactly 1 CPU cycle.
+     */
+    void reset_transient();
+    
+    /**
+     * ensure_transient_capacity
+     * Resizes the transient block if the required graph maximum exceeds it.
+     * ONLY call this during topology compilation/sync, NEVER during the hot frame loop.
+     */
+    void ensure_transient_capacity(size_t p_required_capacity);
 
     // --- Ring Operations ---
     bool ring_push(uint32_t p_id, const void* p_data, size_t p_size);

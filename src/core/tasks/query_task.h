@@ -5,71 +5,80 @@
 #include "query_logic/query_logic_traits.h"
 #include "../memory/views/single_element_view.h"
 #include "../memory/views/strategies.h"
-#include <cstddef> // Required for ptrdiff_t
+#include <cstddef> 
 
 namespace ideam::core {
 
 template<
-    typename T_Logic, 
+    IsQueryLogic T_Logic, 
     QueryOp Op          = QueryOp::CULL, 
     typename T_View     = typename T_Logic::DefaultView, 
     typename T_Strategy = typename T_Logic::DefaultStrategy
 >
-class QueryTask : public INativeTask {
-    // Compile-time safety check to prevent users from queueing an unsupported Op
+class alignas(64) QueryTask final : public INativeTask {
+    
     static_assert(
         (Op == QueryOp::CULL && T_Logic::supports_cull) ||
         (Op == QueryOp::ADD && T_Logic::supports_addition),
         "QueryTask instantiated with a QueryOp that the T_Logic does not support!"
     );
 
+    static_assert(
+        QueryLogicValidator::validate(
+            T_Logic::requirements, 
+            T_Logic::supported_layouts, 
+            ViewTraits<T_View>::capabilities, 
+            BufferLayoutType::NONE
+        ),
+        "QueryTask instantiation failed: Selected T_View does not fulfill T_Logic requirements!"
+    );
+
+private:
     T_Logic logic;
-    const char* task_name;
 
 public:
     using LogicType    = T_Logic;
     using ViewType     = T_View;
     using StrategyType = T_Strategy;
 
-    QueryTask(const T_Logic& p_logic, const char* p_name = "QueryTask")
-        : logic(p_logic), task_name(p_name) {}
-
+    explicit QueryTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~QueryTask() override = default;
 
-    [[nodiscard]] virtual const char* get_task_name() const override {
-        return task_name;
-    }
-
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {
-        // [DOD Update] Fetch by structural ID, not brittle array indices
-        const uint32_t target_id = logic.get_target_buffer_id(); 
-        
-        // Safely extract the mutable selection and the const part info
-        const GrantPartPOD* part = p_context.get_grant_part(target_id);
-        MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
+        // Only fire during the setup wave if we are actively pruning.
+        if constexpr (Op != QueryOp::CULL) return;
 
-        if (!part || !selection) {
-            return; // Buffer ID not present in this grant's cache line
-        }
-
-        const uint32_t actual_idx = static_cast<uint32_t>(part - p_context.grant->parts);
-        
-        T_View view = _create_view(p_context, actual_idx, part);
-        
-        // Compile-time routing to the chosen flat path
-        logic.template execute_cull<Op, T_View, T_Strategy>(*selection, p_context, view);
-    }
-
-    virtual void execute(const TaskContextPOD& p_context) override {
         const uint32_t target_id = logic.get_target_buffer_id();
         
         const GrantPartPOD* part = p_context.get_grant_part(target_id);
         if (!part) return;
 
-        const uint32_t actual_idx = static_cast<uint32_t>(part - p_context.grant->parts);
+        MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
         
-        T_View view = _create_view(p_context, actual_idx, part);
-        logic.template execute_sim<T_View, T_Strategy>(p_context, view);
+        const uint32_t actual_idx = static_cast<uint32_t>(part - p_context.grant->parts);
+        if (!selection || !(p_dirty_mask & (1 << actual_idx))) return;
+
+        T_View view = _create_view(p_context, part);
+        
+        // Zero-overhead route into immediate bitwise manipulation
+        logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
+    }
+
+    virtual void execute(const TaskContextPOD& p_context) override {
+        // Only fire during the hot execution wave if we are defer-appending.
+        if constexpr (Op != QueryOp::ADD) return;
+
+        const uint32_t target_id = logic.get_target_buffer_id();
+        
+        const GrantPartPOD* part = p_context.get_grant_part(target_id);
+        if (!part) return;
+
+        MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
+        if (!selection) return;
+
+        T_View view = _create_view(p_context, part);
+        
+        logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
 
 private:
@@ -78,16 +87,19 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline T_View _create_view(const TaskContextPOD& p_context, uint32_t p_idx, const GrantPartPOD* p_part) const {
+    inline T_View _create_view(const TaskContextPOD& p_context, const GrantPartPOD* p_part) const {
         T_View view;
         using VType = typename T_View::ValueType;
         
         view.head_ptr               = reinterpret_cast<VType*>(p_part->raw_base_ptr);
-        view.grant                  = p_context.grant;
-        view.grant_part_index       = p_idx;
+        view.count                  = p_part->selection.capacity;
         view.baked_buffer_version   = p_part->buffer_version_at_issue;
         view.baked_manager_version  = p_context.grant->manager_version_at_issue;
-
+        
+        if constexpr (requires { logic.configure_view(view, p_context, p_part); }) {
+            logic.configure_view(view, p_context, p_part);
+        }
+        
         return view;
     }
 };

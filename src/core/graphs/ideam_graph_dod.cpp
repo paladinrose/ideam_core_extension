@@ -156,6 +156,7 @@ void IdeamGraphDOD::_sort_kahn_waves() {
     }
 
     size_t total_node_count = 0;
+    size_t max_wave_transient = 0;
     
     // Pre-allocate DOD workspace to prevent heap churn
     std::vector<NodeID> next_wave;
@@ -200,6 +201,15 @@ void IdeamGraphDOD::_sort_kahn_waves() {
             std::ranges::sort(current_wave, std::greater{}, [this](NodeID a) {
                 return build_nodes.execution_priority[a];
             });
+        }
+
+        // Aggregate Transient Memory requirement for this parallel wave
+        size_t current_wave_transient = 0;
+        for (NodeID n : current_wave) {
+            current_wave_transient += _get_node_transient_requirement(n);
+        }
+        if (current_wave_transient > max_wave_transient) {
+            max_wave_transient = current_wave_transient;
         }
 
         total_node_count += current_wave.size();
@@ -252,6 +262,11 @@ void IdeamGraphDOD::_sort_kahn_waves() {
     }
     manager->release_grant(n_grant);
     manager->release_grant(m_grant);
+
+    // Apply the high-water mark for the Transient Arena
+    if (manager && max_wave_transient > 0) {
+        manager->ensure_transient_capacity(max_wave_transient);
+    }
 }
 
 void IdeamGraphDOD::_ensure_buffer(uint32_t& r_id, size_t p_size_bytes, uint32_t p_alignment) {

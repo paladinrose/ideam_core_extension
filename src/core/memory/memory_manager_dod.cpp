@@ -15,8 +15,8 @@ namespace ideam::core {
     constexpr size_t CACHE_LINE_SIZE = 64; 
 #endif
 
-MemoryManagerDOD::MemoryManagerDOD(size_t p_initial_capacity) 
-    : master_capacity(p_initial_capacity) {
+MemoryManagerDOD::MemoryManagerDOD(size_t p_initial_capacity, size_t p_initial_transient) 
+    : master_capacity(p_initial_capacity), transient_capacity(p_initial_transient) {
         
 #if defined(_MSC_VER)
     master_block_ptr = static_cast<uint8_t*>(_aligned_malloc(master_capacity, CACHE_LINE_SIZE));
@@ -25,6 +25,15 @@ MemoryManagerDOD::MemoryManagerDOD(size_t p_initial_capacity)
 #endif
 
     std::memset(master_block_ptr, 0, master_capacity);
+
+    if (transient_capacity > 0) {
+#if defined(_MSC_VER)
+        transient_block_ptr = static_cast<uint8_t*>(_aligned_malloc(transient_capacity, CACHE_LINE_SIZE));
+#else
+        transient_block_ptr = static_cast<uint8_t*>(std::aligned_alloc(CACHE_LINE_SIZE, transient_capacity));
+#endif
+        std::memset(transient_block_ptr, 0, transient_capacity);
+    }
 
     buffers.reserve(1024);
     buffer_gpu_rids.reserve(1024);
@@ -54,6 +63,14 @@ MemoryManagerDOD::~MemoryManagerDOD() {
 #endif
     }
 
+    if (transient_block_ptr) {
+#if defined(_MSC_VER)
+        _aligned_free(transient_block_ptr);
+#else
+        std::free(transient_block_ptr);
+#endif
+    }
+
     for (auto& buf : buffers) {
         if (buf.layout_type == BufferLayoutType::PAGED && buf.extra.paged.table_ptr) {
             std::free(buf.extra.paged.table_ptr);
@@ -63,6 +80,59 @@ MemoryManagerDOD::~MemoryManagerDOD() {
 
 void MemoryManagerDOD::_initialize_system_buffers() {
     system_command_ring_id = create_buffer(BufferLayoutType::RING, 1024 * 1024, 64);
+}
+
+void* MemoryManagerDOD::allocate_transient(size_t p_size_bytes, size_t p_alignment) {
+    if (p_size_bytes == 0) return nullptr;
+
+    size_t current_offset = transient_used.load(std::memory_order_relaxed);
+    size_t aligned_offset;
+    size_t new_offset;
+
+    // Lock-free Compare-And-Swap (CAS) Loop
+    do {
+        aligned_offset = MemoryUtilities::align_to(current_offset, p_alignment);
+        new_offset = aligned_offset + p_size_bytes;
+        
+        if (new_offset > transient_capacity) {
+            // Out of transient memory! The graph failed to pre-calculate its maximum bounds.
+            return nullptr; 
+        }
+    } while (!transient_used.compare_exchange_weak(
+                current_offset, 
+                new_offset, 
+                std::memory_order_acq_rel, 
+                std::memory_order_relaxed));
+
+    return transient_block_ptr + aligned_offset;
+}
+
+void MemoryManagerDOD::reset_transient() {
+    // Zero overhead flush. We do NOT memset the data to 0. 
+    transient_used.store(0, std::memory_order_release);
+}
+
+void MemoryManagerDOD::ensure_transient_capacity(size_t p_required_capacity) {
+    if (p_required_capacity <= transient_capacity) return;
+    
+    // Single-threaded during topology re-bakes
+#if defined(_MSC_VER)
+    uint8_t* new_block = static_cast<uint8_t*>(_aligned_malloc(p_required_capacity, CACHE_LINE_SIZE));
+#else
+    uint8_t* new_block = static_cast<uint8_t*>(std::aligned_alloc(CACHE_LINE_SIZE, p_required_capacity));
+#endif
+
+    if (transient_block_ptr) {
+#if defined(_MSC_VER)
+        _aligned_free(transient_block_ptr);
+#else
+        std::free(transient_block_ptr);
+#endif
+    }
+
+    transient_block_ptr = new_block;
+    transient_capacity = p_required_capacity;
+    transient_used.store(0, std::memory_order_relaxed);
 }
 
 uint32_t MemoryManagerDOD::create_buffer(BufferLayoutType p_layout, size_t p_size_bytes, uint32_t p_alignment) {

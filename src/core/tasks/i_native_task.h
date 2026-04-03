@@ -25,8 +25,8 @@ struct TaskContextPOD {
     TaskGraphCommandPOD* graph_commands = nullptr;     // Tier 1: Processed after the entire Graph runs
     TaskSelectionCommandPOD* wave_commands = nullptr;  // Tier 2: Processed immediately after this Wave
 
-    // --- Wave Scratchpad ---
-    uint64_t* wave_scratchpad = nullptr;               // Volatile buffer for zero-allocation bitwise operations
+    // --- Transient Workspace ---
+    void* local_workspace = nullptr;                   // Dedicated, lock-free transient memory for this Node
 
     // --- Command Queuing Methods (Inlined for DOD Fast Path) ---
     

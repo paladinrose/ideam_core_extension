@@ -21,6 +21,7 @@ NodeID TaskGraphDOD::add_task_node(TaskTypeDOD p_type) {
         output_port_meta.resize(id + 1);
         constant_port_meta.resize(id + 1);
         baked_connections.resize(id + 1);
+        transient_bytes_meta.resize(id + 1, 0);
     }
 
     task_types[id] = p_type;
@@ -46,6 +47,13 @@ void TaskGraphDOD::configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32
 void TaskGraphDOD::configure_native_interface(NodeID p_id, INativeTask* p_interface) {
     if (p_id < cpu_metadata.size()) {
         cpu_metadata[p_id].native_interface = p_interface;
+    }
+}
+
+void TaskGraphDOD::set_node_transient_requirement(NodeID p_id, uint32_t p_bytes) {
+    if (p_id < transient_bytes_meta.size()) {
+        transient_bytes_meta[p_id] = p_bytes;
+        dirty_flags |= STRUCTURE; 
     }
 }
 
@@ -98,18 +106,16 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
 
     manager->flush_gpu_updates();
 
-    // Ensure Utility Command and Scratchpad Buffers exist (4MB capacity each)
+    // Ensure Utility Command Buffers exist (4MB capacity each)
     _ensure_buffer(tier1_buffer_id, 4194304, 64);
     _ensure_buffer(tier2_buffer_id, 4194304, 64);
-    _ensure_buffer(scratchpad_buffer_id, 4194304, 64);
 
     MemoryGrantPOD global_grant;
-    std::array<GrantPartPOD, 5> reqs = {{
+    std::array<GrantPartPOD, 4> reqs = {{
         {.buffer_id = wave_node_id, .access_mode = BufferAccessMode::READ},
         {.buffer_id = wave_meta_id, .access_mode = BufferAccessMode::READ},
         {.buffer_id = tier1_buffer_id, .access_mode = BufferAccessMode::WRITE},
-        {.buffer_id = tier2_buffer_id, .access_mode = BufferAccessMode::WRITE},
-        {.buffer_id = scratchpad_buffer_id, .access_mode = BufferAccessMode::WRITE}
+        {.buffer_id = tier2_buffer_id, .access_mode = BufferAccessMode::WRITE}
     }};
 
     if (!manager->bake_grant(global_grant, reqs)) return;
@@ -132,8 +138,6 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
         tier1_meta[i].reset();
     }
 
-    uint64_t* wave_scratchpad_ptr = reinterpret_cast<uint64_t*>(global_grant.parts[4].raw_base_ptr);
-
     const MemoryBufferPOD* m_buf = manager->get_buffer(wave_meta_id);
     uint32_t wave_count = (m_buf) ? static_cast<uint32_t>(m_buf->capacity_bytes / sizeof(WaveInfo)) : 0;
 
@@ -148,6 +152,16 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
             current_wave_nodes[i] = n_view[wave.offset + i];
         }
 
+        // --- Transient Allocation Pass ---
+        manager->reset_transient();
+        std::vector<void*> wave_workspaces(wave.count, nullptr);
+        for (uint32_t i = 0; i < wave.count; ++i) {
+            size_t req = transient_bytes_meta[current_wave_nodes[i]];
+            if (req > 0) {
+                wave_workspaces[i] = manager->allocate_transient(req, 64);
+            }
+        }
+
         int64_t* tier2_arena = reinterpret_cast<int64_t*>(global_grant.parts[3].raw_base_ptr);
         size_t t2_chunk = (t2_cap / sizeof(int64_t)) / wave.count;
         
@@ -159,11 +173,11 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
         }
 
         for (uint32_t i = 0; i < wave.count; ++i) {
-            _clean_selections(current_wave_nodes[i], wave_scratchpad_ptr);
+            _clean_selections(current_wave_nodes[i], wave_workspaces[i]);
         }
 
         _batch_setup_wave(current_wave_nodes.data(), wave.count);
-        _batch_execute_wave(current_wave_nodes.data(), wave.count, p_delta, wave_scratchpad_ptr);
+        _batch_execute_wave(current_wave_nodes.data(), wave.count, p_delta, wave_workspaces.data());
         
         _process_tier2_commands(current_wave_nodes.data(), wave.count);
         _batch_resolve_wave(current_wave_nodes.data(), wave.count);
@@ -174,7 +188,7 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
     manager->release_grant(global_grant);
 }
 
-void TaskGraphDOD::_clean_selections(NodeID p_id, uint64_t* p_scratchpad) {
+void TaskGraphDOD::_clean_selections(NodeID p_id, void* p_workspace) {
     SelectionMetadata* meta = get_selection_meta(p_id);
     if (!meta || meta->dirty_parts_mask == 0) return;
 
@@ -186,7 +200,7 @@ void TaskGraphDOD::_clean_selections(NodeID p_id, uint64_t* p_scratchpad) {
     if (type == TaskTypeDOD::NATIVE_CPU || type == TaskTypeDOD::QUERY_CULLER) {
         TaskCPUMetadata& cpu_meta = cpu_metadata[p_id];
         if (cpu_meta.native_interface) {
-            TaskContextPOD ctx{ 0.0, grant, manager, nullptr, nullptr, p_scratchpad }; 
+            TaskContextPOD ctx{ 0.0, grant, manager, nullptr, nullptr, p_workspace }; 
             cpu_meta.native_interface->cull_selections(ctx, meta->dirty_parts_mask);
         }
     }
@@ -274,7 +288,7 @@ void TaskGraphDOD::_batch_setup_wave(const NodeID* p_nodes, uint32_t p_count) {
     }
 }
 
-void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, uint64_t* p_scratchpad) {
+void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, void** p_workspaces) {
     int64_t compute_list = -1;
 
     for (uint32_t i = 0; i < p_count; ++i) {
@@ -288,7 +302,7 @@ void TaskGraphDOD::_batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, 
             case TaskTypeDOD::NATIVE_CPU: {
                 TaskCPUMetadata& meta = cpu_metadata[id];
                 if (meta.native_interface) {
-                    TaskContextPOD ctx{ p_delta, grant, manager, &tier1_meta[id], &tier2_meta[i], p_scratchpad };
+                    TaskContextPOD ctx{ p_delta, grant, manager, &tier1_meta[id], &tier2_meta[i], p_workspaces[i] };
                     meta.native_interface->execute(ctx);
                 }
             } break;
@@ -436,12 +450,15 @@ void TaskGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std::
     std::vector<godot::Variant> p_const_data;
     p_const_data.reserve(constant_port_data.size());
 
+    std::vector<uint32_t> p_transient(new_size, 0);
+
     for (uint32_t i = 0; i < p_node_lut.size(); ++i) {
         NodeID n = p_node_lut[i];
         if (n != INVALID_ID) {
             p_types[n] = task_types[i];
             p_cpu[n] = std::move(cpu_metadata[i]);
             p_gpu[n] = std::move(gpu_metadata[i]);
+            p_transient[n] = transient_bytes_meta[i];
             
             if (i < input_port_meta.size() && input_port_meta[i].count > 0) {
                 p_in_meta[n].offset = static_cast<uint32_t>(p_in_data.size());
@@ -469,6 +486,7 @@ void TaskGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std::
     task_types = std::move(p_types);
     cpu_metadata = std::move(p_cpu);
     gpu_metadata = std::move(p_gpu);
+    transient_bytes_meta = std::move(p_transient);
     
     input_port_meta = std::move(p_in_meta);
     input_port_data = std::move(p_in_data);
@@ -486,6 +504,7 @@ void TaskGraphDOD::clear() {
     input_port_meta.clear(); input_port_data.clear();
     output_port_meta.clear(); output_port_data.clear();
     constant_port_meta.clear(); constant_port_data.clear();
+    transient_bytes_meta.clear();
     baked_connections.clear();
     MemoryGraphDOD::clear();
 }

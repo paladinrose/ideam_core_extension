@@ -132,6 +132,13 @@ protected:
     virtual void _remap_ids(const std::vector<NodeID>& p_node_lut, const std::vector<EdgeID>& p_edge_lut);
     
     /**
+     * @brief _get_node_transient_requirement
+     * Hook for derived execution graphs (like TaskGraphDOD) to report the memory
+     * needed for a node's temporary workspace. Calculated during wave baking.
+     */
+    virtual size_t _get_node_transient_requirement(NodeID p_id) const { return 0; }
+
+    /**
      * @brief _ensure_buffer
      * Upgraded to utilize PAGED memory buffers. Allows infinite virtual growth without forcing 
      * the underlying MemoryManagerDOD to rebase or fragment the master block.

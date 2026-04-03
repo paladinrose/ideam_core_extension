@@ -68,22 +68,29 @@ protected:
 
     std::vector<std::vector<TaskPortConnectionDOD>> baked_connections;
 
+    // --- Transient Memory ---
+    std::vector<uint32_t> transient_bytes_meta;
+    
+    virtual size_t _get_node_transient_requirement(NodeID p_id) const override {
+        if (p_id < transient_bytes_meta.size()) return transient_bytes_meta[p_id];
+        return 0;
+    }
+
     godot::RenderingDevice* rd = nullptr;
 
     // --- Command Buffer Resources ---
     uint32_t tier1_buffer_id = INVALID_ID;
     uint32_t tier2_buffer_id = INVALID_ID;
-    uint32_t scratchpad_buffer_id = INVALID_ID;
     
     std::vector<TaskGraphCommandPOD> tier1_meta;
     std::vector<TaskSelectionCommandPOD> tier2_meta;
 
     // --- Internal Execution Pipeline ---
     void _bake_port_connections();
-    void _clean_selections(NodeID p_id, uint64_t* p_scratchpad);
+    void _clean_selections(NodeID p_id, void* p_workspace);
     
     void _batch_setup_wave(const NodeID* p_nodes, uint32_t p_count);
-    void _batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, uint64_t* p_scratchpad);
+    void _batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, void** p_workspaces);
     void _batch_resolve_wave(const NodeID* p_nodes, uint32_t p_count);
     
     void _process_tier2_commands(const NodeID* p_nodes, uint32_t p_count);
@@ -106,6 +113,7 @@ public:
     void configure_cpu_task(NodeID p_id, godot::Object* p_target, const godot::StringName& p_method);
     void configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32_t x, uint32_t y, uint32_t z);
     void configure_native_interface(NodeID p_id, INativeTask* p_interface);
+    void set_node_transient_requirement(NodeID p_id, uint32_t p_bytes);
     
     void set_port_mappings(NodeID p_id, bool p_input, std::span<const TaskPortMetadata> p_mappings);
     void set_port_constants(NodeID p_id, std::span<const godot::Variant> p_constants);
