@@ -23,7 +23,7 @@ namespace ideam::core {
 struct GrantPartPOD {
     // --- 8-Byte Alignment Block ---
     uint8_t* raw_base_ptr = nullptr;     // Absolute start (Master + Offset)
-    MemoryBufferSelectionPOD selection;   // Unified DOD Selection (88 bytes)
+    MemoryBufferSelectionPOD selection;   // Unified DOD Selection (104 bytes)
 
     // --- 4-Byte Alignment Block ---
     uint32_t buffer_id = 0xFFFFFFFF;
@@ -41,7 +41,7 @@ uint8_t reserved_padding[6] = {0};
 };
 
 static_assert(sizeof(GrantPartPOD) % 8 == 0, "GrantPartPOD is not properly padded!");
-static_assert(sizeof(GrantPartPOD) == 128, "GrantPartPOD size altered from expected 128 bytes!");
+static_assert(sizeof(GrantPartPOD) == 136, "GrantPartPOD size altered from expected 136 bytes!");
 
 /**
  * TMemoryGrant
@@ -109,12 +109,12 @@ struct alignas(GRANT_CACHE_LINE) TMemoryGrant {
 /**
  * Standard Aliases
  */
-using MemoryGrantPOD      = TMemoryGrant<4>;  // 576 bytes (Exactly 9 cache lines)
-using MemoryGrantHeavyPOD = TMemoryGrant<8>;  // 1088 bytes (Exactly 17 cache lines)
+using MemoryGrantPOD      = TMemoryGrant<4>;  // 640 bytes (Exactly 10 cache lines)
+using MemoryGrantHeavyPOD = TMemoryGrant<8>;  // 1152 bytes (Exactly 18 cache lines)
 
 // Compile-Time Defenses: Lock the exact memory footprints
-static_assert(sizeof(MemoryGrantPOD) == 576, "MemoryGrantPOD (Lite) broke 9-cache-line perfection!");
-static_assert(sizeof(MemoryGrantHeavyPOD) == 1088, "MemoryGrantHeavyPOD broke 17-cache-line perfection!");
+static_assert(sizeof(MemoryGrantPOD) == 640, "MemoryGrantPOD (Lite) broke 10-cache-lines!");
+static_assert(sizeof(MemoryGrantHeavyPOD) == 1152, "MemoryGrantHeavyPOD broke 18-cache-lines!");
 
 } // namespace ideam::core
 

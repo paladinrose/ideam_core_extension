@@ -43,6 +43,8 @@ public:
 
     // Global Access
     static Object *undo_redo();
+    // A static bridge to request the shared composer window from the active plugin instance.
+    static Window* get_shared_composer_window();
 };
 
 } // namespace godot

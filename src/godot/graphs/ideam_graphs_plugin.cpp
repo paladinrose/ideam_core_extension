@@ -1,6 +1,7 @@
 #include "ideam_graphs_plugin.h"
 #include "ideam_graph_inspector.h"
 
+#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/classes/editor_undo_redo_manager.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
@@ -115,6 +116,26 @@ Object *IdeamGraphsPlugin::undo_redo() {
         return singleton->get_undo_redo();
     }
     return nullptr;
+}
+
+Window* IdeamGraphsPlugin::get_shared_composer_window() {
+    if (!singleton) {
+        return nullptr;
+    }
+
+    // Lazy initialization of the shared window
+    if (!singleton->graph_composer_window) {
+        singleton->graph_composer_window = memnew(Window);
+        singleton->graph_composer_window->set_title("Graph Composer");
+        singleton->graph_composer_window->set_min_size(Vector2i(800, 600));
+        
+        // If we are in the editor, we can parent it to the editor's base control
+        if (Engine::get_singleton()->is_editor_hint()) {
+            EditorInterface::get_singleton()->get_base_control()->add_child(singleton->graph_composer_window);
+        }
+    }
+
+    return singleton->graph_composer_window;
 }
 
 } // namespace godot

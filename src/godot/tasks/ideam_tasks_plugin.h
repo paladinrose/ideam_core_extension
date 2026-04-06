@@ -7,23 +7,17 @@
 
 namespace godot {
 
-/**
- * @class IdeamTasksPlugin
- * @brief Ported from Ideam_Tasks.gd. 
- * Manages task-related editor extensions and provides global access to Task undo/redo.
- */
 class IdeamTasksPlugin : public IdeamEditorPlugin {
     GDCLASS(IdeamTasksPlugin, IdeamEditorPlugin)
 
 private:
     static IdeamTasksPlugin *singleton;
 
-    // Resource Paths
+    // Ecosystem resource paths defining tasks layout defaults
     static constexpr std::string_view TASKS_SETTINGS_PATH = "res://addons/ideam_tasks/resources/project_tasks_settings.res";
-    static constexpr std::string_view SETTINGS_PATHS = "res://addons/ideam_project_tools/resources/project_wizard_settings_paths.res";
 
-    // Members
-    Ref<EditorInspectorPlugin> plan_editor;
+    // Inspector for Task resources (TaskGraphResource, etc.)
+    Ref<EditorInspectorPlugin> task_inspector;
 
 protected:
     static void _bind_methods();
@@ -36,11 +30,8 @@ public:
     virtual void _enter_tree() override;
     virtual void _exit_tree() override;
 
-    // Static Accessors
+    // Global Access
     static Object *undo_redo();
-    static void wait_for_editor_frame();
-
-    static IdeamTasksPlugin *get_singleton() { return singleton; }
 };
 
 } // namespace godot
