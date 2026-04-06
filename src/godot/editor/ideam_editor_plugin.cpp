@@ -1,18 +1,25 @@
 #include "ideam_editor_plugin.h"
-
 #include <godot_cpp/variant/utility_functions.hpp>
 
 namespace godot {
 
 void IdeamEditorPlugin::_bind_methods() {
-	// Base class bindings for the Ideam ecosystem.
+	ClassDB::bind_method(D_METHOD("validate_script_templates"), &IdeamEditorPlugin::validate_script_templates);
+	
+    // Handshake API
+    ClassDB::bind_method(D_METHOD("set_plugin_active", "plugin_name", "active"), &IdeamEditorPlugin::set_plugin_active);
+    ClassDB::bind_method(D_METHOD("is_plugin_active", "plugin_name"), &IdeamEditorPlugin::is_plugin_active);
+
+	// Expose the universal registry to GDScript
+	ClassDB::bind_method(D_METHOD("register_to_ecosystem", "section", "key", "value"), &IdeamEditorPlugin::register_to_ecosystem);
+	ClassDB::bind_method(D_METHOD("get_from_ecosystem", "section", "key", "default_value"), &IdeamEditorPlugin::get_from_ecosystem, DEFVAL(Variant()));
+	ClassDB::bind_method(D_METHOD("get_ecosystem_keys", "section"), &IdeamEditorPlugin::get_ecosystem_keys);
+	ClassDB::bind_method(D_METHOD("get_ecosystem_section", "section"), &IdeamEditorPlugin::get_ecosystem_section);
 }
 
 void IdeamEditorPlugin::validate_script_templates() {
 	Ref<DirAccess> dir = DirAccess::open("res://");
-	if (dir.is_null()) {
-		return;
-	}
+	if (dir.is_null()) return;
 
 	String template_path = String(SCRIPT_TEMPLATE_PATH.data());
 	if (!dir->dir_exists(template_path)) {
@@ -32,50 +39,80 @@ void IdeamEditorPlugin::validate_script_templates() {
 	}
 }
 
-void IdeamEditorPlugin::check_for_project_tools(const String &p_settings_path, const String &p_wizard_paths) {
-	ResourceLoader *rl = ResourceLoader::get_singleton();
+// --- Plugin Lifecycle & Lateral Handshake ---
+
+void IdeamEditorPlugin::set_plugin_active(const String &p_plugin_name, bool p_active) {
+    if (p_active) {
+        register_to_ecosystem("ActivePlugins", p_plugin_name, true);
+    } else {
+        register_to_ecosystem("ActivePlugins", p_plugin_name, false);
+    }
+}
+
+bool IdeamEditorPlugin::is_plugin_active(const String &p_plugin_name) const {
+    return get_from_ecosystem("ActivePlugins", p_plugin_name, false);
+}
+
+// --- Universal Ecosystem Registry Implementation ---
+
+void IdeamEditorPlugin::register_to_ecosystem(const String &p_section, const String &p_key, const Variant &p_value) {
+	Ref<ConfigFile> config;
+	config.instantiate();
 	
-	// Ensure the specific plugin settings and the target directory exist
-	if (!rl->exists(p_settings_path) || !DirAccess::dir_exists_absolute("res://addons/ideam_project_tools")) {
-		return;
+	String path = String(REGISTRY_PATH.data());
+	if (FileAccess::file_exists(path)) {
+		config->load(path);
 	}
 
-	if (!rl->exists(p_wizard_paths)) {
-		return;
-	}
-
-	Ref<Resource> res = rl->load(p_wizard_paths);
-	if (res.is_null()) {
-		return;
-	}
-
-	// PackedDataContainer stores data in a binary blob. 
-	// We use Variant as an intermediary to invoke the internal unpacking to an Array.
-	Variant container_as_variant = res;
-	Array paths = container_as_variant;
+	config->set_value(p_section, p_key, p_value);
 	
-	bool already_registered = false;
-	for (int i = 0; i < paths.size(); ++i) {
-		if (paths[i].operator String() == p_settings_path) {
-			already_registered = true;
-			break;
+	Error err = config->save(path);
+	if (err != OK) {
+		UtilityFunctions::printerr("Ideam: Failed to save to ecosystem registry at ", path);
+	}
+}
+
+Variant IdeamEditorPlugin::get_from_ecosystem(const String &p_section, const String &p_key, const Variant &p_default) const {
+	Ref<ConfigFile> config;
+	config.instantiate();
+	
+	String path = String(REGISTRY_PATH.data());
+	if (config->load(path) == OK) {
+		return config->get_value(p_section, p_key, p_default);
+	}
+	
+	return p_default;
+}
+
+TypedArray<String> IdeamEditorPlugin::get_ecosystem_keys(const String &p_section) const {
+	Ref<ConfigFile> config;
+	config.instantiate();
+	TypedArray<String> keys;
+
+	String path = String(REGISTRY_PATH.data());
+	if (config->load(path) == OK && config->has_section(p_section)) {
+		PackedStringArray section_keys = config->get_section_keys(p_section);
+		for (int i = 0; i < section_keys.size(); ++i) {
+			keys.append(section_keys[i]);
 		}
 	}
+	return keys;
+}
 
-	if (!already_registered) {
-		paths.append(p_settings_path);
-		
-		Ref<PackedDataContainer> new_container;
-		new_container.instantiate();
-		Error pack_err = new_container->pack(paths);
-		
-		if (pack_err == OK) {
-			Error save_err = ResourceSaver::get_singleton()->save(new_container, p_wizard_paths);
-			if (save_err == OK) {
-				UtilityFunctions::print("Ideam: Registered plugin path: ", p_settings_path);
-			}
+Dictionary IdeamEditorPlugin::get_ecosystem_section(const String &p_section) const {
+	Ref<ConfigFile> config;
+	config.instantiate();
+	Dictionary section_data;
+
+	String path = String(REGISTRY_PATH.data());
+	if (config->load(path) == OK && config->has_section(p_section)) {
+		PackedStringArray section_keys = config->get_section_keys(p_section);
+		for (int i = 0; i < section_keys.size(); ++i) {
+			String key = section_keys[i];
+			section_data[key] = config->get_value(p_section, key);
 		}
 	}
+	return section_data;
 }
 
 } // namespace godot

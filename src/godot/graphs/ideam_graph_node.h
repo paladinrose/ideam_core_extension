@@ -3,19 +3,46 @@
 
 #include <godot_cpp/classes/graph_node.hpp>
 #include <godot_cpp/classes/input_event_mouse_button.hpp>
-#include "../../core/graphs/ideam_graph.h"
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/string_name.hpp>
 
 namespace godot {
 
+/**
+ * @class IdeamGraphNode
+ * @brief The visual UI component representing a node in the DOD graph.
+ * This class is purely a View. It reads from a state dictionary and emits signals 
+ * when the user requests a mutation.
+ */
 class IdeamGraphNode : public GraphNode {
     GDCLASS(IdeamGraphNode, GraphNode)
 
 private:
-    // Link to the specific node in the Core Topology
-    ideam::core::NodeID core_node_id = ideam::core::INVALID_NODE;
+    // The unique ID linking this UI node to its entry in the IdeamGraphResource
+    StringName blueprint_id;
+    
+    // The DOD classification type (determines ports and UI)
+    uint32_t type_id = 0;
+
+    // Cached state of node-specific properties
+    Dictionary properties;
 
 protected:
     static void _bind_methods();
+
+    // Internal helper to route context menus
+    void _emit_context_request();
+
+    /**
+     * @brief Virtual method for derived classes to generate their specific ports and UI fields.
+     * Called automatically at the end of initialize().
+     */
+    virtual void _build_ui();
+
+    /**
+     * @brief Helper for derived nodes to notify the parent GraphEdit that a property was changed by the user.
+     */
+    void emit_property_changed(const StringName& p_property_name, const Variant& p_new_value);
 
 public:
     IdeamGraphNode();
@@ -24,17 +51,20 @@ public:
     void _ready() override;
     void _gui_input(const Ref<InputEvent> &p_event) override;
 
-    // --- Core Sync ---
-    void set_core_node_id(ideam::core::NodeID p_id) { core_node_id = p_id; }
-    ideam::core::NodeID get_core_node_id() const { return core_node_id; }
+    // --- State Synchronization ---
+    /**
+     * @brief Initializes or updates the node's visual state from the Resource dictionary.
+     */
+    void initialize(const Dictionary& p_node_data);
+
+    StringName get_blueprint_id() const { return blueprint_id; }
+    uint32_t get_type_id() const { return type_id; }
+    Dictionary get_properties() const { return properties; }
 
     // --- Context Menu Hooks ---
-    // Child classes (e.g., TaskNode) override these to populate options
+    // Child classes (e.g., TransformTaskNode) override these to populate specific right-click options.
     virtual TypedArray<String> get_context_menu_options() const;
     virtual void select_context_menu_option(int p_id);
-
-    // Helper to notify the parent GraphEdit
-    void _emit_context_request();
 };
 
 } // namespace godot

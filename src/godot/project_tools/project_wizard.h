@@ -15,6 +15,7 @@
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/classes/editor_file_system.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/core/class_db.hpp>
@@ -23,16 +24,23 @@
 
 namespace godot {
 
-struct ScriptNode {
+class ScriptNode : public RefCounted {
+    GDCLASS(ScriptNode, RefCounted)
+public:
     Control* root_control = nullptr;
     bool previous_state = false;
     CheckBox* check_box = nullptr;
     LineEdit* name_edit = nullptr;
     Label* message_label = nullptr;
     Dictionary settings;
+
+    ScriptNode() = default;
+    ~ScriptNode() = default;
 };
 
-struct ResourceNode {
+class ResourceNode : public RefCounted {
+    GDCLASS(ResourceNode, RefCounted)
+public:
     Control* root_control = nullptr;
     bool previous_state = false;
     CheckBox* check_box = nullptr;
@@ -40,9 +48,14 @@ struct ResourceNode {
     Label* message_label = nullptr;
     Dictionary settings;
     CheckBox* use_generated_check = nullptr;
+
+    ResourceNode() = default;
+    ~ResourceNode() = default;
 };
 
-struct SceneNode {
+class SceneNode : public RefCounted {
+    GDCLASS(SceneNode, RefCounted)
+public:
     Control* root_control = nullptr;
     bool previous_state = false;
     CheckBox* check_box = nullptr;
@@ -51,28 +64,29 @@ struct SceneNode {
     Dictionary settings;
     CheckBox* use_generated_check = nullptr;
     Control* drop_content = nullptr;
+
+    SceneNode() = default;
+    ~SceneNode() = default;
 };
 
-struct FolderNode {
+class FolderNode : public RefCounted {
+    GDCLASS(FolderNode, RefCounted)
+public:
     Control* root_control = nullptr;
     bool previous_state = false;
     CheckBox* check_box = nullptr;
     Control* content_container = nullptr;
     Label* message_label = nullptr;
 
-    std::map<String, ScriptNode*> scripts;
-    std::map<String, ResourceNode*> resources;
-    std::map<String, SceneNode*> scenes;
-    std::map<String, FolderNode*> sub_folders;
+    std::map<String, Ref<ScriptNode>> scripts;
+    std::map<String, Ref<ResourceNode>> resources;
+    std::map<String, Ref<SceneNode>> scenes;
+    std::map<String, Ref<FolderNode>> sub_folders;
 
-    FolderNode* deep_copy() const;
+    FolderNode() = default;
+    ~FolderNode() = default;
 
-    ~FolderNode() {
-        for (auto& [key, val] : scripts) delete val;
-        for (auto& [key, val] : resources) delete val;
-        for (auto& [key, val] : scenes) delete val;
-        for (auto& [key, val] : sub_folders) delete val;
-    }
+    Ref<FolderNode> deep_copy() const;
 };
 
 class ProjectWizard : public Control {
@@ -107,9 +121,9 @@ private:
     Ref<PackedScene> node_field_template;
 
     // Data Structures
-    FolderNode* project_root = nullptr;
-    FolderNode* path_folders = nullptr;
-    FolderNode* total_folder_hierarchy = nullptr;
+    Ref<FolderNode> project_root;
+    Ref<FolderNode> path_folders;
+    Ref<FolderNode> total_folder_hierarchy;
     
     Dictionary project_settings_files;
     Dictionary project_settings;
@@ -144,37 +158,37 @@ private:
     void remove_resource_settings(const Array& other, int id = -1);
     void remove_scene_settings(const Array& other, int id = -1);
 
-    FolderNode* find_built_folder(const String& settings_path, FolderNode* folder);
+    Ref<FolderNode> find_built_folder(const String& settings_path, Ref<FolderNode> folder);
     
     // UI Helpers
     void build_settings_files_list();
-    FolderNode* build_settings_path(const String& settings_path, FolderNode* folder, Control* folder_content);
+    Ref<FolderNode> build_settings_path(const String& settings_path, Ref<FolderNode> folder, Control* folder_content);
     void build_setting_properties(Control* prop_container, const Dictionary& prop_settings);
     void build_node_setting(Control* node_field, const Dictionary& node_setting);
-    void auto_include_sub_folders(FolderNode* folder);
+    void auto_include_sub_folders(Ref<FolderNode> folder);
 
     // Validation & Generation
     void build_total_hierarchy();
-    bool validate_folder(FolderNode* folder, const String& folder_path);
+    bool validate_folder(Ref<FolderNode> folder, const String& folder_path);
     void generate_folders();
-    void generate_folder_recursive(FolderNode* folder, const String& folder_path);
+    void generate_folder_recursive(Ref<FolderNode> folder, const String& folder_path);
     void generate_scripts();
-    void generate_scripts_in_folder(FolderNode* folder, const String& folder_path);
+    void generate_scripts_in_folder(Ref<FolderNode> folder, const String& folder_path);
     void generate_script_file(const String& script_name, const String& scripts_path, const String& base_type);
     void generate_resources();
-    void generate_resources_in_folder(FolderNode* folder, const String& folder_path);
+    void generate_resources_in_folder(Ref<FolderNode> folder, const String& folder_path);
     void generate_resource_file(const String& res_name, const String& res_path, const Dictionary& settings, bool use_gen_scripts);
     void generate_scenes();
-    void generate_scenes_in_folder(FolderNode* folder, const String& folder_path);
+    void generate_scenes_in_folder(Ref<FolderNode> folder, const String& folder_path);
     void generate_scene_file(const String& scn_name, const String& scn_path, const Dictionary& settings, bool use_gen_scripts);
     Node* make_node(const Dictionary& node_settings, bool use_gen_scripts);
     void finish_generation();
 
     // Mass selection
-    void all_folders_pass(FolderNode* folder, const String& folder_path, bool check);
-    void all_scripts_pass(FolderNode* folder, const String& folder_path, bool check);
-    void all_resources_pass(FolderNode* folder, const String& folder_path, bool check);
-    void all_scenes_pass(FolderNode* folder, const String& folder_path, bool check);
+    void all_folders_pass(Ref<FolderNode> folder, const String& folder_path, bool check);
+    void all_scripts_pass(Ref<FolderNode> folder, const String& folder_path, bool check);
+    void all_resources_pass(Ref<FolderNode> folder, const String& folder_path, bool check);
+    void all_scenes_pass(Ref<FolderNode> folder, const String& folder_path, bool check);
 
 public:
     ProjectWizard();

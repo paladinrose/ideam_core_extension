@@ -3,9 +3,12 @@
 
 #include <godot_cpp/classes/graph_edit.hpp>
 #include <godot_cpp/classes/popup_menu.hpp>
-#include <godot_cpp/classes/editor_undo_redo_manager.hpp>
 #include "ideam_graph_node.h"
-#include "../../core/graphs/ideam_graph.h"
+
+// Forward declare our DOD Resource blueprint
+namespace ideam::godot_ext {
+    class IdeamGraphResource;
+}
 
 namespace godot {
 
@@ -13,8 +16,8 @@ class IdeamGraphEdit : public GraphEdit {
     GDCLASS(IdeamGraphEdit, GraphEdit)
 
 private:
-    // The link to the Core Functional Graph
-    ideam::core::IdeamGraph* core_graph = nullptr;
+    // The definitive source of truth for this graph's layout
+    Ref<ideam::godot_ext::IdeamGraphResource> current_blueprint;
 
     // UI Elements
     PopupMenu* context_popup = nullptr;
@@ -23,17 +26,23 @@ private:
     // Selection state for context actions
     IdeamGraphNode* context_node = nullptr;
 
-    // Dependency Injected by Inspector Plugin
-    Object* undo_redo = nullptr;
+    // Internal sync lock to prevent infinite feedback loops when dragging nodes
+    bool is_syncing_ui = false;
 
 protected:
     static void _bind_methods();
 
-    // Signal Handlers
-    void _request_connect(const String &p_from_node, int p_from_port, const String &p_to_node, int p_to_port);
-    void _request_disconnect(const String &p_from_node, int p_from_port, const String &p_to_node, int p_to_port);
+    // UI Signal Handlers
+    void _request_connect(const StringName &p_from_node, int p_from_port, const StringName &p_to_node, int p_to_port);
+    void _request_disconnect(const StringName &p_from_node, int p_from_port, const StringName &p_to_node, int p_to_port);
     void _show_popup(const Vector2 &p_at);
     void _popup_select(int p_id);
+    
+    // Triggered when the user finishes dragging a node
+    void _on_end_node_move();
+
+    // The Reactive Update Loop
+    void _on_blueprint_changed();
 
     // Internal Helpers
     void _create_popup();
@@ -46,16 +55,11 @@ public:
 
     void _ready() override;
 
-    // --- Core Integration ---
-    void set_core_graph(ideam::core::IdeamGraph* p_core) { core_graph = p_core; }
-    ideam::core::IdeamGraph* get_core_graph() const { return core_graph; }
+    // --- Blueprint Integration ---
+    void set_blueprint(const Ref<ideam::godot_ext::IdeamGraphResource>& p_blueprint);
+    Ref<ideam::godot_ext::IdeamGraphResource> get_blueprint() const { return current_blueprint; }
 
-    void clear_all_nodes();
     void node_context_clicked(IdeamGraphNode* p_node);
-
-    // Property Hook for Inspector Injection
-    void set_undo_redo(Object* p_ur) { undo_redo = p_ur; }
-    Object* get_undo_redo() const { return undo_redo; }
 };
 
 } // namespace godot

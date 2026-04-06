@@ -1,4 +1,5 @@
 #include "ideam_graphs_plugin.h"
+#include "ideam_graph_inspector.h"
 
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/classes/editor_undo_redo_manager.hpp>
@@ -29,23 +30,24 @@ IdeamGraphsPlugin::~IdeamGraphsPlugin() {
 
 void IdeamGraphsPlugin::_enter_tree() {
     validate_script_templates();
-    check_for_project_tools(String(GRAPHS_SETTINGS_PATH.data()), String(SETTINGS_PATHS.data()));
+    
+    // 1. Handshake: Announce this plugin is active
+    set_plugin_active("IdeamGraphs", true);
 
-    // Expects IdeamGraphInspector to be defined/registered in the C++ layer
+    // 2. Registry: Register the graph scaffolding settings into the global Wizard ecosystem
+    register_to_ecosystem("WizardSettings", "IdeamGraphs", String(GRAPHS_SETTINGS_PATH.data()));
+
+    // Instantiate and register the Inspector UI for the Graph Resources
     graph_editor.instantiate();
     add_inspector_plugin(graph_editor);
-
-    add_tool_menu_item("Ideam/Graph Composer", callable_mp(this, &IdeamGraphsPlugin::open_graph_composer));
 }
 
 void IdeamGraphsPlugin::_exit_tree() {
     remove_inspector_plugin(graph_editor);
-    remove_tool_menu_item("Ideam/Graph Composer");
+    close_graph_composer();
 
-    if (graph_composer_window) {
-        graph_composer_window->queue_free();
-        graph_composer_window = nullptr;
-    }
+    // Handshake: Remove plugin from active roster
+    set_plugin_active("IdeamGraphs", false);
 }
 
 void IdeamGraphsPlugin::open_graph_composer() {
@@ -54,35 +56,23 @@ void IdeamGraphsPlugin::open_graph_composer() {
         return;
     }
 
-    EditorInterface *ei = get_editor_interface();
-    Control *top = Object::cast_to<Control>(ei->get_editor_main_screen());
-    
-    if (!top) {
-        return;
-    }
-    // Recursive parent search for root control to center popup correctly
-    Control *p = top->get_parent_control();
-    while (p != nullptr) {
-        top = p;
-        p = top->get_parent_control();
-    }
+    Window *top = EditorInterface::get_singleton()->get_editor_main_screen()->get_window();
+    if (!top) return;
 
     graph_composer_window = memnew(Window);
     graph_composer_window->set_title("Ideam Graph Composer");
-    
-    Vector2 min_size = get_viewport()->get_visible_rect().size * 0.8;
+    graph_composer_window->connect("close_requested", Callable(this, "close_graph_composer"));
+
+    Vector2i min_size(800, 600);
     graph_composer_window->set_min_size(min_size);
-    
-    graph_composer_window->connect("close_requested", callable_mp(this, &IdeamGraphsPlugin::close_graph_composer));
-    
+
     ScrollContainer *scroll = memnew(ScrollContainer);
-    scroll->set_custom_minimum_size(min_size);
-    scroll->set_horizontal_scroll_mode(ScrollContainer::SCROLL_MODE_DISABLED);
+    scroll->set_anchors_preset(Control::PRESET_FULL_RECT);
     graph_composer_window->add_child(scroll);
 
     Ref<PackedScene> composer_scene = ResourceLoader::get_singleton()->load(String(GRAPH_COMPOSER_SCENE_PATH.data()));
     if (composer_scene.is_valid()) {
-        graph_composer = cast_to<Control>(composer_scene->instantiate());
+        graph_composer = Object::cast_to<Control>(composer_scene->instantiate());
         if (graph_composer) {
             scroll->add_child(graph_composer);
             // Calling GDScript/Dynamic methods via call
@@ -125,12 +115,6 @@ Object *IdeamGraphsPlugin::undo_redo() {
         return singleton->get_undo_redo();
     }
     return nullptr;
-}
-
-void IdeamGraphsPlugin::edit_graph(Object *p_graph, const Callable &p_graph_close) {
-    if (singleton) {
-        singleton->edit_ideam_graph(p_graph, p_graph_close);
-    }
 }
 
 } // namespace godot

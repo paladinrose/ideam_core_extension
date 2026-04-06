@@ -1,131 +1,49 @@
 #include "task_graph_node.h"
-#include <godot_cpp/variant/utility_functions.hpp>
+#include "task_graph_resource.h"
 
 namespace godot {
 
 void TaskGraphNode::_bind_methods() {
-    // Methods for synchronization can be exposed if needed for GDScript interop
+    ClassDB::bind_method(D_METHOD("get_task_type"), &TaskGraphNode::get_task_type);
 }
 
-TaskGraphNode::TaskGraphNode() {
-    main_container = memnew(VBoxContainer);
-    add_child(main_container);
+void TaskGraphNode::_build_ui() {
+    MemoryGraphNode::_build_ui();
 
-    input_rows = memnew(VBoxContainer);
-    main_container->add_child(input_rows);
-
-    output_rows = memnew(VBoxContainer);
-    main_container->add_child(output_rows);
-}
-
-TaskGraphNode::~TaskGraphNode() {
-}
-
-void TaskGraphNode::_ready() {
-    IdeamGraphNode::_ready();
-}
-
-void TaskGraphNode::set_graph_context(ideam::core::TaskGraph* p_graph) {
-    task_graph_ptr = p_graph;
-}
-
-void TaskGraphNode::sync_with_core() {
-    if (!task_graph_ptr) return;
-
-    ideam::core::TaskMetadata* metadata = task_graph_ptr->get_task(get_core_node_id());
-    if (!metadata) return;
-
-    // 1. Update Identity
-    set_title(metadata->title.c_str());
+    Dictionary props = get_properties();
     
-    // 2. Clear existing ports
-    for (int i = 0; i < get_child_count(); ++i) {
-        // Implementation detail: GraphEdit manages slot indices. 
-        // We ensure rows are managed within our sub-containers.
+    // Extract task type from the initialized dictionary
+    if (props.has("task_type")) {
+        task_type = static_cast<uint32_t>(props["task_type"]);
     }
 
-    // 3. Build Input Ports
-    int slot_idx = 0;
-    for (const auto& mapping : metadata->input_mappings) {
-        Label* lbl = memnew(Label);
-        lbl->set_text(mapping.internal_key.c_str());
-        input_rows->add_child(lbl);
-        
-        // Slot logic: Left side, type-specific color
-        set_slot(slot_idx, true, 0, Color(1,1,1), false, 0, Color(1,1,1)); 
-        slot_idx++;
-    }
-
-    // 4. Build Output Ports
-    for (const auto& mapping : metadata->output_mappings) {
-        Label* lbl = memnew(Label);
-        lbl->set_text(mapping.internal_key.c_str());
-        lbl->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_RIGHT);
-        output_rows->add_child(lbl);
-        
-        // Slot logic: Right side
-        set_slot(slot_idx, false, 0, Color(1,1,1), true, 0, Color(1,1,1));
-        slot_idx++;
-    }
-
-    update_status_visuals();
-}
-
-void TaskGraphNode::update_status_visuals() {
-    if (!task_graph_ptr) return;
-    ideam::core::TaskMetadata* metadata = task_graph_ptr->get_task(get_core_node_id());
-    if (!metadata) return;
-
-    switch (metadata->status) {
-        case ideam::core::TaskStatus::PLANNING:
-            set_self_modulate(COLOR_PLANNING);
+    task_type_label = memnew(Label);
+    
+    switch (task_type) {
+        case ideam::godot_ext::TASK_GODOT_REFLECTION:
+            task_type_label->set_text("Type: GDScript Reflection");
+            set_self_modulate(Color(0.5f, 0.5f, 1.0f)); // Blue-ish
             break;
-        case ideam::core::TaskStatus::IN_PROGRESS:
-            set_self_modulate(COLOR_IN_PROGRESS);
+        case ideam::godot_ext::TASK_NATIVE_CPU:
+            task_type_label->set_text("Type: Native CPU Transform");
+            set_self_modulate(Color(1.0f, 0.5f, 0.5f)); // Red-ish
             break;
-        case ideam::core::TaskStatus::COMPLETE:
-            set_self_modulate(COLOR_COMPLETE);
+        case ideam::godot_ext::TASK_COMPUTE_GPU:
+            task_type_label->set_text("Type: GPU Compute Shader");
+            set_self_modulate(Color(0.8f, 0.3f, 0.8f)); // Purple-ish
             break;
-        case ideam::core::TaskStatus::FAILED:
-            set_self_modulate(COLOR_FAILED);
+        case ideam::godot_ext::TASK_QUERY_CULLER:
+            task_type_label->set_text("Type: Query / Culler");
+            set_self_modulate(Color(1.0f, 0.8f, 0.2f)); // Yellow/Orange
             break;
         default:
+            task_type_label->set_text("Type: Unknown");
             break;
     }
-}
 
-Color TaskGraphNode::get_color_for_type(ideam::core::DataType p_type) {
-    switch (p_type) {
-        case ideam::core::DataType::FLOAT32: return Color(0.3, 0.7, 1.0); // Light Blue
-        case ideam::core::DataType::INT32:   return Color(0.3, 1.0, 0.5); // Green
-        case ideam::core::DataType::VECTOR3: return Color(1.0, 0.8, 0.2); // Yellow/Gold
-        case ideam::core::DataType::COLOR:   return Color(1.0, 0.4, 0.8); // Pink
-        default: return Color(1, 1, 1);
-    }
-}
-
-TypedArray<String> TaskGraphNode::get_context_menu_options() const {
-    TypedArray<String> options;
-    options.push_back("Set as Entry Point");
-    options.push_back("Set as Exit Point");
-    options.push_back("---");
-    options.push_back("Reset Task");
-    options.push_back("Delete");
-    return options;
-}
-
-void TaskGraphNode::select_context_menu_option(int p_id) {
-    switch (p_id) {
-        case 0: // Entry Point logic
-            break;
-        case 3: // Reset
-            if (task_graph_ptr) {
-                ideam::core::TaskMetadata* m = task_graph_ptr->get_task(get_core_node_id());
-                if (m) m->status = ideam::core::TaskStatus::PLANNING;
-                update_status_visuals();
-            }
-            break;
-    }
+    // Add visual indicator to the top of the node
+    add_child(task_type_label);
+    move_child(task_type_label, 0); 
 }
 
 } // namespace godot

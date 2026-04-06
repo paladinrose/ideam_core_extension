@@ -16,9 +16,8 @@ class IdeamGraphsPlugin : public IdeamEditorPlugin {
 private:
     static IdeamGraphsPlugin *singleton;
 
-    // Resource Paths
+    // Resource Paths (Deprecated SETTINGS_PATHS in favor of the new ConfigFile ecosystem)
     static constexpr std::string_view GRAPHS_SETTINGS_PATH = "res://addons/ideam_graphs/resources/project_graphs_settings.res";
-    static constexpr std::string_view SETTINGS_PATHS = "res://addons/ideam_project_tools/resources/project_wizard_settings_paths.res";
     static constexpr std::string_view GRAPH_COMPOSER_SCENE_PATH = "res://addons/ideam_graphs/scenes/graph_composer_tool.tscn";
 
     // Members
@@ -42,11 +41,8 @@ public:
     void close_graph_composer();
     void edit_ideam_graph(Object *p_graph, const Callable &p_graph_close);
 
-    // Static Accessors
+    // Global Access
     static Object *undo_redo();
-    static void edit_graph(Object *p_graph, const Callable &p_graph_close);
-
-    static IdeamGraphsPlugin *get_singleton() { return singleton; }
 };
 
 } // namespace godot

@@ -15,6 +15,9 @@ class IdeamGraphInspector : public IdeamEditorInspectorPlugin {
 protected:
 	static void _bind_methods();
 
+	// Signal receiver for the injected button
+	void _on_edit_graph_pressed(Object* p_object);
+
 public:
 	IdeamGraphInspector();
 	virtual ~IdeamGraphInspector() override;

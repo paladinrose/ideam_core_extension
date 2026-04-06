@@ -18,16 +18,18 @@ void ProjectWizard::_bind_methods() {
 }
 
 ProjectWizard::ProjectWizard() {
-    project_root = new FolderNode();
+    project_root.instantiate();
 }
 
 ProjectWizard::~ProjectWizard() {
-    if (project_root) delete project_root;
-    if (path_folders) delete path_folders;
+    // Automatic memory cleanup via Ref<T>
 }
-// --- Helper Implementation for Deep Copying the Custom Struct ---
-FolderNode* FolderNode::deep_copy() const {
-    FolderNode* newNode = new FolderNode();
+
+// --- Helper Implementation for Deep Copying the RefCounted Structs ---
+Ref<FolderNode> FolderNode::deep_copy() const {
+    Ref<FolderNode> newNode;
+    newNode.instantiate();
+    
     newNode->root_control = root_control;
     newNode->previous_state = previous_state;
     newNode->check_box = check_box;
@@ -35,15 +37,39 @@ FolderNode* FolderNode::deep_copy() const {
     newNode->message_label = message_label;
 
     for (auto const& [key, val] : scripts) {
-        ScriptNode* sn = new ScriptNode(*val);
+        Ref<ScriptNode> sn;
+        sn.instantiate();
+        sn->root_control = val->root_control;
+        sn->previous_state = val->previous_state;
+        sn->check_box = val->check_box;
+        sn->name_edit = val->name_edit;
+        sn->message_label = val->message_label;
+        sn->settings = val->settings.duplicate();
         newNode->scripts[key] = sn;
     }
     for (auto const& [key, val] : resources) {
-        ResourceNode* rn = new ResourceNode(*val);
+        Ref<ResourceNode> rn;
+        rn.instantiate();
+        rn->root_control = val->root_control;
+        rn->previous_state = val->previous_state;
+        rn->check_box = val->check_box;
+        rn->name_edit = val->name_edit;
+        rn->message_label = val->message_label;
+        rn->settings = val->settings.duplicate();
+        rn->use_generated_check = val->use_generated_check;
         newNode->resources[key] = rn;
     }
     for (auto const& [key, val] : scenes) {
-        SceneNode* scn = new SceneNode(*val);
+        Ref<SceneNode> scn;
+        scn.instantiate();
+        scn->root_control = val->root_control;
+        scn->previous_state = val->previous_state;
+        scn->check_box = val->check_box;
+        scn->name_edit = val->name_edit;
+        scn->message_label = val->message_label;
+        scn->settings = val->settings.duplicate();
+        scn->use_generated_check = val->use_generated_check;
+        scn->drop_content = val->drop_content;
         newNode->scenes[key] = scn;
     }
     for (auto const& [key, val] : sub_folders) {
@@ -270,16 +296,18 @@ void ProjectWizard::remove_scene_settings(const Array& other, int id) {
     }
 }
 
-FolderNode* ProjectWizard::find_built_folder(const String& settings_path, FolderNode* folder) {
+Ref<FolderNode> ProjectWizard::find_built_folder(const String& settings_path, Ref<FolderNode> folder) {
+    if (folder.is_null()) return Ref<FolderNode>();
+
     PackedStringArray broken_path = settings_path.split("/");
-    FolderNode* current = folder;
+    Ref<FolderNode> current = folder;
 
     for (int i = 0; i < broken_path.size(); ++i) {
         String path = broken_path[i];
         if (current->sub_folders.count(path)) {
             current = current->sub_folders[path];
         } else {
-            return nullptr;
+            return Ref<FolderNode>();
         }
     }
     return current;
@@ -298,10 +326,9 @@ void ProjectWizard::clear_project_wizard() {
         Node* child = Object::cast_to<Node>(children[i]);
         child->queue_free();
     }
-    if (project_root) {
-        delete project_root;
-        project_root = new FolderNode();
-    }
+    
+    // Automatically drops the ref count of the old one and generates a fresh one
+    project_root.instantiate(); 
 }
 
 void ProjectWizard::build_settings_files_list() {
@@ -344,13 +371,14 @@ void ProjectWizard::build_folder_hierarchy() {
     Array scripts = project_settings["script_settings"];
     for (int i = 0; i < scripts.size(); ++i) {
         Dictionary script_setting = scripts[i];
-        FolderNode* folder = build_settings_path(script_setting["generated_script_path"], project_root, root_content);
+        Ref<FolderNode> folder = build_settings_path(script_setting["generated_script_path"], project_root, root_content);
         
         Control* script_inst = Object::cast_to<Control>(script_check_template->instantiate());
         script_inst->set_name("Script_" + String(script_setting["base_type"]));
         folder->content_container->add_child(script_inst);
 
-        ScriptNode* sn = new ScriptNode();
+        Ref<ScriptNode> sn;
+        sn.instantiate();
         sn->root_control = script_inst;
         sn->check_box = Object::cast_to<CheckBox>(script_inst->find_child("CheckBox", true, false));
         sn->check_box->set_text(script_setting["base_type"]);
@@ -364,13 +392,14 @@ void ProjectWizard::build_folder_hierarchy() {
     Array resources = project_settings["resource_settings"];
     for (int i = 0; i < resources.size(); ++i) {
         Dictionary resource_setting = resources[i];
-        FolderNode* folder = build_settings_path(resource_setting["generated_resource_path"], project_root, root_content);
+        Ref<FolderNode> folder = build_settings_path(resource_setting["generated_resource_path"], project_root, root_content);
 
         Control* res_inst = Object::cast_to<Control>(resource_check_template->instantiate());
         res_inst->set_name("Resource_" + String(resource_setting["title"]));
         folder->content_container->add_child(res_inst);
 
-        ResourceNode* rn = new ResourceNode();
+        Ref<ResourceNode> rn;
+        rn.instantiate();
         rn->root_control = res_inst;
         rn->check_box = Object::cast_to<CheckBox>(res_inst->find_child("CheckBox", true, false));
         rn->check_box->set_text(resource_setting["title"]);
@@ -394,13 +423,14 @@ void ProjectWizard::build_folder_hierarchy() {
     Array scenes = project_settings["scene_settings"];
     for (int i = 0; i < scenes.size(); ++i) {
         Dictionary scene_setting = scenes[i];
-        FolderNode* folder = build_settings_path(scene_setting["generated_scene_path"], project_root, root_content);
+        Ref<FolderNode> folder = build_settings_path(scene_setting["generated_scene_path"], project_root, root_content);
 
         Control* scene_inst = Object::cast_to<Control>(scene_check_template->instantiate());
         scene_inst->set_name("Scene_" + String(scene_setting["title"]));
         folder->content_container->add_child(scene_inst);
 
-        SceneNode* scn = new SceneNode();
+        Ref<SceneNode> scn;
+        scn.instantiate();
         scn->root_control = scene_inst;
         scn->check_box = Object::cast_to<CheckBox>(scene_inst->find_child("CheckBox", true, false));
         scn->check_box->set_text(scene_setting["title"]);
@@ -424,9 +454,9 @@ void ProjectWizard::build_folder_hierarchy() {
     build_path_folders = true;
 }
 
-FolderNode* ProjectWizard::build_settings_path(const String& settings_path, FolderNode* folder, Control* folder_content) {
+Ref<FolderNode> ProjectWizard::build_settings_path(const String& settings_path, Ref<FolderNode> folder, Control* folder_content) {
     PackedStringArray broken_path = settings_path.split("/");
-    FolderNode* current = folder;
+    Ref<FolderNode> current = folder;
     Control* current_content = folder_content;
 
     for (int i = 0; i < broken_path.size(); ++i) {
@@ -441,7 +471,8 @@ FolderNode* ProjectWizard::build_settings_path(const String& settings_path, Fold
             inst->set_name("Folder_" + path);
             current_content->add_child(inst);
 
-            FolderNode* new_node = new FolderNode();
+            Ref<FolderNode> new_node;
+            new_node.instantiate();
             new_node->root_control = inst;
             new_node->check_box = Object::cast_to<CheckBox>(inst->find_child("CheckBox", true, false));
             new_node->check_box->set_text(path);
@@ -488,10 +519,7 @@ void ProjectWizard::build_node_setting(Control* node_field, const Dictionary& no
 }
 
 void ProjectWizard::build_project_path_hierarchy() {
-    if (path_folders) {
-        delete path_folders;
-        path_folders = nullptr;
-    }
+    path_folders.instantiate();
 
     String project_path = project_path_field->get_text();
     PackedStringArray root_breakdown = project_path.split("/");
@@ -509,7 +537,6 @@ void ProjectWizard::build_project_path_hierarchy() {
     checkBox->set_text(path_root);
     checkBox->set_pressed(true);
 
-    path_folders = new FolderNode();
     path_folders->root_control = folder_inst;
     path_folders->check_box = checkBox;
     path_folders->content_container = folder_content;
@@ -524,39 +551,37 @@ void ProjectWizard::build_project_path_hierarchy() {
     build_total_folder_hierarchy = true;
 }
 
-void ProjectWizard::auto_include_sub_folders(FolderNode* folder) {
+void ProjectWizard::auto_include_sub_folders(Ref<FolderNode> folder) {
+    if (folder.is_null()) return;
     for (auto const& [name, sub] : folder->sub_folders) {
-        sub->check_box->set_pressed(true);
+        if (sub->check_box) sub->check_box->set_pressed(true);
         auto_include_sub_folders(sub);
     }
 }
 
 
 void ProjectWizard::build_total_hierarchy() {
-    if (!path_folders || path_folders->sub_folders.empty()) {
+    if (path_folders.is_null() || path_folders->sub_folders.empty()) {
         UtilityFunctions::print("build_total_hierarchy: No sub folders!");
         
-        if (total_folder_hierarchy) delete total_folder_hierarchy;
         total_folder_hierarchy = project_root->deep_copy();
         
         build_total_folder_hierarchy = false;
         return;
     }
 
-    if (total_folder_hierarchy) delete total_folder_hierarchy;
     total_folder_hierarchy = path_folders->deep_copy();
     
-    FolderNode* last_path_folder = total_folder_hierarchy;
+    Ref<FolderNode> last_path_folder = total_folder_hierarchy;
     String lastKey = "";
 
     if (!last_path_folder->sub_folders.empty()) {
         bool has_sub_folders = true;
         while (has_sub_folders) {
-            // In C++, we grab the first element of the map to simulate the GDScript iteration/break logic
             auto it = last_path_folder->sub_folders.begin();
             if (it != last_path_folder->sub_folders.end()) {
                 lastKey = it->first;
-                FolderNode* f = it->second;
+                Ref<FolderNode> f = it->second;
 
                 progress_total += 1;
                 last_path_folder = f;
@@ -591,16 +616,16 @@ void ProjectWizard::select_settings_file(int id) {
     
     Array folder_paths = settings_file["folder_paths"];
     for (int i = 0; i < folder_paths.size(); ++i) {
-        FolderNode* folder = find_built_folder(folder_paths[i], project_root);
-        if (folder && folder->root_control) folder->root_control->show();
+        Ref<FolderNode> folder = find_built_folder(folder_paths[i], project_root);
+        if (folder.is_valid() && folder->root_control) folder->root_control->show();
     }
 
     Array script_settings = settings_file["script_settings"];
     for (int i = 0; i < script_settings.size(); ++i) {
         Dictionary ss = script_settings[i];
-        FolderNode* folder = find_built_folder(ss["generated_script_path"], project_root);
+        Ref<FolderNode> folder = find_built_folder(ss["generated_script_path"], project_root);
         String base_type = ss["base_type"];
-        if (folder && folder->scripts.count(base_type)) {
+        if (folder.is_valid() && folder->scripts.count(base_type)) {
             folder->scripts[base_type]->root_control->show();
         }
     }
@@ -608,9 +633,9 @@ void ProjectWizard::select_settings_file(int id) {
     Array resource_settings = settings_file["resource_settings"];
     for (int i = 0; i < resource_settings.size(); ++i) {
         Dictionary rs = resource_settings[i];
-        FolderNode* folder = find_built_folder(rs["generated_resource_path"], project_root);
+        Ref<FolderNode> folder = find_built_folder(rs["generated_resource_path"], project_root);
         String title = rs["title"];
-        if (folder && folder->resources.count(title)) {
+        if (folder.is_valid() && folder->resources.count(title)) {
             folder->resources[title]->root_control->show();
         }
     }
@@ -618,9 +643,9 @@ void ProjectWizard::select_settings_file(int id) {
     Array scene_settings = settings_file["scene_settings"];
     for (int i = 0; i < scene_settings.size(); ++i) {
         Dictionary scs = scene_settings[i];
-        FolderNode* folder = find_built_folder(scs["generated_scene_path"], project_root);
+        Ref<FolderNode> folder = find_built_folder(scs["generated_scene_path"], project_root);
         String title = scs["title"];
-        if (folder && folder->scenes.count(title)) {
+        if (folder.is_valid() && folder->scenes.count(title)) {
             folder->scenes[title]->root_control->show();
         }
     }
@@ -636,17 +661,17 @@ void ProjectWizard::unselect_settings_file(int id) {
     for (int i = 0; i < folder_paths.size(); ++i) {
         String path = folder_paths[i];
         if (settings_has_folder_path(path, id)) continue;
-        FolderNode* folder = find_built_folder(path, project_root);
-        if (folder && folder->root_control) folder->root_control->hide();
+        Ref<FolderNode> folder = find_built_folder(path, project_root);
+        if (folder.is_valid() && folder->root_control) folder->root_control->hide();
     }
 
     Array script_settings = settings_file["script_settings"];
     for (int i = 0; i < script_settings.size(); ++i) {
         Dictionary ss = script_settings[i];
         if (settings_has_script_settings(ss, id)) continue;
-        FolderNode* folder = find_built_folder(ss["generated_script_path"], project_root);
+        Ref<FolderNode> folder = find_built_folder(ss["generated_script_path"], project_root);
         String base_type = ss["base_type"];
-        if (folder && folder->scripts.count(base_type)) {
+        if (folder.is_valid() && folder->scripts.count(base_type)) {
             folder->scripts[base_type]->root_control->hide();
         }
     }
@@ -655,9 +680,9 @@ void ProjectWizard::unselect_settings_file(int id) {
     for (int i = 0; i < resource_settings.size(); ++i) {
         Dictionary rs = resource_settings[i];
         if (settings_has_resource_settings(rs, id)) continue;
-        FolderNode* folder = find_built_folder(rs["generated_resource_path"], project_root);
+        Ref<FolderNode> folder = find_built_folder(rs["generated_resource_path"], project_root);
         String title = rs["title"];
-        if (folder && folder->resources.count(title)) {
+        if (folder.is_valid() && folder->resources.count(title)) {
             folder->resources[title]->root_control->hide();
         }
     }
@@ -666,9 +691,9 @@ void ProjectWizard::unselect_settings_file(int id) {
     for (int i = 0; i < scene_settings.size(); ++i) {
         Dictionary scs = scene_settings[i];
         if (settings_has_scene_settings(scs, id)) continue;
-        FolderNode* folder = find_built_folder(scs["generated_scene_path"], project_root);
+        Ref<FolderNode> folder = find_built_folder(scs["generated_scene_path"], project_root);
         String title = scs["title"];
-        if (folder && folder->scenes.count(title)) {
+        if (folder.is_valid() && folder->scenes.count(title)) {
             folder->scenes[title]->root_control->hide();
         }
     }
@@ -688,8 +713,8 @@ bool ProjectWizard::validate_project_details() {
     return validate_folder(total_folder_hierarchy, path_root);
 }
 
-bool ProjectWizard::validate_folder(FolderNode* folder, const String& folder_path) {
-    if (!folder) return true;
+bool ProjectWizard::validate_folder(Ref<FolderNode> folder, const String& folder_path) {
+    if (folder.is_null()) return true;
 
     bool folder_is_valid = true;
     Label* message = folder->message_label;
@@ -737,7 +762,6 @@ bool ProjectWizard::validate_folder(FolderNode* folder, const String& folder_pat
 
     // Validate Scenes
     for (auto const& [name, scene] : folder->scenes) {
-        // Dictionary scene_setting = scene->settings; // Present in GDScript, unused here
         String scene_file_path = folder_path + String("/") + name + ".tscn";
 
         Label* scene_message = scene->message_label;
@@ -781,15 +805,14 @@ void ProjectWizard::generate_folders() {
     generate_scripts(); 
 }
 
-void ProjectWizard::generate_folder_recursive(FolderNode* folder, const String& folder_path) {
-    if (!folder) return;
+void ProjectWizard::generate_folder_recursive(Ref<FolderNode> folder, const String& folder_path) {
+    if (folder.is_null()) return;
 
     if (!DirAccess::dir_exists_absolute(folder_path)) {
         DirAccess::make_dir_absolute(folder_path);
     }
 
     current_progress += 1;
-    // Update progress bar if applicable
     if (progressBar) progressBar->set_value(current_progress);
 
     for (auto const& [name, sub_folder] : folder->sub_folders) {
@@ -816,18 +839,16 @@ void ProjectWizard::check_all_folders(bool check) {
     all_folders_pass(project_root, path_root, check);
 }
 
-void ProjectWizard::all_folders_pass(FolderNode* folder, const String& folder_path, bool check) {
-    if (!folder || !folder->check_box) return;
+void ProjectWizard::all_folders_pass(Ref<FolderNode> folder, const String& folder_path, bool check) {
+    if (folder.is_null() || !folder->check_box) return;
 
     CheckBox* cb = folder->check_box;
 
     if (check) {
-        // Store current state to restore later
         folder->previous_state = cb->is_pressed();
         cb->set_pressed(true);
         cb->set_disabled(true);
     } else {
-        // Restore previous state
         cb->set_pressed(folder->previous_state);
         cb->set_disabled(false);
     }
@@ -848,10 +869,9 @@ void ProjectWizard::generate_scripts() {
     generate_resources();
 }
 
-void ProjectWizard::generate_scripts_in_folder(FolderNode* folder, const String& folder_path) {
-    if (!folder) return;
+void ProjectWizard::generate_scripts_in_folder(Ref<FolderNode> folder, const String& folder_path) {
+    if (folder.is_null()) return;
 
-    // Generate scripts in current folder
     for (auto const& [title, script] : folder->scripts) {
         if (script->check_box && !script->check_box->is_pressed()) {
             continue;
@@ -862,7 +882,6 @@ void ProjectWizard::generate_scripts_in_folder(FolderNode* folder, const String&
         generate_script_file(script_name, folder_path, base_type);
     }
 
-    // Recurse into sub-folders
     for (auto const& [name, sub_folder] : folder->sub_folders) {
         if (sub_folder->check_box && !sub_folder->check_box->is_pressed()) {
             continue;
@@ -902,10 +921,9 @@ void ProjectWizard::generate_script_file(const String& script_name, const String
     Ref<FileAccess> f_script = FileAccess::open(script_path, FileAccess::WRITE);
     if (f_script.is_valid()) {
         f_script->store_string(script_content);
-        f_script->flush(); // Explicitly ensure data is written before loading
+        f_script->flush();
     }
 
-    // Load the newly created script into the dictionary for later resource/scene assignment
     Ref<Resource> script_object = ResourceLoader::get_singleton()->load(script_path);
     generated_scripts[base_type] = script_object;
 }
@@ -914,8 +932,8 @@ void ProjectWizard::check_all_scripts(bool check) {
     all_scripts_pass(project_root, path_root, check);
 }
 
-void ProjectWizard::all_scripts_pass(FolderNode* folder, const String& folder_path, bool check) {
-    if (!folder) return;
+void ProjectWizard::all_scripts_pass(Ref<FolderNode> folder, const String& folder_path, bool check) {
+    if (folder.is_null()) return;
 
     for (auto const& [name, script] : folder->scripts) {
         CheckBox* cb = script->check_box;
@@ -947,8 +965,8 @@ void ProjectWizard::generate_resources() {
     generate_scenes();
 }
 
-void ProjectWizard::generate_resources_in_folder(FolderNode* folder, const String& folder_path) {
-    if (!folder) return;
+void ProjectWizard::generate_resources_in_folder(Ref<FolderNode> folder, const String& folder_path) {
+    if (folder.is_null()) return;
 
     for (auto const& [title, resource] : folder->resources) {
         if (resource->check_box && !resource->check_box->is_pressed()) {
@@ -989,7 +1007,7 @@ void ProjectWizard::generate_resource_file(const String& res_name, const String&
         res = Ref<Resource>(Object::cast_to<Resource>(ClassDB::instantiate(class_name)));
     }
 
-    // 3. Fallback to Global Class List (Custom Resources)
+    // 3. Fallback to Global Class List
     if (res.is_null()) {
         Array global_classes = ProjectSettings::get_singleton()->get_global_class_list();
         for (int i = 0; i < global_classes.size(); ++i) {
@@ -1006,7 +1024,6 @@ void ProjectWizard::generate_resource_file(const String& res_name, const String&
 
     if (res.is_null()) return;
 
-    // Apply Properties
     if (settings.has("properties")) {
         Dictionary props = settings["properties"];
         Array keys = props.keys();
@@ -1014,7 +1031,6 @@ void ProjectWizard::generate_resource_file(const String& res_name, const String&
             String p_name = keys[i];
             Variant p_val = props[p_name];
 
-            // Handle Resource references in properties
             Variant current_val = res->get(p_name);
             if (current_val.get_type() == Variant::OBJECT) {
                 String path_str = p_val;
@@ -1042,8 +1058,8 @@ void ProjectWizard::check_all_resources(bool check) {
     all_resources_pass(project_root, path_root, check);
 }
 
-void ProjectWizard::all_resources_pass(FolderNode* folder, const String& folder_path, bool check) {
-    if (!folder) return;
+void ProjectWizard::all_resources_pass(Ref<FolderNode> folder, const String& folder_path, bool check) {
+    if (folder.is_null()) return;
 
     for (auto const& [name, resource] : folder->resources) {
         CheckBox* cb = resource->check_box;
@@ -1074,8 +1090,8 @@ void ProjectWizard::generate_scenes() {
     finish_generation();
 }
 
-void ProjectWizard::generate_scenes_in_folder(FolderNode* folder, const String& folder_path) {
-    if (!folder) return;
+void ProjectWizard::generate_scenes_in_folder(Ref<FolderNode> folder, const String& folder_path) {
+    if (folder.is_null()) return;
 
     for (auto const& [title, scene] : folder->scenes) {
         if (scene->check_box && !scene->check_box->is_pressed()) {
@@ -1106,6 +1122,7 @@ void ProjectWizard::generate_scene_file(const String& scn_name, const String& sc
     String save_path = scn_path + String("/") + sanitized_name + ".tscn";
     Dictionary node_settings = settings["node"];
 
+    // make_node safely returns a Node* because Godot's Tree hierarchy automatically handles memory
     Node* scene_root = make_node(node_settings, use_gen_scripts);
     if (!scene_root) return;
 
@@ -1164,8 +1181,6 @@ Node* ProjectWizard::make_node(const Dictionary& node_settings, bool use_gen_scr
             String p_name = keys[i];
             Variant p_val = props[p_name];
 
-            // Check if property is a Resource reference
-            // This replicates the "is Resource" check from GDScript
             if (p_val.get_type() == Variant::STRING) {
                 String path_str = p_val;
                 if (generated_resources.has(path_str)) {
@@ -1185,7 +1200,7 @@ Node* ProjectWizard::make_node(const Dictionary& node_settings, bool use_gen_scr
             Node* sub_node = make_node(sub_nodes[i], use_gen_scripts);
             if (sub_node) {
                 node->add_child(sub_node);
-                sub_node->set_owner(node); // Important for PackedScene to recognize children
+                sub_node->set_owner(node); 
             }
         }
     }
@@ -1197,8 +1212,8 @@ void ProjectWizard::check_all_scenes(bool check) {
     all_scenes_pass(project_root, path_root, check);
 }
 
-void ProjectWizard::all_scenes_pass(FolderNode* folder, const String& folder_path, bool check) {
-    if (!folder) return;
+void ProjectWizard::all_scenes_pass(Ref<FolderNode> folder, const String& folder_path, bool check) {
+    if (folder.is_null()) return;
 
     for (auto const& [name, scene] : folder->scenes) {
         CheckBox* cb = scene->check_box;
@@ -1224,7 +1239,6 @@ void ProjectWizard::finish_generation() {
     if (work_message) work_message->set_text("Project Generation Complete.");
     if (progressBar) progressBar->set_value(100.0);
 
-    // Trigger FileSystem Scan so the editor sees new files immediately
     EditorInterface::get_singleton()->get_resource_filesystem()->scan();
 
     emit_signal("completed");

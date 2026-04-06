@@ -1,13 +1,11 @@
 #include "task_graph_edit.h"
-#include <godot_cpp/classes/engine.hpp>
+#include "task_graph_resource.h"
+#include <godot_cpp/variant/utility_functions.hpp>
 
 namespace godot {
 
 void TaskGraphEdit::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("start_execution"), &TaskGraphEdit::start_execution);
-    ClassDB::bind_method(D_METHOD("stop_execution"), &TaskGraphEdit::stop_execution);
-    
-    ADD_SIGNAL(MethodInfo("task_node_selected", PropertyInfo(Variant::INT, "node_id")));
+    ClassDB::bind_method(D_METHOD("_on_task_popup_select", "id"), &TaskGraphEdit::_on_task_popup_select);
 }
 
 TaskGraphEdit::TaskGraphEdit() {
@@ -17,103 +15,58 @@ TaskGraphEdit::~TaskGraphEdit() {
 }
 
 void TaskGraphEdit::_ready() {
-    IdeamGraphEdit::_ready();
-    
-    // Disable editing if we are in a "Running" state logic
-    set_show_grid(true);
-}
+    MemoryGraphEdit::_ready();
 
-void TaskGraphEdit::set_task_graph(ideam::core::TaskGraph* p_graph) {
-    task_graph_ptr = p_graph;
-    // Set the base class pointer too so IdeamGraphEdit logic works
-    set_core_graph(p_graph); 
-    
-    if (task_graph_ptr) {
-        rebuild_from_core();
-    }
-}
-
-void TaskGraphEdit::rebuild_from_core() {
-    if (!task_graph_ptr) return;
-
-    clear_all_nodes();
-    node_map.clear();
-
-    // 1. Create Nodes
-    // Note: This assumes IdeamGraph provides a way to iterate current valid nodes
-    // For now, we utilize the add_task_node pattern
-}
-
-void TaskGraphEdit::_request_connect(const String &p_from_node, int p_from_port, const String &p_to_node, int p_to_port) {
-    if (is_running) return;
-
-    TaskGraphNode* v_from = find_visual_node_by_name(p_from_node);
-    TaskGraphNode* v_to = find_visual_node_by_name(p_to_node);
-
-    if (v_from && v_to && task_graph_ptr) {
-        // Validation Layer: Try to connect in core first
-        ideam::core::EdgeID eid = task_graph_ptr->connect_nodes(
-            v_from->get_core_node_id(), p_from_port,
-            v_to->get_core_node_id(), p_to_port
-        );
-
-        // Visual Layer: Only connect if core returned a valid EdgeID (no cycles, etc)
-        if (eid != 0xFFFFFFFF) {
-            connect_node(p_from_node, p_from_port, p_to_node, p_to_port);
+    // Re-route the popup selection from the base class to our specialized Task builder
+    // We disconnect the base class signal and bind our own
+    if (PopupMenu* popup = Object::cast_to<PopupMenu>(find_child("PopupMenu", true, false))) {
+        if (popup->is_connected("id_pressed", Callable(this, "_filtered_popup_select"))) {
+            popup->disconnect("id_pressed", Callable(this, "_filtered_popup_select"));
         }
+        popup->connect("id_pressed", Callable(this, "_on_task_popup_select"));
     }
 }
 
-void TaskGraphEdit::_request_disconnect(const String &p_from_node, int p_from_port, const String &p_to_node, int p_to_port) {
-    if (is_running) return;
-
-    // Note: Disconnection usually needs the EdgeID. 
-    // We would look up the edge in the core graph that matches these parameters.
-    disconnect_node(p_from_node, p_from_port, p_to_node, p_to_port);
-    
-    // task_graph_ptr->disconnect_nodes(eid);
-}
-
-void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
-    if (!task_graph_ptr) return;
-
-    // 1. Create Core Node
-    ideam::core::NodeID cid = task_graph_ptr->add_task_node();
-    
-    // 2. Create Visual Node
-    TaskGraphNode *v_node = memnew(TaskGraphNode);
-    v_node->set_graph_context(task_graph_ptr);
-    v_node->set_core_node_id(cid);
-    
-    add_child(v_node);
-    v_node->set_position_offset(popup_position + get_scroll_offset());
-    
-    // 3. Register and Sync
-    node_map[cid] = v_node;
-    v_node->sync_with_core();
-}
-
-TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
+TypedArray<String> TaskGraphEdit::_get_filtered_node_types(uint32_t p_filter_mask) const {
     TypedArray<String> arr;
-    arr.push_back("Standard Task");
-    arr.push_back("Native Optimized Task");
-    arr.push_back("Sub-Graph Container");
+    
+    // For now, we present the raw fundamental task types. 
+    // Future implementations will query a C++ Registry for all registered T_Logic names.
+    arr.push_back("GDScript Reflection Task");
+    arr.push_back("Native CPU Transform Task");
+    arr.push_back("GPU Compute Task");
+    arr.push_back("Query / Culler Task");
+    
     return arr;
 }
 
-TaskGraphNode* TaskGraphEdit::find_visual_node_by_name(const String& p_name) {
-    return Object::cast_to<TaskGraphNode>(get_node_or_null(p_name));
-}
+void TaskGraphEdit::_on_task_popup_select(int p_id) {
+    Ref<ideam::godot_ext::IdeamGraphResource> blueprint = get_blueprint();
+    if (blueprint.is_null()) return;
 
-void TaskGraphEdit::start_execution() {
-    is_running = true;
-    // Set GraphEdit to read-only mode visually
-    set_modulate(Color(0.7, 0.7, 0.8)); // Slight dimming to indicate "Running"
-}
+    StringName unique_name = String("TaskNode_") + String::num_int64(UtilityFunctions::randi());
 
-void TaskGraphEdit::stop_execution() {
-    is_running = false;
-    set_modulate(Color(1, 1, 1));
+    // Inject the TaskType into the properties dictionary so TaskGraphNode can read it
+    Dictionary props;
+    props["task_type"] = p_id; 
+
+    // Setup defaults
+    if (p_id == ideam::godot_ext::TASK_GODOT_REFLECTION) {
+        props["execution_method"] = "execute_task";
+    }
+
+    Dictionary new_node;
+    new_node["name"] = unique_name;
+    new_node["type_id"] = p_id; 
+    new_node["properties"] = props;
+    
+    // Adjust for viewport scroll offset 
+    // Note: We use get_scroll_offset() inherited from GraphEdit. 
+    // memory_popup_position requires accessing protected members, so in practice 
+    // you might retrieve the mouse position directly here if memory_popup_position isn't accessible.
+    new_node["position"] = get_local_mouse_position() + get_scroll_offset();
+    
+    blueprint->action_add_node(new_node);
 }
 
 } // namespace godot
