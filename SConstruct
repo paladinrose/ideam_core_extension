@@ -11,20 +11,25 @@ out_filename   = "ideam_core_extension"    # Change this for different tools
 out_dir        = "#" + project_folder + "/addons/" + out_filename + "/lib/"
 
 # --- COMPILER & LANGUAGE STANDARDS ---
-# Targeting C++26. Note: MSVC uses /std:c++latest, GCC/Clang use -std=c++26 or -std=c++2c
+# Targeting C++26 explicitly.
 if env.get("is_msvc", False):
-    env.Append(CPPFLAGS=["/std:c++latest"])
+    # MSVC uses /std:c++latest for bleeding edge / C++26.
+    # /Zc:__cplusplus is REQUIRED so MSVC correctly sets the __cplusplus macro for C++26 features.
+    env.Append(CXXFLAGS=["/std:c++latest", "/Zc:__cplusplus"])
 else:
-    # GCC 14+ / Clang 18+ support
+    # GCC 14+ / Clang 18+ support. 
+    # Godot-cpp might inject its own -std=c++17 or c++20, so we append this to override.
     env.Append(CXXFLAGS=["-std=c++26"])
 
 # --- INCLUDE PATHS ---
 env.Append(CPPPATH=["src/"])
 
 # --- SOURCE DISCOVERY ---
-# Using recursive globbing to ensure nested folders are included in the rebuild
-sources = Glob("src/*.cpp")
-sources += Glob("src/**/*.cpp")
+# Using recursive globbing to ensure nested folders are included in the rebuild.
+# We merge and remove potential duplicates to keep the build tree clean.
+raw_sources = env.Glob("src/*.cpp") + env.Glob("src/**/*.cpp")
+# Ensure uniqueness just in case 'src/**/*.cpp' caught the root 'src/*.cpp' files too
+sources = list(set(raw_sources))
 
 # --- BUILD LOGIC ---
 if env["platform"] == "macos":
