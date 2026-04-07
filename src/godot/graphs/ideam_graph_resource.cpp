@@ -119,7 +119,7 @@ void IdeamGraphResource::action_add_edge(const godot::Dictionary& p_edge_data) {
 
 std::shared_ptr<core::IdeamGraphDOD> IdeamGraphResource::compile_to_dod(
     core::MemoryManagerDOD* p_manager, 
-    std::unordered_map<godot::String, core::NodeID>& r_ui_to_dod_map) const 
+    godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const 
 {
     auto dod_graph = std::make_shared<core::IdeamGraphDOD>(p_manager);
     
@@ -127,14 +127,13 @@ std::shared_ptr<core::IdeamGraphDOD> IdeamGraphResource::compile_to_dod(
     dod_graph->reserve(nodes.size(), edges.size());
 
     r_ui_to_dod_map.clear();
-    r_ui_to_dod_map.reserve(nodes.size());
 
     // 2. Compile Nodes
     for (int i = 0; i < nodes.size(); ++i) {
         godot::Dictionary n = nodes[i];
         if (!n.has("name") || !n.has("type_id")) continue;
 
-        godot::String ui_name = n["name"];
+        godot::StringName ui_name = n["name"];
         uint32_t type_id = static_cast<uint32_t>(n["type_id"]);
 
         // Push to DOD and cache the physical integer ID
@@ -147,18 +146,18 @@ std::shared_ptr<core::IdeamGraphDOD> IdeamGraphResource::compile_to_dod(
         godot::Dictionary e = edges[i];
         if (!e.has("from") || !e.has("to")) continue;
 
-        godot::String from_name = e["from"];
-        godot::String to_name = e["to"];
+        godot::StringName from_name = e["from"];
+        godot::StringName to_name = e["to"];
 
-        // Look up the physical IDs
-        auto from_it = r_ui_to_dod_map.find(from_name);
-        auto to_it = r_ui_to_dod_map.find(to_name);
-
-        if (from_it != r_ui_to_dod_map.end() && to_it != r_ui_to_dod_map.end()) {
+        // Look up the physical IDs using Godot's HashMap logic
+        if (r_ui_to_dod_map.has(from_name) && r_ui_to_dod_map.has(to_name)) {
+            core::NodeID from_id = r_ui_to_dod_map[from_name];
+            core::NodeID to_id = r_ui_to_dod_map[to_name];
+            
             uint32_t from_port = e.has("from_port") ? static_cast<uint32_t>(e["from_port"]) : 0;
             uint32_t to_port = e.has("to_port") ? static_cast<uint32_t>(e["to_port"]) : 0;
 
-            dod_graph->connect_nodes(from_it->second, from_port, to_it->second, to_port);
+            dod_graph->connect_nodes(from_id, from_port, to_id, to_port);
         } else {
             godot::UtilityFunctions::printerr("IdeamGraphResource Compiler: Invalid edge connection. Nodes not found in UI map.");
         }

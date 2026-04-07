@@ -5,8 +5,8 @@
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
 #include <memory>
-#include <unordered_map>
 
 #include "../../core/graphs/ideam_graph_dod.h"
 
@@ -59,7 +59,7 @@ public:
     // --- The DOD Compiler ---
     std::shared_ptr<core::IdeamGraphDOD> compile_to_dod(
         core::MemoryManagerDOD* p_manager, 
-        std::unordered_map<godot::String, core::NodeID>& r_ui_to_dod_map) const;
+        godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const;
 };
 
 } // namespace ideam::godot_ext

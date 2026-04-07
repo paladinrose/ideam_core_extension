@@ -9,7 +9,7 @@ void MemoryGraphResource::_bind_methods() {
 
 std::shared_ptr<core::MemoryGraphDOD> MemoryGraphResource::compile_to_memory_graph(
     core::MemoryManagerDOD* p_manager, 
-    std::unordered_map<godot::String, core::NodeID>& r_ui_to_dod_map) const 
+    godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const 
 {
     // 1. Instantiate the specialized MemoryGraphDOD
     auto memory_graph = std::make_shared<core::MemoryGraphDOD>(p_manager);
@@ -19,15 +19,16 @@ std::shared_ptr<core::MemoryGraphDOD> MemoryGraphResource::compile_to_memory_gra
 
     memory_graph->reserve(current_nodes.size(), current_edges.size());
     r_ui_to_dod_map.clear();
-    r_ui_to_dod_map.reserve(current_nodes.size());
 
     // 2. Compile Nodes
     for (int i = 0; i < current_nodes.size(); ++i) {
         godot::Dictionary n = current_nodes[i];
         if (!n.has("name") || !n.has("type_id")) continue;
 
+        godot::StringName ui_name = n["name"];
+        
         core::NodeID core_id = memory_graph->add_node(static_cast<uint32_t>(n["type_id"]));
-        r_ui_to_dod_map[n["name"]] = core_id;
+        r_ui_to_dod_map[ui_name] = core_id;
     }
 
     // 3. Compile Edges
@@ -35,13 +36,19 @@ std::shared_ptr<core::MemoryGraphDOD> MemoryGraphResource::compile_to_memory_gra
         godot::Dictionary e = current_edges[i];
         if (!e.has("from") || !e.has("to")) continue;
 
-        auto from_it = r_ui_to_dod_map.find(e["from"]);
-        auto to_it = r_ui_to_dod_map.find(e["to"]);
+        godot::StringName from_name = e["from"];
+        godot::StringName to_name = e["to"];
 
-        if (from_it != r_ui_to_dod_map.end() && to_it != r_ui_to_dod_map.end()) {
+        if (r_ui_to_dod_map.has(from_name) && r_ui_to_dod_map.has(to_name)) {
+            core::NodeID from_id = r_ui_to_dod_map[from_name];
+            core::NodeID to_id = r_ui_to_dod_map[to_name];
+
             uint32_t from_port = e.has("from_port") ? static_cast<uint32_t>(e["from_port"]) : 0;
             uint32_t to_port = e.has("to_port") ? static_cast<uint32_t>(e["to_port"]) : 0;
-            memory_graph->connect_nodes(from_it->second, from_port, to_it->second, to_port);
+            
+            memory_graph->connect_nodes(from_id, from_port, to_id, to_port);
+        } else {
+            godot::UtilityFunctions::printerr("MemoryGraphResource Compiler: Invalid edge connection. Nodes not found in UI map.");
         }
     }
 

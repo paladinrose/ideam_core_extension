@@ -14,7 +14,7 @@ void TaskGraphResource::_bind_methods() {
 
 std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
     core::MemoryManagerDOD* p_manager, 
-    std::unordered_map<godot::String, core::NodeID>& r_ui_to_dod_map) const 
+    godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const 
 {
     auto task_graph = std::make_shared<core::TaskGraphDOD>(p_manager);
     
@@ -23,19 +23,19 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
 
     task_graph->reserve(current_nodes.size(), current_edges.size());
     r_ui_to_dod_map.clear();
-    r_ui_to_dod_map.reserve(current_nodes.size());
 
     // 1. Compile Nodes & Configure Task Data
     for (int i = 0; i < current_nodes.size(); ++i) {
         godot::Dictionary n = current_nodes[i];
         if (!n.has("name") || !n.has("task_type")) continue;
 
+        godot::StringName ui_name = n["name"];
         uint32_t raw_type = static_cast<uint32_t>(n["task_type"]);
         core::TaskTypeDOD task_type = static_cast<core::TaskTypeDOD>(raw_type);
 
         // Add node to backend
         core::NodeID core_id = task_graph->add_task_node(task_type);
-        r_ui_to_dod_map[n["name"]] = core_id;
+        r_ui_to_dod_map[ui_name] = core_id;
 
         // Apply Configuration from Properties Dictionary
         if (n.has("properties")) {
@@ -50,8 +50,9 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
             // Route Specific Task Configuration
             switch (task_type) {
                 case core::TaskTypeDOD::GODOT_REFLECTION: {
-                    godot::Object* target = props.has("reflection_target") ? Object::cast_to<godot::Object>(props["reflection_target"]) : nullptr;
-                    godot::StringName method = props.has("execution_method") ? static_cast<godot::StringName>(props["execution_method"]) : godot::StringName("");                    task_graph->configure_cpu_task(core_id, target, method);
+                    godot::Object* target = props.has("reflection_target") ? godot::Object::cast_to<godot::Object>(props["reflection_target"]) : nullptr;
+                    godot::StringName method = props.has("execution_method") ? static_cast<godot::StringName>(props["execution_method"]) : godot::StringName("");
+                    task_graph->configure_cpu_task(core_id, target, method);
                     break;
                 }
                 case core::TaskTypeDOD::COMPUTE_GPU: {
@@ -75,13 +76,20 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
         godot::Dictionary e = current_edges[i];
         if (!e.has("from") || !e.has("to")) continue;
 
-        auto from_it = r_ui_to_dod_map.find(e["from"]);
-        auto to_it = r_ui_to_dod_map.find(e["to"]);
+        godot::StringName from_name = e["from"];
+        godot::StringName to_name = e["to"];
 
-        if (from_it != r_ui_to_dod_map.end() && to_it != r_ui_to_dod_map.end()) {
+        // Look up the physical IDs using Godot's HashMap logic
+        if (r_ui_to_dod_map.has(from_name) && r_ui_to_dod_map.has(to_name)) {
+            core::NodeID from_id = r_ui_to_dod_map[from_name];
+            core::NodeID to_id = r_ui_to_dod_map[to_name];
+
             uint32_t from_port = e.has("from_port") ? static_cast<uint32_t>(e["from_port"]) : 0;
             uint32_t to_port = e.has("to_port") ? static_cast<uint32_t>(e["to_port"]) : 0;
-            task_graph->connect_nodes(from_it->second, from_port, to_it->second, to_port);
+            
+            task_graph->connect_nodes(from_id, from_port, to_id, to_port);
+        } else {
+            godot::UtilityFunctions::printerr("TaskGraphResource Compiler: Invalid edge connection. Nodes not found in UI map.");
         }
     }
 

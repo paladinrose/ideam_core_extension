@@ -3,6 +3,9 @@
 
 #include "../graphs/ideam_graph_resource.h"
 #include "../../core/memory/memory_graph_dod.h"
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/variant/string_name.hpp>
+#include <memory>
 
 namespace ideam::godot_ext {
 
@@ -14,14 +17,11 @@ protected:
 
 public:
     MemoryGraphResource() = default;
-    virtual ~MemoryGraphResource() = default;
+    ~MemoryGraphResource() = default;
 
-    /**
-     * @brief Compiles the Godot strings/dictionaries into a tightly packed MemoryGraphDOD.
-     */
     std::shared_ptr<core::MemoryGraphDOD> compile_to_memory_graph(
         core::MemoryManagerDOD* p_manager, 
-        std::unordered_map<godot::String, core::NodeID>& r_ui_to_dod_map) const;
+        godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const;
 };
 
 } // namespace ideam::godot_ext

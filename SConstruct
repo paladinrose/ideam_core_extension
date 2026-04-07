@@ -25,11 +25,14 @@ else:
 env.Append(CPPPATH=["src/"])
 
 # --- SOURCE DISCOVERY ---
-# Using recursive globbing to ensure nested folders are included in the rebuild.
-# We merge and remove potential duplicates to keep the build tree clean.
-raw_sources = env.Glob("src/*.cpp") + env.Glob("src/**/*.cpp")
-# Ensure uniqueness just in case 'src/**/*.cpp' caught the root 'src/*.cpp' files too
-sources = list(set(raw_sources))
+# Using Python's os.walk guarantees we find every .cpp file, no matter how deep the folders go.
+sources = []
+for root, dirs, files in os.walk("src"):
+    for file in files:
+        if file.endswith(".cpp"):
+            # SCons prefers forward slashes for paths, even on Windows
+            full_path = os.path.join(root, file).replace("\\", "/")
+            sources.append(full_path)
 
 # --- BUILD LOGIC ---
 if env["platform"] == "macos":

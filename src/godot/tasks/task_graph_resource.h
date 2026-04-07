@@ -3,6 +3,8 @@
 
 #include "../memory/memory_graph_resource.h"
 #include "../../core/tasks/task_graph_dod.h"
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/variant/string_name.hpp>
 
 namespace ideam::godot_ext {
 
@@ -33,7 +35,7 @@ public:
      */
     std::shared_ptr<core::TaskGraphDOD> compile_to_task_graph(
         core::MemoryManagerDOD* p_manager, 
-        std::unordered_map<godot::String, core::NodeID>& r_ui_to_dod_map) const;
+        godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const;
 };
 
 } // namespace ideam::godot_ext
