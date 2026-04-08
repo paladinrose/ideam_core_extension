@@ -4,13 +4,15 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
-
 #include "godot/memory/memory_buffer_resource.h"
 #include "godot/memory/memory_manager_resource.h"
 
 #include "godot/graphs/ideam_graph_resource.h"
 #include "godot/memory/memory_graph_resource.h"
 #include "godot/tasks/task_graph_resource.h"
+
+// Native task registration
+#include "core/tasks/native_task_registry.h"
 
 using namespace godot;
 
@@ -22,14 +24,15 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	// ========================================================================
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		
-		
-		
 		ClassDB::register_class<ideam::godot_ext::MemoryBufferResource>();
 		ClassDB::register_class<ideam::godot_ext::MemoryManagerResource>();
 		
 		ClassDB::register_class<ideam::godot_ext::IdeamGraphResource>();
 		ClassDB::register_class<ideam::godot_ext::MemoryGraphResource>();
 		ClassDB::register_class<ideam::godot_ext::TaskGraphResource>();
+
+		// --- Core Native Task Registration ---
+		ideam::core::NativeTaskRegistry::register_task<ideam::core::TestTask>("TestTask");
 	}
 
 }
@@ -41,6 +44,9 @@ void uninitialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		// Cleanup Scene level statics/singletons
+		
+		// Flush the static factories and dictionaries to prevent Godot memory leak warnings on exit
+		ideam::core::NativeTaskRegistry::cleanup();
 	}
 
 	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {

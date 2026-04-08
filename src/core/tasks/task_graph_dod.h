@@ -8,6 +8,7 @@
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/classes/rendering_device.hpp>
 #include <vector>
+#include <memory>
 #include <span>
 
 namespace ideam::core {
@@ -55,6 +56,9 @@ protected:
     std::vector<TaskTypeDOD> task_types;
     std::vector<TaskCPUMetadata> cpu_metadata;
     std::vector<TaskGPUMetadata> gpu_metadata;
+
+    // --- Lifecycle Management ---
+    std::vector<std::unique_ptr<INativeTask>> owned_native_tasks;
 
     // --- CSR Flattened Port Mappings ---
     std::vector<TaskPortOffsets> input_port_meta;
@@ -112,7 +116,10 @@ public:
     
     void configure_cpu_task(NodeID p_id, godot::Object* p_target, const godot::StringName& p_method);
     void configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32_t x, uint32_t y, uint32_t z);
-    void configure_native_interface(NodeID p_id, INativeTask* p_interface);
+    
+    // Updated: Now takes a unique_ptr to assume ownership.
+    void configure_native_interface(NodeID p_id, std::unique_ptr<INativeTask> p_interface);
+    
     void set_node_transient_requirement(NodeID p_id, uint32_t p_bytes);
     
     void set_port_mappings(NodeID p_id, bool p_input, std::span<const TaskPortMetadata> p_mappings);

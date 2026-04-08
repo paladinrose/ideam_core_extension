@@ -1,4 +1,5 @@
 #include "task_graph_resource.h"
+#include "../../core/tasks/native_task_registry.h"
 #include <godot_cpp/variant/utility_functions.hpp>
 
 namespace ideam::godot_ext {
@@ -61,9 +62,21 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
                     break;
                 }
                 case core::TaskTypeDOD::NATIVE_CPU:
-                case core::TaskTypeDOD::QUERY_CULLER:
-                    // Native C++ tasks will be instantiated via a Registry pattern during compilation in the future.
+                case core::TaskTypeDOD::QUERY_CULLER: {
+                    // Extract the identifier string (e.g., "MyBoidTask") from the Godot UI property dictionary
+                    if (props.has("native_class")) {
+                        godot::StringName native_class = props["native_class"];
+                        
+                        // Instantiate and hand over ownership to the TaskGraphDOD
+                        auto task_instance = core::NativeTaskRegistry::create(native_class);
+                        if (task_instance) {
+                            task_graph->configure_native_interface(core_id, std::move(task_instance));
+                        } else {
+                            godot::UtilityFunctions::printerr("TaskGraph Compiler: Unable to find registered native task '", native_class, "' for node '", ui_name, "'");
+                        }
+                    }
                     break;
+                }
             }
             
             // Note: Port mappings and constants would be extracted and compiled here as well

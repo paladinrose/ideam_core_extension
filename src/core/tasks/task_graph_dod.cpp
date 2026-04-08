@@ -44,9 +44,10 @@ void TaskGraphDOD::configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32
     }
 }
 
-void TaskGraphDOD::configure_native_interface(NodeID p_id, INativeTask* p_interface) {
-    if (p_id < cpu_metadata.size()) {
-        cpu_metadata[p_id].native_interface = p_interface;
+void TaskGraphDOD::configure_native_interface(NodeID p_id, std::unique_ptr<INativeTask> p_interface) {
+    if (p_id < cpu_metadata.size() && p_interface) {
+        cpu_metadata[p_id].native_interface = p_interface.get();
+        owned_native_tasks.push_back(std::move(p_interface));
     }
 }
 
@@ -506,6 +507,7 @@ void TaskGraphDOD::clear() {
     constant_port_meta.clear(); constant_port_data.clear();
     transient_bytes_meta.clear();
     baked_connections.clear();
+    owned_native_tasks.clear(); // Important: Cleans up instantiated tasks
     MemoryGraphDOD::clear();
 }
 
