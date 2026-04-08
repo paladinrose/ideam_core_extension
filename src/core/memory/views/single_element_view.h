@@ -28,14 +28,18 @@ struct SingleElementView {
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
 
+    // Zero-overhead abstraction. If Strategy is empty, it adds 0 bytes to the struct size.
+    #if defined(_MSC_VER)
+        [[msvc::no_unique_address]] Strategy strategy;
+    #else
+        [[no_unique_address]] Strategy strategy;
+    #endif
+
     // --- Explicit Alignment Padding ---
     // Locks the base members to exactly 32 bytes (half a cache line).
     uint8_t reserved_padding[4] = {0};
 
-    // --- Strategy Policy ---
-    // Zero-overhead abstraction. If Strategy is empty, it adds 0 bytes to the struct size.
-    [[no_unique_address]] Strategy strategy;
-
+   
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
@@ -80,7 +84,7 @@ struct SingleElementView {
 
         // --- 1D LINEAR ACCESS PATH ---
         if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
-            size_t p_selection_index = static_cast<size_t>((p_coords)...);
+            size_t p_selection_index = static_cast<size_t>((p_coords, ...));
             
             // C++26 Optimizer Hinting
             #ifdef NDEBUG
@@ -151,7 +155,9 @@ struct SingleElementView {
     }
 };
 
+#ifndef __INTELLISENSE__
 static_assert(sizeof(SingleElementView<int, FlatStrategy>) == 32, "SingleElementView base layout alignment failed!");
+#endif
 
 } // namespace ideam::core
 

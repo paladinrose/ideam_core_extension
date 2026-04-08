@@ -29,12 +29,16 @@ struct SparseSetView {
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
 
+    // Zero-overhead abstraction. If Strategy is empty, it adds 0 bytes to the struct size.
+    #if defined(_MSC_VER)
+        [[msvc::no_unique_address]] Strategy strategy;
+    #else
+        [[no_unique_address]] Strategy strategy;
+    #endif
+
     // --- Explicit Alignment Padding (4 Bytes) ---
     // Locks the base members to exactly 48 bytes (perfect 16-byte multiple).
     uint8_t reserved_padding[4] = {0};
-
-    // --- Strategy Policy ---
-    [[no_unique_address]] Strategy strategy;
 
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = 
@@ -77,7 +81,7 @@ struct SparseSetView {
 
         // --- 1D LINEAR (DENSE ITERATION) ---
         if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
-            size_t p_selection_index = static_cast<size_t>((p_coords)...);
+            size_t p_selection_index = static_cast<size_t>((p_coords, ...));
 
             #ifdef NDEBUG
                 [[assume(p_selection_index < static_cast<size_t>(selection.element_count))]];
@@ -191,7 +195,9 @@ struct SparseSetView {
     }
 };
 
+#ifndef __INTELLISENSE__
 static_assert(sizeof(SparseSetView<int, FlatStrategy>) == 48, "SparseSetView base layout alignment failed!");
+#endif
 
 } // namespace ideam::core
 

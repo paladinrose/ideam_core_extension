@@ -29,7 +29,7 @@ public:
      * @brief Creates a completely isolated DOD execution environment.
      * Instantiates its own MemoryManager and compiles the Graph against it.
      */
-    void setup_isolated(const godot::Ref<MemoryManagerResource>& p_manager_res, const godot::Ref<TaskGraphResource>& p_graph_res);
+    void setup_isolated(const godot::Ref<godot::Resource>& p_manager_res, const godot::Ref<godot::Resource>& p_graph_res);
 
     /**
      * @brief Creates an execution environment that shares memory with another Host.

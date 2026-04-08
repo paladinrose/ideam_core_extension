@@ -44,9 +44,13 @@ struct BridgeView {
     uint32_t baked_buffer_version = 0;
     uint32_t baked_manager_version = 0;
 
-    // --- Strategy Policy ---
-    [[no_unique_address]] Strategy strategy;
-
+    // Zero-overhead abstraction. If Strategy is empty, it adds 0 bytes to the struct size.
+    #if defined(_MSC_VER)
+        [[msvc::no_unique_address]] Strategy strategy;
+    #else
+        [[no_unique_address]] Strategy strategy;
+    #endif
+    
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = ViewCapability::SPATIAL_ACCESS;
     static constexpr bool is_spatial = true;

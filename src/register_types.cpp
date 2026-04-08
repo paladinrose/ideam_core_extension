@@ -10,6 +10,7 @@
 #include "godot/graphs/ideam_graph_resource.h"
 #include "godot/memory/memory_graph_resource.h"
 #include "godot/tasks/task_graph_resource.h"
+#include "godot/tasks/task_graph_host.h" // ADDED: Required for Host registration
 
 // Native task registration
 #include "core/tasks/native_task_registry.h"
@@ -30,8 +31,12 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		ClassDB::register_class<ideam::godot_ext::IdeamGraphResource>();
 		ClassDB::register_class<ideam::godot_ext::MemoryGraphResource>();
 		ClassDB::register_class<ideam::godot_ext::TaskGraphResource>();
+		
+		// ADDED: Register the TaskGraphHost Node
+		ClassDB::register_class<ideam::godot_ext::TaskGraphHost>();
 
 		// --- Core Native Task Registration ---
+		ideam::core::NativeTaskRegistry::init();
 		ideam::core::NativeTaskRegistry::register_task<ideam::core::TestTask>("TestTask");
 	}
 
