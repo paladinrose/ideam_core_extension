@@ -27,30 +27,28 @@ public:
 
     /**
      * @brief Creates a completely isolated DOD execution environment.
-     * Instantiates its own MemoryManager and compiles the Graph against it.
+     * Orchestrates the strict memory handshake before compiling the Graph.
      */
     void setup_isolated(const godot::Ref<godot::Resource>& p_manager_res, const godot::Ref<godot::Resource>& p_graph_res);
 
     /**
      * @brief Creates an execution environment that shares memory with another Host.
-     * Uses the target host's MemoryManager, allowing multiple graphs to process the same contiguous data.
      */
     void setup_shared(TaskGraphHost* p_target_host, const godot::Ref<TaskGraphResource>& p_graph_res);
 
     /**
-     * @brief Ticks the active graph. Derived classes will call this in their preferred process loop.
+     * @brief Ticks the active graph. 
      */
     void execute_graph(double p_delta);
 
     /**
-     * @brief C++ internal accessor for memory sharing.
+     * @brief Returns true if this host has mathematically valid memory and a compiled graph.
      */
+    bool is_ready() const;
+
+    // --- C++ Internal Accessors ---
     std::shared_ptr<core::MemoryManagerDOD> get_active_manager() const { return active_manager; }
-    
-    /**
-     * @brief Returns true if this host has a valid compiled graph ready to run.
-     */
-    bool is_ready() const { return active_graph != nullptr && active_manager != nullptr; }
+    std::shared_ptr<core::TaskGraphDOD> get_active_graph() const { return active_graph; }
 };
 
 } // namespace ideam::godot_ext

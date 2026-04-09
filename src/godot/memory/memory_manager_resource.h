@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "memory_buffer_resource.h"
+#include "managed_buffer_profile.h" 
 #include "../../core/memory/memory_manager_dod.h"
 
 namespace ideam::godot_ext {
@@ -21,10 +22,11 @@ public:
 
 private:
     godot::TypedArray<MemoryBufferResource> buffer_schemas;
+    godot::TypedArray<ManagedBufferProfile> managed_profiles;
+    
     ScalabilityStrategy scaling_strategy = STRATEGY_FIXED;
-    int transient_capacity_mb = 16; // Workspace memory for worker threads
+    int transient_capacity_mb = 16; 
 
-    // The core backend. Instantiated during initialize_backend().
     std::shared_ptr<core::MemoryManagerDOD> backend_manager;
 
 protected:
@@ -34,14 +36,11 @@ public:
     MemoryManagerResource() = default;
     ~MemoryManagerResource() = default;
 
-    // Core Orchestration
     void initialize_backend();
     bool is_initialized() const { return backend_manager != nullptr; }
     
-    // Core Backend Access for Native Tasks
     std::shared_ptr<core::MemoryManagerDOD> get_backend() const { return backend_manager; }
 
-    // Resource Properties
     void set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) { buffer_schemas = p_schemas; }
     godot::TypedArray<MemoryBufferResource> get_buffer_schemas() const { return buffer_schemas; }
 
@@ -51,17 +50,16 @@ public:
     void set_transient_capacity_mb(int p_mb) { transient_capacity_mb = p_mb; }
     int get_transient_capacity_mb() const { return transient_capacity_mb; }
 
-    // UX Helpers
+    void register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferProfile>& p_profiles);
+    godot::TypedArray<ManagedBufferProfile> get_managed_profiles() const { return managed_profiles; }
+    int get_total_projected_footprint_bytes() const;
+
     godot::String get_projected_footprint_string() const;
 
-    // FFI Passed Queries
     bool buffer_contains_id(int p_buffer_id, int p_entity_id) const;
     int get_dense_index(int p_buffer_id, int p_entity_id) const;
-    void flush_gpu_updates();
 };
 
 } // namespace ideam::godot_ext
 
-VARIANT_ENUM_CAST(ideam::godot_ext::MemoryManagerResource::ScalabilityStrategy);
-
-#endif // IDEAM_GODOT_MEMORY_MANAGER_RESOURCE_H
+#endif
