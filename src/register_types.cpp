@@ -4,13 +4,15 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
-#include "godot/memory/memory_buffer_resource.h"
-#include "godot/memory/memory_manager_resource.h"
-
 #include "godot/graphs/ideam_graph_resource.h"
+
+#include "godot/memory/memory_buffer_resource.h"
+#include "godot/memory/managed_buffer_profile.h"
+#include "godot/memory/memory_manager_resource.h"
 #include "godot/memory/memory_graph_resource.h"
+
 #include "godot/tasks/task_graph_resource.h"
-#include "godot/tasks/task_graph_host.h" // ADDED: Required for Host registration
+#include "godot/tasks/task_graph_host.h" 
 
 // Native task registration
 #include "core/tasks/native_task_registry.h"
@@ -26,6 +28,7 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		
 		ClassDB::register_class<ideam::godot_ext::MemoryBufferResource>();
+		ClassDB::register_class<ideam::godot_ext::ManagedBufferProfile>();
 		ClassDB::register_class<ideam::godot_ext::MemoryManagerResource>();
 		
 		ClassDB::register_class<ideam::godot_ext::IdeamGraphResource>();
