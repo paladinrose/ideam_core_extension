@@ -146,6 +146,8 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
             task_graph->connect_nodes(from_id, from_port, to_id, to_port);
         }
     }
+    
+    godot::UtilityFunctions::print(p_manager->get_allocation_report());
 
     godot::UtilityFunctions::print("[DOD Tracker] compile_to_task_graph: Defragmenting...");
     task_graph->defragment();

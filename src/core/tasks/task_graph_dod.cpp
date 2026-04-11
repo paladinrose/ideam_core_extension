@@ -108,19 +108,30 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
     manager->flush_gpu_updates();
 
     // Ensure Utility Command Buffers exist (4MB capacity each)
-    _ensure_buffer(tier1_buffer_id, 4194304, 64);
-    _ensure_buffer(tier2_buffer_id, 4194304, 64);
+    // Tier 1 is a raw byte arena, so stride is 1
+    _ensure_buffer(tier1_buffer_id, 4194304, 1, 64); 
+    // Tier 2 is a queue of int64_t indices
+    _ensure_buffer(tier2_buffer_id, 4194304, sizeof(int64_t), 64);
 
     MemoryGrantPOD global_grant;
     std::array<GrantPartPOD, 4> reqs = {{
-        {.buffer_id = wave_node_id, .access_mode = BufferAccessMode::READ},
-        {.buffer_id = wave_meta_id, .access_mode = BufferAccessMode::READ},
-        {.buffer_id = tier1_buffer_id, .access_mode = BufferAccessMode::WRITE},
-        {.buffer_id = tier2_buffer_id, .access_mode = BufferAccessMode::WRITE}
+        {.buffer_id = wave_node_id, .element_stride = sizeof(NodeID), .access_mode = BufferAccessMode::READ},
+        {.buffer_id = wave_meta_id, .element_stride = sizeof(WaveInfo), .access_mode = BufferAccessMode::READ},
+        {.buffer_id = tier1_buffer_id, .element_stride = 1, .access_mode = BufferAccessMode::WRITE}, // 1 byte raw bump arena
+        {.buffer_id = tier2_buffer_id, .element_stride = sizeof(int64_t), .access_mode = BufferAccessMode::WRITE}
     }};
 
-    if (!manager->bake_grant(global_grant, reqs)) return;
+    for (auto& req : reqs) {
+        if (const MemoryBufferPOD* b = manager->get_buffer(req.buffer_id)) {
+            req.selection.mode = SelectionMode::RANGE;
+            req.selection.start_index = 0;
+            req.selection.element_count = b->max_elements;
+            req.selection.capacity = b->max_elements;
+        }
+    }
 
+    if (!manager->bake_grant(global_grant, reqs)) return;
+    
     auto n_view = _get_paged_view<NodeID, FlatStrategy>(global_grant, 0);
     auto m_view = _get_paged_view<WaveInfo, FlatStrategy>(global_grant, 1);
     

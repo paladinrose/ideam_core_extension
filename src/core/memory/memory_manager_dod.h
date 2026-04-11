@@ -202,6 +202,9 @@ public:
     [[nodiscard]] const uint64_t* get_global_version_ptr() const { return &global_version; }
     [[nodiscard]] MemoryBufferPOD* get_buffer(uint32_t p_id);
     [[nodiscard]] godot::RenderingDevice* get_rendering_device() const { return rd; }
+
+    // --- Diagnostics ---
+    [[nodiscard]] godot::String get_allocation_report() const;
 };
 
 } // namespace ideam::core

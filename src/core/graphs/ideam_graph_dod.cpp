@@ -76,13 +76,21 @@ bool IdeamGraphDOD::bake_topology_grant(MemoryGrantPOD& r_grant) {
 }
 
 void IdeamGraphDOD::_rebuild_topology() {
+    godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - START");
     if (dirty_flags & (STRUCTURE | CONNECTIONS)) {
+        godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - Calling _bake_adjacency...");
         _bake_adjacency();
+        godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - _bake_adjacency COMPLETE.");
     }
-    _sort_kahn_waves();
     
+    godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - Calling _sort_kahn_waves...");
+    _sort_kahn_waves();
+    godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - _sort_kahn_waves COMPLETE.");
+    
+    godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - Calling virtual on_topology_changed...");
     on_topology_changed();
     dirty_flags = CLEAN;
+    godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - END");
 }
 
 void IdeamGraphDOD::_bake_adjacency() {
@@ -91,19 +99,40 @@ void IdeamGraphDOD::_bake_adjacency() {
         if (edge.id != INVALID_ID) active_edges++;
     }
 
-    _ensure_buffer(input_registry_id, active_edges * sizeof(EdgeID));
-    _ensure_buffer(output_registry_id, active_edges * sizeof(EdgeID));
+    _ensure_buffer(input_registry_id, active_edges * sizeof(EdgeID), sizeof(EdgeID));
+    _ensure_buffer(output_registry_id, active_edges * sizeof(EdgeID), sizeof(EdgeID));
 
     MemoryGrantPOD in_grant, out_grant;
     
     std::array<GrantPartPOD, 1> in_req = {{ 
-        GrantPartPOD{ .buffer_id = input_registry_id, .access_mode = BufferAccessMode::WRITE } 
+        GrantPartPOD{ 
+            .buffer_id = input_registry_id, 
+            .element_stride = sizeof(EdgeID),
+            .access_mode = BufferAccessMode::WRITE 
+        } 
     }};
+    if (const MemoryBufferPOD* b = manager->get_buffer(input_registry_id)) {
+        in_req[0].selection.mode = SelectionMode::RANGE;
+        in_req[0].selection.start_index = 0;
+        in_req[0].selection.element_count = b->max_elements;
+        in_req[0].selection.capacity = b->max_elements;
+    }
     manager->bake_grant(in_grant, in_req);
     
+    
     std::array<GrantPartPOD, 1> out_req = {{ 
-        GrantPartPOD{ .buffer_id = output_registry_id, .access_mode = BufferAccessMode::WRITE } 
+        GrantPartPOD{ 
+            .buffer_id = output_registry_id, 
+            .element_stride = sizeof(EdgeID),
+            .access_mode = BufferAccessMode::WRITE 
+        } 
     }};
+    if (const MemoryBufferPOD* b = manager->get_buffer(output_registry_id)) {
+        out_req[0].selection.mode = SelectionMode::RANGE;
+        out_req[0].selection.start_index = 0;
+        out_req[0].selection.element_count = b->max_elements;
+        out_req[0].selection.capacity = b->max_elements;
+    }
     manager->bake_grant(out_grant, out_req);
 
     auto in_view = _get_paged_view<EdgeID, FlatStrategy>(in_grant, 0);
@@ -236,23 +265,64 @@ void IdeamGraphDOD::_sort_kahn_waves() {
         std::swap(current_wave, next_wave);
     }
 
-    _ensure_buffer(wave_node_id, total_node_count * sizeof(NodeID));
-    _ensure_buffer(wave_meta_id, wave_list.size() * sizeof(WaveInfo));
+    godot::UtilityFunctions::print("[DOD Tracker]   _sort_kahn_waves() - Ensuring wave buffers...");
+    _ensure_buffer(wave_node_id, total_node_count * sizeof(NodeID), sizeof(NodeID));
+    _ensure_buffer(wave_meta_id, wave_list.size() * sizeof(WaveInfo), sizeof(WaveInfo));
 
     MemoryGrantPOD n_grant, m_grant;
     std::array<GrantPartPOD, 1> n_req = {{ 
-        GrantPartPOD{ .buffer_id = wave_node_id, .access_mode = BufferAccessMode::WRITE } 
+        GrantPartPOD{ 
+            .buffer_id = wave_node_id, 
+            .element_stride = sizeof(NodeID), // <--- THE FIX
+            .access_mode = BufferAccessMode::WRITE 
+        } 
     }};
+    if (const MemoryBufferPOD* b = manager->get_buffer(wave_node_id)) {
+        n_req[0].selection.mode = SelectionMode::RANGE;
+        n_req[0].selection.start_index = 0;
+        n_req[0].selection.element_count = b->max_elements;
+        n_req[0].selection.capacity = b->max_elements;
+    }
     manager->bake_grant(n_grant, n_req);
     
     std::array<GrantPartPOD, 1> m_req = {{ 
-        GrantPartPOD{ .buffer_id = wave_meta_id, .access_mode = BufferAccessMode::WRITE } 
+        GrantPartPOD{ 
+            .buffer_id = wave_meta_id, 
+            .element_stride = sizeof(WaveInfo), // <--- THE FIX
+            .access_mode = BufferAccessMode::WRITE 
+        } 
     }};
+    if (const MemoryBufferPOD* b = manager->get_buffer(wave_meta_id)) {
+        m_req[0].selection.mode = SelectionMode::RANGE;
+        m_req[0].selection.start_index = 0;
+        m_req[0].selection.element_count = b->max_elements;
+        m_req[0].selection.capacity = b->max_elements;
+    }
     manager->bake_grant(m_grant, m_req);
     
+    // CRITICAL DIAGNOSTIC: These should NOT be 0 anymore!
+    godot::UtilityFunctions::print("[DOD Tracker]   _sort_kahn_waves() - n_grant valid elements: ", n_grant.parts[0].selection.element_count);
+    godot::UtilityFunctions::print("[DOD Tracker]   _sort_kahn_waves() - m_grant valid elements: ", m_grant.parts[0].selection.element_count);
+
     auto n_view = _get_paged_view<NodeID, FlatStrategy>(n_grant, 0);
     auto m_view = _get_paged_view<WaveInfo, FlatStrategy>(m_grant, 0);
 
+    // --- PAGED VIEW DIAGNOSTIC ---
+    godot::UtilityFunctions::print("--- PAGED VIEW DIAGNOSTIC ---");
+    
+    // 1. Is the Grant holding the correct stride?
+    godot::UtilityFunctions::print("m_grant Stride: ", m_grant.parts[0].element_stride);
+    
+    // 2. Did the View successfully grab the Page Table pointer?
+    godot::UtilityFunctions::print("m_view Page Table Ptr: ", reinterpret_cast<uint64_t>(m_view.page_table));
+    
+    // 3. If the table exists, does Page 0 point to valid Master Block memory?
+    if (m_view.page_table) {
+        godot::UtilityFunctions::print("m_view Page[0] Ptr: ", reinterpret_cast<uint64_t>(m_view.page_table[0]));
+    }
+    godot::UtilityFunctions::print("-----------------------------");
+
+    godot::UtilityFunctions::print("[DOD Tracker]   _sort_kahn_waves() - Writing to Views...");
     uint32_t write_ptr = 0;
     for (uint32_t w = 0; w < wave_list.size(); ++w) {
         m_view[w] = { write_ptr, static_cast<uint32_t>(wave_list[w].size()) };
@@ -260,6 +330,8 @@ void IdeamGraphDOD::_sort_kahn_waves() {
             n_view[write_ptr++] = id;
         }
     }
+    
+    godot::UtilityFunctions::print("[DOD Tracker]   _sort_kahn_waves() - Releasing Grants...");
     manager->release_grant(n_grant);
     manager->release_grant(m_grant);
 
@@ -269,7 +341,7 @@ void IdeamGraphDOD::_sort_kahn_waves() {
     }
 }
 
-void IdeamGraphDOD::_ensure_buffer(uint32_t& r_id, size_t p_size_bytes, uint32_t p_alignment) {
+void IdeamGraphDOD::_ensure_buffer(uint32_t& r_id, size_t p_size_bytes, uint32_t p_stride, uint32_t p_alignment) {
     size_t page_size = 4096;
     size_t aligned_size = ((p_size_bytes + page_size - 1) / page_size) * page_size;
     if (aligned_size == 0) aligned_size = page_size;
@@ -278,12 +350,33 @@ void IdeamGraphDOD::_ensure_buffer(uint32_t& r_id, size_t p_size_bytes, uint32_t
         MemoryBufferPOD* buf = manager->get_buffer(r_id);
         if (buf && buf->capacity_bytes >= aligned_size) return;
         
-        // Zero-copy virtual page expansion (prevents Master Block fragmentation)
-        if (manager->expand_paged_buffer(r_id, aligned_size)) return;
+        // Zero-copy virtual page expansion
+        if (manager->expand_paged_buffer(r_id, aligned_size)) {
+            // IMPORTANT: Expand logical bounds when physical capacity grows!
+            if (buf) {
+                buf->max_elements = aligned_size / p_stride;
+                buf->current_count = buf->max_elements; 
+            }
+            return;
+        }
     }
     
     r_id = manager->create_buffer(BufferLayoutType::PAGED, aligned_size, p_alignment);
     manager->configure_paged(r_id, static_cast<uint32_t>(page_size));
+
+    std::vector<ColumnMetadata> col;
+    col.push_back({
+        0, 0, 0, DataType::CUSTOM, 0, p_stride, p_alignment, 0
+    });
+    manager->configure_buffer_columns(r_id, col);
+
+    // Force the utility buffer's logical bounds to match its physical capacity.
+    // This gives the PagedView permission to write to the entire block.
+    MemoryBufferPOD* buf = manager->get_buffer(r_id);
+    if (buf) {
+        buf->max_elements = aligned_size / p_stride;
+        buf->current_count = buf->max_elements; 
+    }
 }
 
 void IdeamGraphDOD::reserve(size_t p_node_count, size_t p_edge_count) {
@@ -292,11 +385,14 @@ void IdeamGraphDOD::reserve(size_t p_node_count, size_t p_edge_count) {
 }
 
 void IdeamGraphDOD::defragment() {
+    godot::UtilityFunctions::print("[DOD Tracker] IdeamGraphDOD::defragment() - START");
     if (build_nodes.empty() && build_edges.empty()) {
+        godot::UtilityFunctions::print("[DOD Tracker] defragment() - Graph is empty. Clearing.");
         clear();
         return;
     }
 
+    godot::UtilityFunctions::print("[DOD Tracker] defragment() - Packing Nodes...");
     std::vector<NodeID> node_lut(build_nodes.size(), INVALID_ID);
     std::vector<EdgeID> edge_lut(build_edges.size(), INVALID_ID);
 
@@ -310,6 +406,7 @@ void IdeamGraphDOD::defragment() {
         }
     }
 
+    godot::UtilityFunctions::print("[DOD Tracker] defragment() - Packing Edges...");
     std::vector<GraphEdgeData> packed_edges;
     packed_edges.reserve(build_edges.size());
 
@@ -333,10 +430,16 @@ void IdeamGraphDOD::defragment() {
     build_nodes = std::move(packed_nodes);
     build_edges = std::move(packed_edges);
 
+    godot::UtilityFunctions::print("[DOD Tracker] defragment() - Calling Virtual _remap_ids...");
     _remap_ids(node_lut, edge_lut);
+    godot::UtilityFunctions::print("[DOD Tracker] defragment() - Virtual _remap_ids COMPLETE.");
 
     dirty_flags = ALL;
+    
+    godot::UtilityFunctions::print("[DOD Tracker] defragment() - Calling _rebuild_topology()...");
     _rebuild_topology();
+    godot::UtilityFunctions::print("[DOD Tracker] defragment() - _rebuild_topology() COMPLETE.");
+    godot::UtilityFunctions::print("[DOD Tracker] IdeamGraphDOD::defragment() - FULLY COMPLETE.");
 }
 
 void IdeamGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std::vector<EdgeID>& p_edge_lut) {

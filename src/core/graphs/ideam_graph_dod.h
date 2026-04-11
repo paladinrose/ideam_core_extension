@@ -143,7 +143,7 @@ protected:
      * Upgraded to utilize PAGED memory buffers. Allows infinite virtual growth without forcing 
      * the underlying MemoryManagerDOD to rebase or fragment the master block.
      */
-    void _ensure_buffer(uint32_t& r_id, size_t p_size_bytes, uint32_t p_alignment = 64);
+    void _ensure_buffer(uint32_t& r_id, size_t p_size_bytes, uint32_t p_stride, uint32_t p_alignment = 64);
     
     /**
      * @brief _get_paged_view
@@ -155,9 +155,14 @@ protected:
         PagedView<T, Strategy> view;
         view.grant = &p_grant;
         view.grant_part_index = p_part_index;
-        view.page_table = reinterpret_cast<uint8_t**>(p_grant.parts[p_part_index].raw_base_ptr);
 
+        // 1. Fetch the physical buffer configuration
         MemoryBufferPOD* buf = manager->get_buffer(p_grant.parts[p_part_index].buffer_id);
+        
+        // --- THE FIX ---
+        // Route the actual page table directory, NOT the raw data pointer!
+        view.page_table = buf->extra.paged.table_ptr;
+
         uint32_t page_size = buf->extra.paged.page_size_bytes;
 
         view.page_shift = static_cast<uint32_t>(std::countr_zero(page_size));

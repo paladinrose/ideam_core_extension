@@ -777,4 +777,43 @@ MemoryBufferPOD* MemoryManagerDOD::get_buffer(uint32_t p_id) {
     return &buffers[id_to_index[p_id]];
 }
 
+godot::String MemoryManagerDOD::get_allocation_report() const {
+    godot::String report = "\n=== DOD Memory Manager Physical Allocation Report ===\n";
+    
+    float master_mb = master_capacity / (1024.0f * 1024.0f);
+    float master_used_mb = master_used / (1024.0f * 1024.0f);
+    float transient_mb = transient_capacity / (1024.0f * 1024.0f);
+
+    report += "Master Block Capacity: " + godot::String::num(master_mb, 2) + " MB\n";
+    report += "Master Block Used:     " + godot::String::num(master_used_mb, 2) + " MB\n";
+    report += "Transient Capacity:    " + godot::String::num(transient_mb, 2) + " MB\n";
+    report += "Active Buffers:        " + godot::String::num_int64(buffers.size()) + "\n";
+    report += "------------------------------------------------------\n";
+
+    for (size_t i = 0; i < buffers.size(); ++i) {
+        const MemoryBufferPOD& buf = buffers[i];
+        
+        godot::String layout_str = "UNKNOWN";
+        switch(buf.layout_type) {
+            case BufferLayoutType::FLAT: layout_str = "FLAT"; break;
+            case BufferLayoutType::AOS: layout_str = "AOS"; break;
+            case BufferLayoutType::SOA: layout_str = "SOA"; break;
+            case BufferLayoutType::SPARSE_SET: layout_str = "SPARSE_SET"; break;
+            case BufferLayoutType::TILED_SOA: layout_str = "TILED_SOA"; break;
+            case BufferLayoutType::RING: layout_str = "RING"; break;
+            case BufferLayoutType::PAGED: layout_str = "PAGED"; break;
+            default: break;
+        }
+
+        float kb = buf.capacity_bytes / 1024.0f;
+        report += "  [Buffer " + godot::String::num_int64(buf.buffer_id) + "] ";
+        report += layout_str.rpad(12) + " | ";
+        report += godot::String::num_int64(buf.capacity_bytes).lpad(8) + " bytes ";
+        report += "(" + godot::String::num(kb, 2) + " KB)\n";
+    }
+    
+    report += "======================================================\n";
+    return report;
+}
+
 } // namespace ideam::core
