@@ -6,7 +6,10 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/callable.hpp>
 
-namespace godot {
+// Bring Godot types into scope locally for the implementation file
+using namespace godot;
+
+namespace ideam::godot_ext {
 
 void IdeamGraphInspector::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_edit_graph_pressed", "object"), &IdeamGraphInspector::_on_edit_graph_pressed);
@@ -70,4 +73,4 @@ void IdeamGraphInspector::_on_edit_graph_pressed(Object* p_object) {
     GraphComposer::edit_ideam_graph(graph_edit);
 }
 
-} // namespace godot
+} // namespace ideam::godot_ext

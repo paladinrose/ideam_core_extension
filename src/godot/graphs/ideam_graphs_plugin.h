@@ -9,7 +9,7 @@
 #include <godot_cpp/classes/packed_scene.hpp>
 #include <godot_cpp/classes/editor_inspector_plugin.hpp>
 
-namespace godot {
+namespace ideam::godot_ext {
 
 class IdeamGraphsPlugin : public IdeamEditorPlugin {
     GDCLASS(IdeamGraphsPlugin, IdeamEditorPlugin)
@@ -22,8 +22,8 @@ private:
     static constexpr std::string_view GRAPH_COMPOSER_SCENE_PATH = "res://addons/ideam_graphs/scenes/graph_composer_tool.tscn";
 
     // Members
-    Ref<EditorInspectorPlugin> graph_editor;
-    Window *graph_composer_window = nullptr;
+    godot::Ref<godot::EditorInspectorPlugin> graph_editor;
+    godot::Window *graph_composer_window = nullptr;
     GraphComposer *graph_composer = nullptr;
 
 protected:
@@ -40,14 +40,14 @@ public:
     // Logic
     void open_graph_composer();
     void close_graph_composer();
-    void edit_ideam_graph(Object *p_graph, const Callable &p_graph_close);
+    void edit_ideam_graph(godot::Object *p_graph, const godot::Callable &p_graph_close);
 
     // Global Access
-    static Object *undo_redo();
+    static godot::Object *undo_redo();
     // A static bridge to request the shared composer window from the active plugin instance.
-    static Window* get_shared_composer_window();
+    static godot::Window* get_shared_composer_window();
 };
 
-} // namespace godot
+} // namespace ideam::godot_ext
 
 #endif // IDEAM_GRAPHS_PLUGIN_H

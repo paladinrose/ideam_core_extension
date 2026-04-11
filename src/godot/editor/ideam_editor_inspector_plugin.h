@@ -7,10 +7,10 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/variant.hpp>
 
-namespace godot {
+namespace ideam::godot_ext {
 
-class IdeamEditorInspectorPlugin : public EditorInspectorPlugin {
-	GDCLASS(IdeamEditorInspectorPlugin, EditorInspectorPlugin)
+class IdeamEditorInspectorPlugin : public godot::EditorInspectorPlugin {
+	GDCLASS(IdeamEditorInspectorPlugin, godot::EditorInspectorPlugin)
 
 private:
 	static void _bind_methods();
@@ -19,12 +19,12 @@ public:
 	IdeamEditorInspectorPlugin();
 	~IdeamEditorInspectorPlugin();
 
-	virtual bool _can_handle(Object *p_object);
-	virtual void _parse_begin(Object *p_object) override;
+	virtual bool _can_handle(godot::Object *p_object);
+	virtual void _parse_begin(godot::Object *p_object) override;
 
-    virtual Object *get_undo_redo() const;
+    virtual godot::Object *get_undo_redo() const;
 };
 
-} // namespace godot
+} // namespace ideam::godot_ext
 
 #endif // IDEAM_EDITOR_INSPECTOR_PLUGIN_H

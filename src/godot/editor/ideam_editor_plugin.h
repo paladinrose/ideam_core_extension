@@ -8,15 +8,15 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <string_view>
 
-namespace godot {
+namespace ideam::godot_ext {
 
 /**
  * @class IdeamEditorPlugin
  * @brief Abstract base class for the Ideam plugin ecosystem.
  * Handles filesystem standardization and cross-plugin registry discovery.
  */
-class IdeamEditorPlugin : public EditorPlugin {
-	GDCLASS(IdeamEditorPlugin, EditorPlugin)
+class IdeamEditorPlugin : public godot::EditorPlugin {
+	GDCLASS(IdeamEditorPlugin, godot::EditorPlugin)
 
 protected:
 	static void _bind_methods();
@@ -40,12 +40,12 @@ public:
     /**
      * @brief Broadcasts the active state of this plugin to the ecosystem.
      */
-    void set_plugin_active(const String &p_plugin_name, bool p_active);
+    void set_plugin_active(const godot::String &p_plugin_name, bool p_active);
     
     /**
      * @brief Checks if another plugin in the Ideam ecosystem is currently active.
      */
-    bool is_plugin_active(const String &p_plugin_name) const;
+    bool is_plugin_active(const godot::String &p_plugin_name) const;
 
 	// --- Universal Ecosystem Registry API ---
 	// Exposed to GDScript so standalone plugins can inject their tools.
@@ -54,24 +54,24 @@ public:
 	 * @brief Writes a value to the universal .ideam_registry.cfg
 	 * Use this to inject tools into the Project Wizard or register file paths.
 	 */
-	void register_to_ecosystem(const String &p_section, const String &p_key, const Variant &p_value);
+	void register_to_ecosystem(const godot::String &p_section, const godot::String &p_key, const godot::Variant &p_value);
 
 	/**
 	 * @brief Retrieves a value from the registry.
 	 */
-	Variant get_from_ecosystem(const String &p_section, const String &p_key, const Variant &p_default = Variant()) const;
+	godot::Variant get_from_ecosystem(const godot::String &p_section, const godot::String &p_key, const godot::Variant &p_default = godot::Variant()) const;
 
 	/**
 	 * @brief Retrieves all keys registered under a specific section (e.g., "WizardTools").
 	 */
-	TypedArray<String> get_ecosystem_keys(const String &p_section) const;
+	godot::TypedArray<godot::String> get_ecosystem_keys(const godot::String &p_section) const;
 	
 	/**
 	 * @brief Retrieves a dictionary of all Key-Value pairs in a section. Useful for building UI lists.
 	 */
-	Dictionary get_ecosystem_section(const String &p_section) const;
+	godot::Dictionary get_ecosystem_section(const godot::String &p_section) const;
 };
 
-} // namespace godot
+} // namespace ideam::godot_ext
 
 #endif // IDEAM_EDITOR_PLUGIN_H

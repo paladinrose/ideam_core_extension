@@ -1,7 +1,11 @@
 #include "ideam_editor_plugin.h"
+
 #include <godot_cpp/variant/utility_functions.hpp>
 
-namespace godot {
+// Bring Godot types into scope locally for the implementation file
+using namespace godot;
+
+namespace ideam::godot_ext {
 
 void IdeamEditorPlugin::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("validate_script_templates"), &IdeamEditorPlugin::validate_script_templates);
@@ -115,4 +119,4 @@ Dictionary IdeamEditorPlugin::get_ecosystem_section(const String &p_section) con
 	return section_data;
 }
 
-} // namespace godot
+} // namespace ideam::godot_ext

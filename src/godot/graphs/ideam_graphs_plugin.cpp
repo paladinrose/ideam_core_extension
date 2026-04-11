@@ -1,6 +1,7 @@
 #include "ideam_graphs_plugin.h"
 #include "ideam_graph_inspector.h"
 
+#include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/classes/editor_undo_redo_manager.hpp>
@@ -10,7 +11,10 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/classes/v_box_container.hpp>
 
-namespace godot {
+// Bring Godot types into scope locally for the implementation file
+using namespace godot;
+
+namespace ideam::godot_ext {
 
 IdeamGraphsPlugin *IdeamGraphsPlugin::singleton = nullptr;
 
@@ -144,4 +148,4 @@ Window* IdeamGraphsPlugin::get_shared_composer_window() {
     return singleton->graph_composer_window;
 }
 
-} // namespace godot
+} // namespace ideam::godot_ext

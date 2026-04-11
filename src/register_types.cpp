@@ -5,6 +5,11 @@
 #include <godot_cpp/godot.hpp>
 
 #include "godot/graphs/ideam_graph_resource.h"
+#include "godot/graphs/ideam_graph_edit.h"
+#include "godot/graphs/ideam_graph_node.h"
+#include "godot/graphs/ideam_graphs_plugin.h"
+#include "godot/graphs/ideam_graph_inspector.h"
+#include "godot/graphs/graph_composer.h"
 
 #include "godot/memory/memory_buffer_resource.h"
 #include "godot/memory/managed_buffer_profile.h"
@@ -39,9 +44,11 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		
+        // Graph UI elements needed at runtime/scene level
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphNode);
+
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
-		
-		// ADDED: Register the TaskGraphHost Node
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 
 		// --- Core Native Task Registration ---
@@ -57,9 +64,13 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		
 		// Ecosystem Base Classes - Registered as Abstract to expose API but block direct instantiation
-		GDREGISTER_ABSTRACT_CLASS(godot::IdeamEditorPlugin);
-		GDREGISTER_ABSTRACT_CLASS(godot::IdeamEditorInspectorPlugin);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorPlugin);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorInspectorPlugin);
 		
+        // Editor-only Graph tooling
+		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphInspector);
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphsPlugin);
 	}
 }
 

@@ -1,6 +1,11 @@
 #include "ideam_editor_inspector_plugin.h"
 
-namespace godot {
+#include <godot_cpp/core/class_db.hpp>
+
+// Bring Godot types into scope locally for the implementation file
+using namespace godot;
+
+namespace ideam::godot_ext {
 
 void IdeamEditorInspectorPlugin::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_undo_redo"), &IdeamEditorInspectorPlugin::get_undo_redo);
@@ -11,7 +16,6 @@ IdeamEditorInspectorPlugin::IdeamEditorInspectorPlugin() {
 
 IdeamEditorInspectorPlugin::~IdeamEditorInspectorPlugin() {
 }
-
 
 Object *IdeamEditorInspectorPlugin::get_undo_redo() const {
 	// Virtual base returns nullptr; derived inspectors (e.g., IdeamGraphInspector) 
@@ -43,4 +47,4 @@ void IdeamEditorInspectorPlugin::_parse_begin(Object *p_object) {
 	}
 }
 
-} // namespace godot
+} // namespace ideam::godot_ext

@@ -1,9 +1,14 @@
 #include "graph_composer.h"
 #include "ideam_graphs_plugin.h"
+
+#include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
-namespace godot {
+// Bring Godot types into scope locally for the implementation file
+using namespace godot;
+
+namespace ideam::godot_ext {
 
 void GraphComposer::_bind_methods() {
     // Expose instance operations to Godot's reflection system if GDScript interaction is required
@@ -36,7 +41,7 @@ void GraphComposer::_notification(int p_what) {
 void GraphComposer::open_graph(IdeamGraphEdit* p_graph_edit) {
     if (!p_graph_edit) return;
 
-    Ref<ideam::godot_ext::IdeamGraphResource> blueprint = p_graph_edit->get_blueprint();
+    Ref<IdeamGraphResource> blueprint = p_graph_edit->get_blueprint();
     if (blueprint.is_null()) {
         // Reject invalid states before they dirty our tracking vectors.
         UtilityFunctions::printerr("GraphComposer: Attempted to open graph with null blueprint.");
@@ -158,4 +163,4 @@ void GraphComposer::close_ideam_graph(IdeamGraphEdit* p_graph_edit, Control* p_o
     }
 }
 
-} // namespace godot
+} // namespace ideam::godot_ext

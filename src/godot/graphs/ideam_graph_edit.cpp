@@ -1,12 +1,14 @@
 #include "ideam_graph_edit.h"
-// Include the actual resource definition (adjust path as needed for your folder structure)
-#include "ideam_graph_resource.h" 
 
+#include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/callable.hpp>
 
-namespace godot {
+// Bring Godot types into scope locally for the implementation file
+using namespace godot;
+
+namespace ideam::godot_ext {
 
 void IdeamGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_request_connect", "from_node", "from_port", "to_node", "to_port"), &IdeamGraphEdit::_request_connect);
@@ -16,6 +18,8 @@ void IdeamGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("node_context_clicked", "node"), &IdeamGraphEdit::node_context_clicked);
     ClassDB::bind_method(D_METHOD("_on_blueprint_changed"), &IdeamGraphEdit::_on_blueprint_changed);
     ClassDB::bind_method(D_METHOD("_on_end_node_move"), &IdeamGraphEdit::_on_end_node_move);
+    ClassDB::bind_method(D_METHOD("_on_node_property_changed", "node_name", "property_name", "new_value"), &IdeamGraphEdit::_on_node_property_changed);
+    ClassDB::bind_method(D_METHOD("_on_node_delete_request", "node_name"), &IdeamGraphEdit::_on_node_delete_request);
 
     ClassDB::bind_method(D_METHOD("set_blueprint", "blueprint"), &IdeamGraphEdit::set_blueprint);
     ClassDB::bind_method(D_METHOD("get_blueprint"), &IdeamGraphEdit::get_blueprint);
@@ -44,7 +48,7 @@ void IdeamGraphEdit::_ready() {
     connect("end_node_move", Callable(this, "_on_end_node_move"));
 }
 
-void IdeamGraphEdit::set_blueprint(const Ref<ideam::godot_ext::IdeamGraphResource>& p_blueprint) {
+void IdeamGraphEdit::set_blueprint(const Ref<IdeamGraphResource>& p_blueprint) {
     // Disconnect old blueprint
     if (current_blueprint.is_valid() && current_blueprint->is_connected("changed", Callable(this, "_on_blueprint_changed"))) {
         current_blueprint->disconnect("changed", Callable(this, "_on_blueprint_changed"));
@@ -99,6 +103,8 @@ void IdeamGraphEdit::_on_blueprint_changed() {
             // Create missing node
             g_node = memnew(IdeamGraphNode);
             add_child(g_node);
+            g_node->connect("property_changed", Callable(this, "_on_node_property_changed"));
+            g_node->connect("delete_request", Callable(this, "_on_node_delete_request"));
             g_node->initialize(n_data); // Automatically sets name, position, and builds UI
         }
     }
@@ -259,4 +265,44 @@ void IdeamGraphEdit::node_context_clicked(IdeamGraphNode* p_node) {
     }
 }
 
-} // namespace godot
+// ==========================================
+// NODE SIGNAL ROUTING (View -> Model)
+// ==========================================
+
+void IdeamGraphEdit::_on_node_delete_request(const StringName& p_node_name) {
+    if (current_blueprint.is_null()) return;
+
+    // Route directly to the Resource's Tier 1 action router
+    current_blueprint->action_remove_node(p_node_name);
+}
+
+void IdeamGraphEdit::_on_node_property_changed(const StringName& p_node_name, const StringName& p_property_name, const Variant& p_new_value) {
+    if (current_blueprint.is_null() || is_syncing_ui) return;
+
+    // We need to fetch the nodes, update the specific property, and push them back.
+    // In a full Undo/Redo implementation, this would be wrapped in an action.
+    TypedArray<Dictionary> nodes = current_blueprint->get_nodes().duplicate(true);
+    
+    for (int i = 0; i < nodes.size(); ++i) {
+        Dictionary n_data = nodes[i];
+        if (n_data.has("name") && static_cast<StringName>(n_data["name"]) == p_node_name) {
+            
+            // Ensure the properties dictionary exists
+            Dictionary props;
+            if (n_data.has("properties")) {
+                props = n_data["properties"];
+            }
+            
+            // Update the property
+            props[p_property_name] = p_new_value;
+            n_data["properties"] = props;
+            
+            nodes[i] = n_data;
+            break;
+        }
+    }
+    
+    current_blueprint->set_nodes(nodes);
+}
+
+} // namespace ideam::godot_ext

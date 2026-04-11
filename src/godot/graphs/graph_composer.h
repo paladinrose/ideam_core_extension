@@ -9,20 +9,20 @@
 #include "ideam_graph_edit.h"
 #include "ideam_graph_resource.h"
 
-namespace godot {
+namespace ideam::godot_ext {
 
-class GraphComposer : public VBoxContainer {
-    GDCLASS(GraphComposer, VBoxContainer)
+class GraphComposer : public godot::VBoxContainer {
+    GDCLASS(GraphComposer, godot::VBoxContainer)
 
 private:
-    TabContainer* tab_container = nullptr;
+    godot::TabContainer* tab_container = nullptr;
 
     // DOD-Optimized State Tracker
     // Size: 24 bytes. Padding to 32 bytes via alignas ensures optimal fit 
     // for AVX operations and prevents false sharing on cache lines.
     struct alignas(32) ActiveSession {
         // We store the raw pointer as a fast-comparison key to avoid Ref<> ref-count thrashing
-        const ideam::godot_ext::IdeamGraphResource* resource_key; 
+        const IdeamGraphResource* resource_key; 
         IdeamGraphEdit* editor_node;
         int tab_index;
     };
@@ -43,10 +43,10 @@ public:
     void close_graph(IdeamGraphEdit* p_graph_edit);
 
     // Unified Static API routing
-    static void edit_ideam_graph(IdeamGraphEdit* p_graph_edit, Control* p_owner = nullptr);
-    static void close_ideam_graph(IdeamGraphEdit* p_graph_edit, Control* p_owner = nullptr);
+    static void edit_ideam_graph(IdeamGraphEdit* p_graph_edit, godot::Control* p_owner = nullptr);
+    static void close_ideam_graph(IdeamGraphEdit* p_graph_edit, godot::Control* p_owner = nullptr);
 };
 
-} // namespace godot
+} // namespace ideam::godot_ext
 
 #endif // IDEAM_GRAPH_COMPOSER_H

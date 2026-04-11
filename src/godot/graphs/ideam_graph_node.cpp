@@ -1,9 +1,14 @@
 #include "ideam_graph_node.h"
 #include "ideam_graph_edit.h"
+
+#include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/input_event_mouse_button.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
-namespace godot {
+// Bring Godot types into scope locally for the implementation file
+using namespace godot;
+
+namespace ideam::godot_ext {
 
 void IdeamGraphNode::_bind_methods() {
     // Fired when the user right-clicks the node
@@ -11,6 +16,8 @@ void IdeamGraphNode::_bind_methods() {
     
     // Fired when an internal UI element (like a slider or LineEdit) is modified by the user
     ADD_SIGNAL(MethodInfo("property_changed", PropertyInfo(Variant::STRING_NAME, "blueprint_id"), PropertyInfo(Variant::STRING_NAME, "property_name"), PropertyInfo(Variant::NIL, "new_value")));
+
+    ADD_SIGNAL(MethodInfo("delete_request", PropertyInfo(Variant::STRING_NAME, "blueprint_id")));
 
     ClassDB::bind_method(D_METHOD("initialize", "node_data"), &IdeamGraphNode::initialize);
     ClassDB::bind_method(D_METHOD("get_blueprint_id"), &IdeamGraphNode::get_blueprint_id);
@@ -95,10 +102,9 @@ TypedArray<String> IdeamGraphNode::get_context_menu_options() const {
 }
 
 void IdeamGraphNode::select_context_menu_option(int p_id) {
-    // In a real application, ID 0 would emit a signal to the GraphEdit to delete this node from the Resource
     switch(p_id) {
         case 0:
-            UtilityFunctions::print("Requested Deletion for ", blueprint_id);
+            emit_signal("delete_request", blueprint_id);
             break;
         case 1:
             UtilityFunctions::print("Requested Duplication for ", blueprint_id);
@@ -108,4 +114,4 @@ void IdeamGraphNode::select_context_menu_option(int p_id) {
     }
 }
 
-} // namespace godot
+} // namespace ideam::godot_ext
