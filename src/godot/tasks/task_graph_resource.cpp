@@ -27,7 +27,8 @@ void TaskGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuffer
     // 1. Inherit Topologies and Grant Registries from parent classes
     MemoryGraphResource::_append_managed_profiles(r_profiles);
 
-    constexpr int ALIGNMENT = 64; 
+    constexpr int ALIGNMENT = 64;
+    constexpr int PAGE_SIZE = 4096; 
     int node_cap = get_is_volatile() ? std::max(static_cast<int>(get_nodes().size()), get_volatile_node_capacity()) : static_cast<int>(get_nodes().size());
 
     // --- Profile 5: TaskGraph Execution State Arrays (SoA) ---
@@ -54,13 +55,13 @@ void TaskGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuffer
 
     // --- Profile 6: Structural Command Arena ---
     // Backs the `TaskGraphCommandPOD` for deferred element spawning and graph mutations
-    int padded_cmd_arena = (command_arena_capacity_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+    int padded_cmd_arena = ((command_arena_capacity_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
     
     godot::Ref<ManagedBufferProfile> cmd_arena_profile;
     cmd_arena_profile.instantiate();
     cmd_arena_profile->set_consumer_name(get_name());
     cmd_arena_profile->set_purpose("Structural Command Arena");
-    cmd_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT));
+    cmd_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); // Updated to clarify intent
     cmd_arena_profile->set_alignment(ALIGNMENT);
     cmd_arena_profile->set_byte_footprint(padded_cmd_arena);
     r_profiles.append(cmd_arena_profile);
@@ -68,33 +69,33 @@ void TaskGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuffer
     // --- Profile 7: Selection Command Queue ---
     // Backs the `TaskSelectionCommandPOD` index queue for wave expansion
     int sel_bytes = selection_queue_capacity_elements * sizeof(int64_t);
-    int padded_sel_arena = (sel_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
+    // FIX: Align to 4KB Virtual Pages to match _ensure_buffer projection
+    int padded_sel_arena = ((sel_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
 
     godot::Ref<ManagedBufferProfile> sel_arena_profile;
     sel_arena_profile.instantiate();
     sel_arena_profile->set_consumer_name(get_name());
     sel_arena_profile->set_purpose("Selection Command Queue");
-    sel_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT));
+    sel_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); // Updated to clarify intent
     sel_arena_profile->set_alignment(ALIGNMENT);
     sel_arena_profile->set_byte_footprint(padded_sel_arena);
     r_profiles.append(sel_arena_profile);
+
 }
 
 std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
     core::MemoryManagerDOD* p_manager, 
     godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const 
 {
-    godot::UtilityFunctions::print("[DOD Tracker] compile_to_task_graph: Allocating TaskGraphDOD...");
+    
     auto task_graph = std::make_shared<core::TaskGraphDOD>(p_manager);
     
     godot::TypedArray<godot::Dictionary> current_nodes = get_nodes();
     godot::TypedArray<godot::Dictionary> current_edges = get_edges();
 
-    godot::UtilityFunctions::print("[DOD Tracker] compile_to_task_graph: Fetching Nodes/Edges from Resource...");
     task_graph->reserve(current_nodes.size(), current_edges.size());
     r_ui_to_dod_map.clear();
 
-    godot::UtilityFunctions::print("[DOD Tracker] compile_to_task_graph: Iterating nodes...");
     for (int i = 0; i < current_nodes.size(); ++i) {
         godot::Dictionary n = current_nodes[i];
         if (!n.has("name") || !n.has("task_type")) continue;
@@ -115,7 +116,6 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
                         auto native_interface = core::NativeTaskRegistry::create(native_class);
                         
                         if (native_interface) {
-                            godot::UtilityFunctions::print("[DOD Tracker] Instantiating Native Task: ", native_class);
                             task_graph->configure_native_interface(core_id, std::move(native_interface));
                         } else {
                             godot::UtilityFunctions::printerr("TaskGraph Compiler: Unable to find registered native task '", native_class, "' for node '", ui_name, "'");
@@ -128,7 +128,6 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
         }
     }
 
-    godot::UtilityFunctions::print("[DOD Tracker] compile_to_task_graph: Compiling edges...");
     for (int i = 0; i < current_edges.size(); ++i) {
         godot::Dictionary e = current_edges[i];
         if (!e.has("from") || !e.has("to")) continue;
@@ -147,9 +146,11 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
         }
     }
     
-    godot::UtilityFunctions::print(p_manager->get_allocation_report());
+    task_graph->configure_command_arenas(
+        command_arena_capacity_bytes, 
+        selection_queue_capacity_elements * sizeof(int64_t)
+    );
 
-    godot::UtilityFunctions::print("[DOD Tracker] compile_to_task_graph: Defragmenting...");
     task_graph->defragment();
 
     return task_graph;

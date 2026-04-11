@@ -14,6 +14,10 @@
 #include "godot/tasks/task_graph_resource.h"
 #include "godot/tasks/task_graph_host.h" 
 
+// UI/Editor Handshake
+#include "godot/editor/ideam_editor_plugin.h"
+#include "godot/editor/ideam_editor_inspector_plugin.h"
+
 // Native task registration
 #include "core/tasks/native_task_registry.h"
 
@@ -27,22 +31,36 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	// ========================================================================
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		
-		ClassDB::register_class<ideam::godot_ext::MemoryBufferResource>();
-		ClassDB::register_class<ideam::godot_ext::ManagedBufferProfile>();
-		ClassDB::register_class<ideam::godot_ext::MemoryManagerResource>();
+		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
+		GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
+		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
 		
-		ClassDB::register_class<ideam::godot_ext::IdeamGraphResource>();
-		ClassDB::register_class<ideam::godot_ext::MemoryGraphResource>();
-		ClassDB::register_class<ideam::godot_ext::TaskGraphResource>();
+		// Foundational Base Classes - Registered as Abstract to protect constructors
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
+		
+		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
 		
 		// ADDED: Register the TaskGraphHost Node
-		ClassDB::register_class<ideam::godot_ext::TaskGraphHost>();
+		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 
 		// --- Core Native Task Registration ---
 		ideam::core::NativeTaskRegistry::init();
 		ideam::core::NativeTaskRegistry::register_task<ideam::core::TestTask>("TestTask");
 	}
 
+	// ========================================================================
+	// EDITOR LEVEL
+	// Register all Tool, Inspector, and Graph UI nodes here.
+	// These are stripped from the final exported binary.
+	// ========================================================================
+	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
+		
+		// Ecosystem Base Classes - Registered as Abstract to expose API but block direct instantiation
+		GDREGISTER_ABSTRACT_CLASS(godot::IdeamEditorPlugin);
+		GDREGISTER_ABSTRACT_CLASS(godot::IdeamEditorInspectorPlugin);
+		
+	}
 }
 
 void uninitialize_ideam_core_module(ModuleInitializationLevel p_level) {

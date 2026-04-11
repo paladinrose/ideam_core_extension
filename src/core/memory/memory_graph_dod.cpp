@@ -53,12 +53,16 @@ void MemoryGraphDOD::validate_grants() {
 
             if (i >= node_metadata.size()) continue; 
             const MemoryNodeMetadata& meta = node_metadata[i];
-            if (meta.req_count == 0 || !reg_available) continue;
+            
+            // Only skip if they HAVE requirements but the registry isn't available.
+            if (meta.req_count > 0 && !reg_available) continue;
 
-            // Extract requests securely across potential Virtual Page boundaries
-            std::vector<GrantPartPOD> reqs(meta.req_count);
-            for(uint32_t r = 0; r < meta.req_count; ++r) {
-                reqs[r] = reg_view[meta.req_offset + r];
+            std::vector<GrantPartPOD> reqs;
+            if (meta.req_count > 0) {
+                reqs.resize(meta.req_count);
+                for(uint32_t r = 0; r < meta.req_count; ++r) {
+                    reqs[r] = reg_view[meta.req_offset + r];
+                }
             }
             
             if (manager->bake_grant(grant, reqs)) {
@@ -138,7 +142,6 @@ void MemoryGraphDOD::release_all_grants() {
 }
 
 void MemoryGraphDOD::on_topology_changed() {
-    godot::UtilityFunctions::print("[DOD Tracker]     MemoryGraphDOD::on_topology_changed() triggered.");
     dirty_flags |= RESOURCES;
 }
 
@@ -178,7 +181,6 @@ void MemoryGraphDOD::_remap_ids(const std::vector<NodeID>& p_node_lut, const std
 }
 
 void MemoryGraphDOD::_bake_requirements() {
-    godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - START");
     uint32_t total_parts = 0;
     for (size_t i = 0; i < build_nodes.size(); ++i) {
         if (build_nodes.id[i] != INVALID_ID && i < staging_meta.size()) {
@@ -186,7 +188,6 @@ void MemoryGraphDOD::_bake_requirements() {
         }
     }
 
-    godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - Ensuring Registry Buffer. Total Parts: ", total_parts);
     _ensure_buffer(registry_buffer_id, total_parts * sizeof(GrantPartPOD), sizeof(GrantPartPOD));
     
     MemoryGrantPOD reg_write_grant;
@@ -205,13 +206,11 @@ void MemoryGraphDOD::_bake_requirements() {
         reg_req[0].selection.capacity = b->max_elements;
     }
 
-    godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - Baking Grant...");
     if (!manager->bake_grant(reg_write_grant, reg_req)) {
-        godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - WARNING: bake_grant FAILED. Bailing out.");
+        godot::UtilityFunctions::printerr("[DOD Tracker]     _bake_requirements() - WARNING: bake_grant FAILED. Bailing out.");
         return;
     }
 
-    godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - Resolving PagedView...");
     auto reg_view = _get_paged_view<GrantPartPOD, FlatStrategy>(reg_write_grant, 0);
     node_metadata.assign(build_nodes.size(), {0, 0});
     
@@ -223,17 +222,14 @@ void MemoryGraphDOD::_bake_requirements() {
             node_metadata[i].req_offset = current_offset;
             node_metadata[i].req_count = staging_meta[i].count;
 
-            godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - Writing Node ", i, " data to View at offset ", current_offset);
             for (uint32_t r = 0; r < staging_meta[i].count; ++r) {
                 reg_view[current_offset++] = staging_data[staging_meta[i].offset + r];
             }
         }
     }
 
-    godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - Releasing Grant.");
     manager->release_grant(reg_write_grant);
     dirty_flags &= ~RESOURCES;
-    godot::UtilityFunctions::print("[DOD Tracker]     _bake_requirements() - END");
 }
 
 void MemoryGraphDOD::clear() {

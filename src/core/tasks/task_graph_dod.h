@@ -114,6 +114,8 @@ public:
     // --- Configuration ---
     NodeID add_task_node(TaskTypeDOD p_type);
     
+    void configure_command_arenas(size_t p_tier1_bytes, size_t p_tier2_bytes);
+    
     void configure_cpu_task(NodeID p_id, godot::Object* p_target, const godot::StringName& p_method);
     void configure_gpu_task(NodeID p_id, godot::RID p_pipeline, uint32_t x, uint32_t y, uint32_t z);
     

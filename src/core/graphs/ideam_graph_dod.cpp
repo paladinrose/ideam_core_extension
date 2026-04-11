@@ -87,9 +87,10 @@ void IdeamGraphDOD::_rebuild_topology() {
     _sort_kahn_waves();
     godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - _sort_kahn_waves COMPLETE.");
     
+    dirty_flags = CLEAN;
     godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - Calling virtual on_topology_changed...");
     on_topology_changed();
-    dirty_flags = CLEAN;
+    
     godot::UtilityFunctions::print("[DOD Tracker]   _rebuild_topology() - END");
 }
 

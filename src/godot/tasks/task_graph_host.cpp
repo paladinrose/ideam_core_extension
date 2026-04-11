@@ -16,8 +16,6 @@ bool TaskGraphHost::is_ready() const {
 }
 
 void TaskGraphHost::setup_isolated(const godot::Ref<godot::Resource>& p_manager_res, const godot::Ref<godot::Resource>& p_graph_res) {
-    godot::UtilityFunctions::print("[DOD Tracker] setup_isolated: Boundary crossed successfully!");
-
     godot::Ref<MemoryManagerResource> manager = p_manager_res;
     godot::Ref<TaskGraphResource> graph = p_graph_res;
 
@@ -30,11 +28,8 @@ void TaskGraphHost::setup_isolated(const godot::Ref<godot::Resource>& p_manager_
     // and SoA footprints into the Manager's mathematical sizing logic BEFORE allocation.
     graph->set_memory_manager(manager);
 
-    godot::UtilityFunctions::print("Pre-Setup Arena Target: ", manager->get_projected_footprint_string());
-
     // 2. Physical Allocation
     if (!manager->is_initialized()) {
-        godot::UtilityFunctions::print("[DOD Tracker] setup_isolated: Initializing Backend...");
         manager->initialize_backend();
     }
 
@@ -42,15 +37,11 @@ void TaskGraphHost::setup_isolated(const godot::Ref<godot::Resource>& p_manager_
     active_manager = manager->get_backend();
     ERR_FAIL_COND_MSG(active_manager == nullptr, "TaskGraphHost: MemoryManagerResource failed to provide a valid backend.");
 
-    godot::UtilityFunctions::print("Post-Setup Arena Allocation: ", active_manager->get_allocation_report());
-    
     // 4. Graph Compilation & Defragmentation
     // Because the Manager was just perfectly sized, compiling the graph is now 100% memory-safe.
-    godot::UtilityFunctions::print("[DOD Tracker] setup_isolated: Compiling Task Graph...");
     active_graph = graph->compile_to_task_graph(active_manager.get(), ui_to_dod_map);
     
     ERR_FAIL_COND_MSG(active_graph == nullptr, "TaskGraphHost: TaskGraphResource failed to compile a valid graph.");
-    godot::UtilityFunctions::print("[DOD Tracker] setup_isolated: Graph compilation complete.");
 }
 
 void TaskGraphHost::setup_shared(TaskGraphHost* p_target_host, const godot::Ref<TaskGraphResource>& p_graph_res) {
@@ -72,7 +63,6 @@ void TaskGraphHost::execute_graph(double p_delta) {
         return; 
     }
 
-    active_graph->validate_grants();
     active_graph->execute_graph_dod(p_delta);
 }
 

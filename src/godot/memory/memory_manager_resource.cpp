@@ -47,16 +47,66 @@ void MemoryManagerResource::register_consumer_buffers(const godot::StringName& p
 }
 
 int MemoryManagerResource::get_total_projected_footprint_bytes() const {
-    int total_bytes = 0;
+    size_t simulated_offset = 0;
+
+    // --- 1. Simulate Intrinsic Manager Overhead ---
+    // MemoryManagerDOD::_initialize_system_buffers unconditionally creates the System Ring
+    simulated_offset = core::MemoryUtilities::align_to(simulated_offset, 64);
+    simulated_offset += 1024 * 1024; // 1 MB System Ring
+
+    // --- 2. Simulate User Data Buffers ---
+    // We must mimic initialize_backend()'s exact allocation math
     for (int i = 0; i < buffer_schemas.size(); ++i) {
         godot::Ref<MemoryBufferResource> schema = buffer_schemas[i];
-        if (schema.is_valid()) total_bytes += schema->calculate_projected_footprint_bytes();
+        if (!schema.is_valid()) continue;
+
+        uint32_t buffer_align = static_cast<uint32_t>(schema->get_alignment());
+        int64_t max_elems = schema->get_max_elements();
+
+        godot::TypedArray<godot::Dictionary> dict_columns = schema->get_columns();
+        size_t raw_data_size = 0;
+        for (int j = 0; j < dict_columns.size(); ++j) {
+            godot::Dictionary dict = dict_columns[j];
+            uint32_t type_size = dict.has("size") ? static_cast<uint32_t>(dict["size"]) : 1;
+            raw_data_size += (type_size * max_elems);
+        }
+
+        if (schema->get_enable_shadowing()) {
+            // Shadowed Buffers consume TWO separate allocations.
+            // 1. Primary Data Buffer (create_shadowed_buffer always forces 64-byte alignment here)
+            simulated_offset = core::MemoryUtilities::align_to(simulated_offset, 64);
+            simulated_offset += raw_data_size;
+
+            // 2. The Shadow Metadata Buffer
+            core::SelectionMode sel_mode = static_cast<core::SelectionMode>(schema->get_selection_mode());
+            size_t selection_data_size = (sel_mode == core::SelectionMode::DENSE) ? 
+                ((max_elems + 63) / 64) * sizeof(uint64_t) : max_elems * sizeof(int64_t);
+
+            size_t meta_soa_size = (max_elems * sizeof(uint32_t)) + (max_elems * sizeof(int64_t)) + 
+                                   (max_elems * sizeof(uint32_t)) + (max_elems * sizeof(uint8_t));
+
+            simulated_offset = core::MemoryUtilities::align_to(simulated_offset, 64);
+            simulated_offset += (selection_data_size + meta_soa_size + 256);
+        } else {
+            // Standard Buffer
+            simulated_offset = core::MemoryUtilities::align_to(simulated_offset, buffer_align);
+            simulated_offset += raw_data_size;
+        }
     }
+
+    // --- 3. Simulate Graph Consumer Profiles ---
     for (int i = 0; i < managed_profiles.size(); ++i) {
         godot::Ref<ManagedBufferProfile> profile = managed_profiles[i];
-        if (profile.is_valid()) total_bytes += profile->get_byte_footprint();
+        if (!profile.is_valid()) continue;
+        
+        uint32_t align = static_cast<uint32_t>(profile->get_alignment());
+        size_t size = static_cast<size_t>(profile->get_byte_footprint());
+        
+        simulated_offset = core::MemoryUtilities::align_to(simulated_offset, align);
+        simulated_offset += size;
     }
-    return total_bytes;
+
+    return static_cast<int>(simulated_offset);
 }
 
 void MemoryManagerResource::initialize_backend() {
