@@ -37,10 +37,25 @@
 #include "godot/tasks/task_graph_resource.h"
 #include "godot/tasks/task_graph_host.h" 
 
-
-
 // Native task registration
 #include "core/tasks/native_task_registry.h"
+
+
+// --- Narratives UI & Editor ---
+#include "godot/narratives/narreme.h"
+#include "godot/narratives/narremes/character.h"
+#include "godot/narratives/narremes/location.h"
+#include "godot/narratives/narremes/prop.h"
+#include "godot/narratives/narremes/incident.h"
+#include "godot/narratives/narremes/plot.h"
+#include "godot/narratives/narremes/narrative.h"
+
+#include "godot/narratives/helpers/relationship.h"
+#include "godot/narratives/helpers/incident_condition.h"
+#include "godot/narratives/helpers/causal_condition.h"
+#include "godot/narratives/helpers/gameplay_condition.h"
+#include "godot/narratives/helpers/narrative_condition.h"
+#include "godot/narratives/helpers/plot_event.h"
 
 using namespace godot;
 
@@ -55,8 +70,8 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		// Foundational Base Classes - Registered as Abstract to protect constructors
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
 		
-		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
 
         // Graph UI elements needed at runtime/scene level
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
@@ -70,6 +85,7 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphNode);
 
 		// Task UI elements needed at runtime/scene level
+		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
         GDREGISTER_CLASS(ideam::godot_ext::TaskGraphNode);
@@ -77,6 +93,23 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		// --- Core Native Task Registration ---
 		ideam::core::NativeTaskRegistry::init();
 		ideam::core::NativeTaskRegistry::register_task<ideam::core::TestTask>("TestTask");
+
+		// --- Narratives ---
+		GDREGISTER_CLASS(ideam::godot_ext::Narrative);
+		GDREGISTER_CLASS(ideam::godot_ext::Character);
+		GDREGISTER_CLASS(ideam::godot_ext::Location);
+		GDREGISTER_CLASS(ideam::godot_ext::Prop);
+		GDREGISTER_CLASS(ideam::godot_ext::Incident);
+		GDREGISTER_CLASS(ideam::godot_ext::Plot);
+
+		// --- Narrative Helper Classes ---
+		GDREGISTER_CLASS(ideam::godot_ext::Relationship);
+		GDREGISTER_CLASS(ideam::godot_ext::Incident_Condition);
+		GDREGISTER_CLASS(ideam::godot_ext::Causal_Condition);
+		GDREGISTER_CLASS(ideam::godot_ext::Gameplay_Condition);
+		GDREGISTER_CLASS(ideam::godot_ext::Narrative_Condition);
+		GDREGISTER_CLASS(ideam::godot_ext::Plot_Event);
+		
 	}
 
 	// ========================================================================
