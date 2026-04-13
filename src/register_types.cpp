@@ -4,24 +4,40 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
+// UI/Editor Handshake
+#include "godot/editor/ideam_editor_plugin.h"
+#include "godot/editor/ideam_editor_inspector_plugin.h"
+
+// --- Graph UI & Editor ---
+#include "godot/graphs/ideam_graphs_plugin.h"
+
 #include "godot/graphs/ideam_graph_resource.h"
 #include "godot/graphs/ideam_graph_edit.h"
 #include "godot/graphs/ideam_graph_node.h"
-#include "godot/graphs/ideam_graphs_plugin.h"
 #include "godot/graphs/ideam_graph_inspector.h"
 #include "godot/graphs/graph_composer.h"
 
+// --- Memory UI & Editor ---
+#include "godot/memory/ideam_memory_plugin.h"
+
+#include "godot/memory/memory_graph_edit.h"
+#include "godot/memory/memory_graph_node.h"
+#include "godot/memory/memory_graph_inspector.h"
 #include "godot/memory/memory_buffer_resource.h"
 #include "godot/memory/managed_buffer_profile.h"
 #include "godot/memory/memory_manager_resource.h"
 #include "godot/memory/memory_graph_resource.h"
 
+// --- Tasks UI & Editor ---
+#include "godot/tasks/ideam_tasks_plugin.h"
+
+#include "godot/tasks/task_graph_edit.h"
+#include "godot/tasks/task_graph_node.h"
+#include "godot/tasks/task_graph_inspector.h"
 #include "godot/tasks/task_graph_resource.h"
 #include "godot/tasks/task_graph_host.h" 
 
-// UI/Editor Handshake
-#include "godot/editor/ideam_editor_plugin.h"
-#include "godot/editor/ideam_editor_inspector_plugin.h"
+
 
 // Native task registration
 #include "core/tasks/native_task_registry.h"
@@ -36,20 +52,27 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	// ========================================================================
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		
-		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
-		GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
-		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
-		
 		// Foundational Base Classes - Registered as Abstract to protect constructors
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		
+		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
+
         // Graph UI elements needed at runtime/scene level
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphNode);
 
-		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
+		// Memory UI elements needed at runtime/scene level
+		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
+		GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
+		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
+		GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphEdit);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphNode);
+
+		// Task UI elements needed at runtime/scene level
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
+		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
+        GDREGISTER_CLASS(ideam::godot_ext::TaskGraphNode);
 
 		// --- Core Native Task Registration ---
 		ideam::core::NativeTaskRegistry::init();
@@ -71,6 +94,14 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphInspector);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphsPlugin);
+
+		// Editor-only Memory tooling
+		GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphInspector);
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamMemoryPlugin);
+
+		// Editor-only Tasks tooling
+		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphInspector);
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamTasksPlugin);
 	}
 }
 

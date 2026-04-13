@@ -14,10 +14,12 @@ void IdeamGraphResource::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("set_nodes", "nodes"), &IdeamGraphResource::set_nodes);
     ClassDB::bind_method(D_METHOD("get_nodes"), &IdeamGraphResource::get_nodes);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "nodes", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_nodes", "get_nodes");
     
     ClassDB::bind_method(D_METHOD("set_edges", "edges"), &IdeamGraphResource::set_edges);
     ClassDB::bind_method(D_METHOD("get_edges"), &IdeamGraphResource::get_edges);
-    
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "edges", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_edges", "get_edges");
+
     ClassDB::bind_method(D_METHOD("set_is_volatile", "is_volatile"), &IdeamGraphResource::set_is_volatile);
     ClassDB::bind_method(D_METHOD("get_is_volatile"), &IdeamGraphResource::get_is_volatile);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_volatile_at_runtime"), "set_is_volatile", "get_is_volatile");

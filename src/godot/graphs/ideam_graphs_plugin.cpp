@@ -43,7 +43,7 @@ void IdeamGraphsPlugin::_enter_tree() {
     register_to_ecosystem("WizardSettings", "IdeamGraphs", String(GRAPHS_SETTINGS_PATH.data()));
 
     // Instantiate and register the Inspector UI for the Graph Resources
-    graph_editor.instantiate();
+    graph_editor = Ref<IdeamGraphInspector>(memnew(IdeamGraphInspector));
     add_inspector_plugin(graph_editor);
 }
 

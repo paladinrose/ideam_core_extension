@@ -11,10 +11,10 @@ namespace ideam::godot_ext {
 class IdeamGraphEdit : public godot::GraphEdit {
     GDCLASS(IdeamGraphEdit, godot::GraphEdit)
 
-private:
+
+protected:
     // The definitive source of truth for this graph's layout
     godot::Ref<IdeamGraphResource> current_blueprint;
-
     // UI Elements
     godot::PopupMenu* context_popup = nullptr;
     godot::Vector2 popup_position;
@@ -24,8 +24,8 @@ private:
 
     // Internal sync lock to prevent infinite feedback loops when dragging nodes
     bool is_syncing_ui = false;
+    
 
-protected:
     static void _bind_methods();
 
     void _on_node_property_changed(const godot::StringName& p_node_name, const godot::StringName& p_property_name, const godot::Variant& p_new_value);
