@@ -1,13 +1,14 @@
 #ifndef IDEAM_CORE_VIEW_TRAITS_H
 #define IDEAM_CORE_VIEW_TRAITS_H
 
+#include "../memory_common.h" // Required for DataType bitmask
 #include <type_traits>
 #include <cstdint>
 
 namespace ideam::core {
 
 /**
- * ViewCapabilities
+ * ViewCapability
  * Bitmask for high-level T_Logic dispatching.
  */
 enum class ViewCapability : uint32_t {
@@ -34,6 +35,14 @@ constexpr bool has_capability(ViewCapability p_mask, ViewCapability p_cap) noexc
  */
 template<typename T_View>
 struct ViewTraits {
+    // --- The New DataType Axis ---
+    // Defines which hardware-level types this View is compiled to handle.
+    static constexpr DataType supported_types = DataType::NONE;
+    
+    // Helper to extract the underlying C++ type (float, int, etc.)
+    using ValueType = void;
+
+    // --- Access Capabilities ---
     static constexpr ViewCapability capabilities = ViewCapability::NONE;
     static constexpr bool is_spatial = false;
     static constexpr bool is_simd = false;

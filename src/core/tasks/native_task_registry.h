@@ -2,11 +2,14 @@
 #define IDEAM_CORE_NATIVE_TASK_REGISTRY_H
 
 #include "i_native_task.h"
-#include "test_task.h"
+#include "entry_fill_task.h"
 #include "query_task.h"
 #include "metadata_task.h"
 #include "transform_task.h"
 #include "../simulations/simulation_task.h"
+
+// --- Logic ---
+#include "query_logic/stochastic_query_logic.h"
 
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/dictionary.hpp>

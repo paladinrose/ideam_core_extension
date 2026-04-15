@@ -39,6 +39,20 @@
 
 // Native task registration
 #include "core/tasks/native_task_registry.h"
+// --- Views ---
+#include "core/memory/views/single_element_view.h"
+#include "core/memory/views/multi_element_view.h"
+#include "core/memory/views/aosoa_view.h"
+#include "core/memory/views/atomic_view.h"
+#include "core/memory/views/paged_view.h"
+#include "core/memory/views/ring_view.h"
+#include "core/memory/views/sparse_set_view.h"
+#include "core/memory/views/static_stencil_view.h"
+#include "core/memory/views/stencil_view.h"
+#include "core/memory/views/swap_view.h"
+
+// --- Strategies ---
+#include "core/memory/views/strategies.h"
 
 
 // --- Narratives UI & Editor ---
@@ -57,8 +71,14 @@
 #include "godot/narratives/helpers/narrative_condition.h"
 #include "godot/narratives/helpers/plot_event.h"
 
-using namespace godot;
+// Utility Wrapper for the QueryOp enum to be type-passed to the MatrixBuilder
+template <ideam::core::QueryOp Op>
+struct QueryOpTag { 
+    static constexpr ideam::core::QueryOp value = Op; 
+};
 
+using namespace godot;
+using namespace ideam::core;
 void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	// ========================================================================
 	// SCENE LEVEL
@@ -72,7 +92,6 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
 		
-
         // Graph UI elements needed at runtime/scene level
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphNode);
@@ -89,11 +108,7 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
         GDREGISTER_CLASS(ideam::godot_ext::TaskGraphNode);
-
-		// --- Core Native Task Registration ---
-		ideam::core::NativeTaskRegistry::init();
-		ideam::core::NativeTaskRegistry::register_task<ideam::core::TestTask>("TestTask");
-
+		
 		// --- Narratives ---
 		GDREGISTER_CLASS(ideam::godot_ext::Narrative);
 		GDREGISTER_CLASS(ideam::godot_ext::Character);
@@ -109,7 +124,76 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::Gameplay_Condition);
 		GDREGISTER_CLASS(ideam::godot_ext::Narrative_Condition);
 		GDREGISTER_CLASS(ideam::godot_ext::Plot_Event);
-		
+
+		// --- Native Task Registration ---
+		ideam::core::NativeTaskRegistry::init();
+		ideam::core::NativeTaskRegistry::register_task<ideam::core::EntryFillTask>("Entry Fill Task");
+
+		// 1. Comprehensive Operations
+    	// StochasticQueryLogic supports both CULL and ADD out of the box.
+		using QueryOpsMatrix = std::tuple<
+			QueryOpTag<QueryOp::CULL>, 
+			QueryOpTag<QueryOp::ADD>
+		>;
+
+		// 2. Comprehensive Data Types (Stochastic Logics)
+		// Registering the core DOD primitives defined in MemoryUtilities::get_type_byte_size.
+		// Using explicit sizes guarantees uniform stride boundaries for the View iterators.
+		using StochasticLogicsMatrix = std::tuple<
+			StochasticQueryLogic<float>,
+			StochasticQueryLogic<double>,
+			StochasticQueryLogic<int32_t>,
+			StochasticQueryLogic<int64_t>,
+			StochasticQueryLogic<uint8_t>, // Mapped to DataType::BYTE
+			StochasticQueryLogic<bool>     // Mapped to DataType::BOOL
+		>;
+
+		// 3. Comprehensive Strategies
+		// The permutations of how the execution wave resolves the actual memory pointers.
+		using StrategiesMatrix = std::tuple<
+			FlatStrategy,
+			SoAStrategy,
+			AoSStrategy,
+			Spatial2DStrategy,
+			Spatial3DStrategy,
+			Spatial4DStrategy,
+			TiledSoAStrategy,
+			RingStrategy,
+			PagedStrategy
+		>;
+
+		// 4. Comprehensive Views
+		// Lenses into the memory footprint. Supplying base primitive float as the anchor for the generic setup.
+		using ViewsMatrix = std::tuple<
+			SingleElementView<float>,
+			MultiElementView<AoSStrategy>,
+			AOSOAView<float>,
+			AtomicView<float>,
+			PagedView<float>,
+			RingView<float>,
+			SparseSetView<float>,
+			SwapView<float>,
+
+			StencilView<float, Spatial2DStrategy, 2>,
+			StencilView<float, Spatial3DStrategy, 3>,
+			StencilView<float, Spatial4DStrategy, 4>,
+
+			StaticStencilView<float, Spatial2DStrategy, 5>,   // e.g., 2D Von Neumann (Center + 4 dirs)
+			StaticStencilView<float, Spatial2DStrategy, 9>,   // e.g., 2D Moore Radius 1 (3x3 grid)
+			StaticStencilView<float, Spatial3DStrategy, 27>,  // e.g., 3D Moore Radius 1 (3x3x3 grid)
+			StaticStencilView<float, Spatial4DStrategy, 81>   // e.g., 4D Moore Radius 1 (3x3x3x3 grid)
+			
+		>;
+
+		// 5. Build the Factory Matrix
+		// This unfolds the tuples via fold expressions in NativeTaskRegistry, computing the `constexpr`
+		// validity of every (Logic x Op x View x Strategy) combination at compile-time.
+		NativeTaskRegistry::QueryMatrixBuilder<
+			StochasticLogicsMatrix, 
+			QueryOpsMatrix, 
+			ViewsMatrix, 
+			StrategiesMatrix
+		>::build();
 	}
 
 	// ========================================================================

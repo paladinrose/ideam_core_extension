@@ -13,26 +13,51 @@ namespace ideam::core {
  * Underlying int64_t for seamless casting to Godot's Variant if needed.
  * Includes CUSTOM hook for plugin-specific or composite structures.
  */
-enum class DataType : int64_t {
-    BOOL, 
-    BYTE, 
-    INT32, 
-    INT64, 
-    FLOAT32, 
-    FLOAT64,
-    VECTOR2, 
-    VECTOR3, 
-    VECTOR4, 
-    VECTOR2I, 
-    VECTOR3I, 
-    VECTOR4I, 
-    VECTOR1D, 
-    VECTOR2D, 
-    VECTOR3D, 
-    VECTOR4D,
-    COLOR,
-    CUSTOM,         // User-defined/Plugin-specific structures
-    DATA_TYPE_MAX
+enum class DataType : uint64_t {
+    NONE       = 0,
+    
+    // --- Concrete Primitives (The "Leaf" Bits) ---
+    BOOL       = 1ULL << 0, 
+    BYTE       = 1ULL << 1, 
+    INT32      = 1ULL << 2, 
+    INT64      = 1ULL << 3, 
+    FLOAT32    = 1ULL << 4, 
+    FLOAT64    = 1ULL << 5,
+
+    VECTOR2    = 1ULL << 6,  // Float32
+    VECTOR3    = 1ULL << 7, 
+    VECTOR4    = 1ULL << 8,
+
+    VECTOR2I   = 1ULL << 9,  // Int32
+    VECTOR3I   = 1ULL << 10, 
+    VECTOR4I   = 1ULL << 11,
+
+    VECTOR2D   = 1ULL << 12, // Float64
+    VECTOR3D   = 1ULL << 13, 
+    VECTOR4D   = 1ULL << 14,
+
+    COLOR      = 1ULL << 15,
+    CUSTOM     = 1ULL << 63,
+
+    // --- Dimension Masks (Logic-Centric) ---
+    ANY_VECTOR2 = VECTOR2 | VECTOR2I | VECTOR2D,
+    ANY_VECTOR3 = VECTOR3 | VECTOR3I | VECTOR3D,
+    ANY_VECTOR4 = VECTOR4 | VECTOR4I | VECTOR4D | COLOR,
+
+    // --- Precision Masks (Hardware/SIMD-Centric) ---
+    ANY_32BIT_FLOAT = FLOAT32 | VECTOR2  | VECTOR3  | VECTOR4,
+    ANY_64BIT_FLOAT = FLOAT64 | VECTOR2D | VECTOR3D | VECTOR4D,
+    ANY_32BIT_INT   = INT32   | VECTOR2I | VECTOR3I | VECTOR4I,
+    
+    // --- Godot-Specific Semantic Masks ---
+    // Useful for mapping Godot's 'Variant::Type' to our DOD world
+    GODOT_FLOAT_TYPES  = ANY_64BIT_FLOAT, // Godot 4 defaults to doubles
+    GODOT_INT_TYPES    = INT64, 
+    GODOT_VECTOR_TYPES = ANY_VECTOR2 | ANY_VECTOR3 | ANY_VECTOR4,
+
+    // --- Final Utility Aggregates ---
+    ANY_NUMERIC = ANY_32BIT_FLOAT | ANY_64BIT_FLOAT | ANY_32BIT_INT | INT64 | BYTE,
+    ANY         = (1ULL << 16) - 1 
 };
 
 /**
@@ -98,8 +123,7 @@ struct MemoryUtilities {
             case DataType::VECTOR3:  return (p_mode == BufferAlignmentMode::STD140) ? 16 : 12; 
             case DataType::VECTOR4: 
             case DataType::VECTOR4I: 
-            case DataType::COLOR:    return 16;
-            case DataType::VECTOR1D: return 8;
+            case DataType::COLOR: 
             case DataType::VECTOR2D: return 16;
             case DataType::VECTOR3D: return 24;
             case DataType::VECTOR4D: return 32;
@@ -127,7 +151,6 @@ struct MemoryUtilities {
             case DataType::FLOAT32:  return 4;
             case DataType::INT64: 
             case DataType::FLOAT64: 
-            case DataType::VECTOR1D: return 8;
             case DataType::VECTOR2: 
             case DataType::VECTOR2I: return 8; 
             case DataType::VECTOR2D: return 16;

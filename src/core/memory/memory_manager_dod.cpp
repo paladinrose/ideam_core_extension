@@ -356,44 +356,74 @@ bool MemoryManagerDOD::expand_paged_buffer(uint32_t p_id, size_t p_new_size_byte
 
 void MemoryManagerDOD::configure_buffer_columns(uint32_t p_id, const std::vector<ColumnMetadata>& p_columns) {
     std::unique_lock<std::shared_mutex> lock(manager_rw_lock);
+    
+    // 1. Boundary and State Validation
     if (p_id >= id_to_index.size() || id_to_index[p_id] == 0xFFFFFFFF) return;
 
     MemoryBufferPOD& buf = buffers[id_to_index[p_id]];
     buf.column_count = std::min(static_cast<uint32_t>(p_columns.size()), static_cast<uint32_t>(MAX_BUFFER_COLUMNS));
     
     size_t current_offset = 0;
+    uint32_t max_alignment = 1;
     uint32_t total_element_size = 0;
 
+    // 2. Structural Layout Calculation
     for (uint32_t i = 0; i < buf.column_count; ++i) {
         buf.columns[i] = p_columns[i];
-        total_element_size += p_columns[i].type_size;
         
-        assert(buf.columns[i].data_type != DataType::DATA_TYPE_MAX && "ColumnMetadata missing semantic DataType!");
-        
+        // Ensures the column is exactly one DataType, not a mask combination.
+        auto dt_val = static_cast<uint64_t>(buf.columns[i].data_type);
+        assert(dt_val != 0 && (dt_val & (dt_val - 1)) == 0 && "Column must be a single leaf DataType!");
+
+        // Track max alignment for AoS padding requirements
+        if (buf.columns[i].alignment > max_alignment) {
+            max_alignment = buf.columns[i].alignment;
+        }
+
         if (buf.layout_type == BufferLayoutType::SOA) {
-            buf.columns[i].offset = current_offset;
-            current_offset += (buf.max_elements * p_columns[i].type_size);
-        } else if (buf.layout_type == BufferLayoutType::AOS) {
-            buf.columns[i].offset = (i > 0) ? (buf.columns[i-1].offset + buf.columns[i-1].type_size) : 0;
+            // --- SOA SIMD ALIGNMENT (64-byte / Cache-Line) ---
+            // Every attribute array starts on a 64-byte boundary to ensure
+            // AVX-512 and Cache-Line aligned streaming.
+            buf.columns[i].offset = MemoryUtilities::align_to(current_offset, 64);
+            current_offset = buf.columns[i].offset + (buf.max_elements * buf.columns[i].type_size);
+        } 
+        else if (buf.layout_type == BufferLayoutType::AOS) {
+            // --- AOS INTERNAL STRUCT ALIGNMENT ---
+            // Ensures members are placed according to their specific alignment needs (e.g., STD140/430).
+            buf.columns[i].offset = MemoryUtilities::align_to(current_offset, buf.columns[i].alignment);
+            current_offset = buf.columns[i].offset + buf.columns[i].type_size;
+            total_element_size = static_cast<uint32_t>(current_offset);
         }
     }
 
-    if (buf.layout_type == BufferLayoutType::SOA && current_offset > buf.capacity_bytes) return;
-
-    if (buf.layout_type == BufferLayoutType::AOS) {
-        buf.element_stride = total_element_size;
+    // 3. Post-Loop Finalization and Capacity Checks
+    if (buf.layout_type == BufferLayoutType::SOA) {
+        if (current_offset > buf.capacity_bytes) return;
+    } 
+    else if (buf.layout_type == BufferLayoutType::AOS) {
+        // --- AOS STRIDE PADDING ---
+        // The total element stride must be a multiple of the largest alignment 
+        // in the struct to ensure the *next* row starts correctly aligned.
+        buf.element_stride = (uint32_t)MemoryUtilities::align_to(total_element_size, max_alignment);
+        
         if ((size_t)buf.element_stride * buf.max_elements > buf.capacity_bytes) return;
-    } else if (buf.layout_type == BufferLayoutType::TILED_SOA) {
+    } 
+    else if (buf.layout_type == BufferLayoutType::TILED_SOA) {
         uint32_t tile_size_bytes = 0;
         for (uint32_t i = 0; i < buf.column_count; ++i) {
-            buf.columns[i].offset = tile_size_bytes;
-            tile_size_bytes += (buf.extra.tiled.elements_per_tile * buf.columns[i].type_size);
+            // Align each attribute within the tile block for SIMD
+            buf.columns[i].offset = MemoryUtilities::align_to(tile_size_bytes, buf.columns[i].alignment);
+            tile_size_bytes = static_cast<uint32_t>(buf.columns[i].offset + (buf.extra.tiled.elements_per_tile * buf.columns[i].type_size));
         }
-        buf.extra.tiled.tile_stride_bytes = tile_size_bytes;
+        
+        // Align the entire tile stride to cache line boundaries
+        buf.extra.tiled.tile_stride_bytes = (uint32_t)MemoryUtilities::align_to(tile_size_bytes, 64);
+        
         size_t total_tiles = (buf.max_elements + buf.extra.tiled.elements_per_tile - 1) / buf.extra.tiled.elements_per_tile;
-        if (total_tiles * tile_size_bytes > buf.capacity_bytes) return;
+        if (total_tiles * buf.extra.tiled.tile_stride_bytes > buf.capacity_bytes) return;
     }
-    buf.version++; 
+
+    buf.version++; // Notify tasks that memory layout has stabilized
 }
 
 bool MemoryManagerDOD::ring_push(uint32_t p_id, const void* p_data, size_t p_size) {
