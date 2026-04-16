@@ -23,6 +23,7 @@ struct alignas(64) StencilConvolutionTransformLogic {
 
     static constexpr TransformRequirement requirements = TransformRequirement::REQUIRES_SPATIAL;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
+    static constexpr DataType supported_types = DataType::ANY_NUMERIC;
     static constexpr size_t transient_workspace_bytes = 0;
 
     struct KernelNode {

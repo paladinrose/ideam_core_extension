@@ -4,6 +4,7 @@
 #include "metadata_logic/metadata_logic_traits.h"
 #include "i_native_task.h"
 #include "../memory/views/view_traits.h"
+#include <type_traits>
 
 namespace ideam::core {
 
@@ -31,6 +32,9 @@ public:
     using LogicType    = T_Logic;
     using ViewType     = T_View;
     using StrategyType = T_Strategy;
+
+    // --- NEW: Expose the supported types bitmask to the Registry Builder for O(1) pruning ---
+    static constexpr DataType supported_types = T_Logic::supported_types;
 
     explicit MetadataTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~MetadataTask() override = default;
@@ -60,7 +64,10 @@ private:
     #endif
     inline T_View _create_view(const TaskContextPOD& p_context, const GrantPartPOD* p_part) const {
         T_View view;
-        using VType = typename T_View::ValueType;
+        
+        // Extract the underlying C++ primitive/struct type from the View
+        // (Assuming ViewTraits or the View itself exposes ValueType)
+        using VType = typename T_View::ValueType; 
         
         view.head_ptr = reinterpret_cast<VType*>(p_part->raw_base_ptr);
         view.count    = p_part->selection.capacity;

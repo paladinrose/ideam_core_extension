@@ -51,6 +51,8 @@
 #include "core/memory/views/stencil_view.h"
 #include "core/memory/views/swap_view.h"
 
+#include "core/memory/views/stencil_math.h"
+
 // --- Strategies ---
 #include "core/memory/views/strategies.h"
 
@@ -126,8 +128,8 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::Plot_Event);
 
 		// --- Native Task Registration ---
-		ideam::core::NativeTaskRegistry::init();
-		ideam::core::NativeTaskRegistry::register_task<ideam::core::EntryFillTask>("Entry Fill Task");
+		NativeTaskRegistry::init();
+		NativeTaskRegistry::register_task<EntryFillTask>("Entry Fill Task");
 
 		// 1. Comprehensive Operations
     	// StochasticQueryLogic supports both CULL and ADD out of the box.
@@ -174,11 +176,11 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 			SparseSetView<float>,
 			SwapView<float>,
 
-			StencilView<float, Spatial2DStrategy, 2>,
-			StencilView<float, Spatial3DStrategy, 3>,
-			StencilView<float, Spatial4DStrategy, 4>,
+			StencilView<float, Spatial2DStrategy>,
+			StencilView<float, Spatial3DStrategy>,
+			StencilView<float, Spatial4DStrategy>,
 
-			StaticStencilView<float, Spatial2DStrategy, 5>,   // e.g., 2D Von Neumann (Center + 4 dirs)
+			StaticStencilView<float, Spatial2DStrategy, stencil_math::von_neumann_size<2,1>()>,   // e.g., 2D Von Neumann (Center + 4 dirs)
 			StaticStencilView<float, Spatial2DStrategy, 9>,   // e.g., 2D Moore Radius 1 (3x3 grid)
 			StaticStencilView<float, Spatial3DStrategy, 27>,  // e.g., 3D Moore Radius 1 (3x3x3 grid)
 			StaticStencilView<float, Spatial4DStrategy, 81>   // e.g., 4D Moore Radius 1 (3x3x3x3 grid)

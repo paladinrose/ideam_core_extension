@@ -24,6 +24,7 @@ struct AABBQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
+    static constexpr DataType supported_types = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
     
     // UI/Compiler Routing
     static constexpr bool supports_cull = true;

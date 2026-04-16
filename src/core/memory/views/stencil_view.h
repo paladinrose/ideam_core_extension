@@ -17,8 +17,11 @@ namespace ideam::core {
  * Access is strictly bound to the MemoryBufferSelectionPOD.
  * * [C++26 Enabled]: Multidimensional Subscripts, [[assume]] optimizations, and `mutable` cursors.
  */
-template<typename T, IsMemoryStrategy Strategy, size_t DimCount>
+template<typename T, IsMemoryStrategy Strategy>
 struct StencilView {
+    
+    static constexpr size_t DimCount = Strategy::dimensions;
+
     // --- 8-Byte Block (24 Bytes) ---
     T* head_ptr = nullptr;
     const MemoryGrantPOD* grant = nullptr;

@@ -39,6 +39,9 @@ struct alignas(64) ValueAccumulationTransformLogic {
 
     static constexpr TransformRequirement requirements = TransformRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr DataType supported_types = 
+    DataType::BYTE | DataType::INT32 | DataType::INT64 | 
+    DataType::FLOAT32 | DataType::FLOAT64;
     static constexpr size_t transient_workspace_bytes = 0; 
 
     // --- Configuration ---

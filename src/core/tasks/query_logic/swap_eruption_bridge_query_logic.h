@@ -23,6 +23,7 @@ struct SwapEruptionBridgeQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::ANY_VECTOR4;
 
     static constexpr bool supports_cull = false; // Eruptions are strictly additive
     static constexpr bool supports_addition = true;

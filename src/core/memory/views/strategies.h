@@ -8,14 +8,20 @@
 
 namespace ideam::core {
 
-// C++20 Concept to guarantee a type fulfills the Strategy contract
+/**
+ * IsMemoryStrategy
+ * Concept ensuring a type provides the necessary DOD metadata for View dispatching.
+ */
 template <typename T>
 concept IsMemoryStrategy = requires {
     { T::is_spatial } -> std::convertible_to<bool>;
+    { T::dimensions } -> std::convertible_to<size_t>; // Enforces dimensionality trait
 };
 
 struct FlatStrategy {
     static constexpr bool is_spatial = false;
+    static constexpr size_t dimensions = 1;
+
     template<typename T>
     static inline T* resolve(T* p_base, size_t p_index, size_t p_stride, size_t p_capacity_bytes = 0) noexcept {
         return p_base + p_index; 
@@ -24,6 +30,8 @@ struct FlatStrategy {
 
 struct SoAStrategy {
     static constexpr bool is_spatial = false;
+    static constexpr size_t dimensions = 1;
+
     template<typename T>
     static inline T* resolve(T* p_base, size_t p_index, size_t p_stride, size_t p_capacity_bytes = 0) noexcept {
         return p_base + p_index; 
@@ -32,6 +40,8 @@ struct SoAStrategy {
 
 struct AoSStrategy {
     static constexpr bool is_spatial = false;
+    static constexpr size_t dimensions = 1;
+
     template<typename T>
     static inline T* resolve(T* p_base, size_t p_index, size_t p_stride, size_t p_capacity_bytes = 0) noexcept {
         uint8_t* byte_ptr = reinterpret_cast<uint8_t*>(p_base);
@@ -41,6 +51,7 @@ struct AoSStrategy {
 
 struct Spatial2DStrategy {
     static constexpr bool is_spatial = true;
+    static constexpr size_t dimensions = 2;
     int64_t stride_y = 0; 
 
     template<typename T>
@@ -62,6 +73,7 @@ struct Spatial2DStrategy {
 
 struct Spatial3DStrategy {
     static constexpr bool is_spatial = true;
+    static constexpr size_t dimensions = 3;
     int64_t stride_y = 0;
     int64_t stride_z = 0;
 
@@ -84,6 +96,7 @@ struct Spatial3DStrategy {
 
 struct Spatial4DStrategy {
     static constexpr bool is_spatial = true;
+    static constexpr size_t dimensions = 4;
     int64_t stride_y = 0;
     int64_t stride_z = 0;
     int64_t stride_w = 0;
@@ -107,6 +120,7 @@ struct Spatial4DStrategy {
 
 struct TiledSoAStrategy {
     static constexpr bool is_spatial = false;
+    static constexpr size_t dimensions = 1;
     uint32_t elements_per_tile = 0;
     uint32_t tile_stride_bytes = 0;
 
@@ -125,6 +139,7 @@ struct TiledSoAStrategy {
 
 struct RingStrategy {
     static constexpr bool is_spatial = false;
+    static constexpr size_t dimensions = 1;
 
     template<typename T>
     static inline T* resolve(T* p_base, size_t p_index, size_t p_stride, size_t p_capacity_bytes) noexcept {
@@ -140,6 +155,7 @@ struct RingStrategy {
 
 struct PagedStrategy {
     static constexpr bool is_spatial = false;
+    static constexpr size_t dimensions = 1;
     uint32_t page_size_bytes = 0;
     uint32_t page_shift = 0; 
     uint32_t page_mask = 0; 

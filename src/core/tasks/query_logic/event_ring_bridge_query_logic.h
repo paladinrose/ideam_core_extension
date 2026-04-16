@@ -22,6 +22,7 @@ struct EventRingBridgeQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::RING;
+    static constexpr DataType supported_types = DataType::CUSTOM;
 
     static constexpr bool supports_cull = false;
     static constexpr bool supports_addition = true;

@@ -26,6 +26,7 @@ struct StencilDilationBridgeQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::REQUIRES_SPATIAL;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
+    static constexpr DataType supported_types = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4I | DataType::VECTOR4D;
 
     static constexpr bool supports_cull = false; // Stencils are used for dilation/addition
     static constexpr bool supports_addition = true;

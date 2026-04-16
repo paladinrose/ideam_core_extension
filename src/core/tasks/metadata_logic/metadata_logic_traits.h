@@ -52,6 +52,7 @@ concept IsMetadataLogic = requires {
     
     { T::requirements } -> std::convertible_to<MetadataRequirement>;
     { T::supported_layouts } -> std::convertible_to<BufferLayoutType>;
+    { T::supported_types } -> std::convertible_to<DataType>;
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
 
     // Must implement templated execute_metadata handling the mutable selection

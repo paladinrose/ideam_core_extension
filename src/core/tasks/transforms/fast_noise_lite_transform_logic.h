@@ -32,6 +32,7 @@ struct alignas(64) FastNoiseLiteTransformLogic {
     static constexpr uint32_t supported_layouts = 
         static_cast<uint32_t>(BufferLayoutType::FLAT) | 
         static_cast<uint32_t>(BufferLayoutType::SOA);
+    static constexpr DataType supported_types = DataType::CUSTOM;
     static constexpr size_t transient_workspace_bytes = 0; // Pure mathematical mapping, no heap workspace required
 
     // 3. Internal State (Trivially Copyable)

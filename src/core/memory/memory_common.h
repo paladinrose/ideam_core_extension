@@ -60,6 +60,14 @@ enum class DataType : uint64_t {
     ANY         = (1ULL << 16) - 1 
 };
 
+constexpr DataType operator|(DataType a, DataType b) noexcept {
+    return static_cast<DataType>(static_cast<uint64_t>(a) | static_cast<uint64_t>(b));
+}
+
+constexpr DataType operator&(DataType a, DataType b) noexcept {
+    return static_cast<DataType>(static_cast<uint64_t>(a) & static_cast<uint64_t>(b));
+}
+
 /**
  * BufferAccessMode
  * Defines the read/write permissions for a MemoryGrant.

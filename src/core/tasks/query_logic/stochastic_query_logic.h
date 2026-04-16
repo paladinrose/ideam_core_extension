@@ -23,6 +23,7 @@ struct StochasticQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY;
+    static constexpr DataType supported_types = DataType::BOOL | DataType::ANY_NUMERIC;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;

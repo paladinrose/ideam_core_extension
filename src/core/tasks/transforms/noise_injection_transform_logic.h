@@ -24,6 +24,7 @@ struct alignas(64) NoiseInjectionTransformLogic {
 
     static constexpr TransformRequirement requirements = TransformRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType supported_types = DataType::ANY_VECTOR3;
     static constexpr size_t transient_workspace_bytes = 0;
 
     // --- Configuration ---

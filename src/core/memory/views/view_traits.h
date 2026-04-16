@@ -35,13 +35,7 @@ constexpr bool has_capability(ViewCapability p_mask, ViewCapability p_cap) noexc
  */
 template<typename T_View>
 struct ViewTraits {
-    // --- The New DataType Axis ---
-    // Defines which hardware-level types this View is compiled to handle.
-    static constexpr DataType supported_types = DataType::NONE;
-    
-    // Helper to extract the underlying C++ type (float, int, etc.)
-    using ValueType = void;
-
+   
     // --- Access Capabilities ---
     static constexpr ViewCapability capabilities = ViewCapability::NONE;
     static constexpr bool is_spatial = false;

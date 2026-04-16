@@ -32,6 +32,7 @@ struct alignas(64) BoundsExtractionTransformLogic {
 
     static constexpr TransformRequirement requirements = TransformRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::ANY_VECTOR;
     static constexpr size_t transient_workspace_bytes = 0;
 
     // --- Configuration ---

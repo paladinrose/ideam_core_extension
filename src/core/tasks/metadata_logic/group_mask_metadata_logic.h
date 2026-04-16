@@ -31,6 +31,7 @@ struct GroupMaskMetadataLogic {
 
     static constexpr MetadataRequirement requirements = MetadataRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType supported_types = DataType::ANY;
     static constexpr size_t transient_workspace_bytes = 0;
 
     struct Mapping {

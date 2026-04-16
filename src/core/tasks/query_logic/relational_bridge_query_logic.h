@@ -24,6 +24,7 @@ struct RelationalBridgeQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType supported_types = DataType::INT32 | DataType::INT64;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;

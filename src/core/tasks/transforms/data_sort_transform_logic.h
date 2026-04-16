@@ -31,6 +31,7 @@ struct DataSortTransformLogic {
 
     static constexpr TransformRequirement requirements = TransformRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::ANY_VECTOR;
     static constexpr size_t transient_workspace_bytes = 0; // Output vector is externally provided via Graph Port
 
     // --- Configuration ---

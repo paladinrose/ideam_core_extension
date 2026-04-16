@@ -19,7 +19,8 @@ struct ColorQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-
+    static constexpr DataType supported_types = DataType::COLOR;
+    
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 

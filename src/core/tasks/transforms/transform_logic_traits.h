@@ -30,10 +30,6 @@ constexpr bool has_transform_requirement(TransformRequirement p_mask, TransformR
     return (static_cast<uint32_t>(p_mask) & static_cast<uint32_t>(p_req)) != 0;
 }
 
-/**
- * TransformLogicValidator
- * Verifies that the supplied T_View provides the capabilities demanded by the T_Logic.
- */
 struct TransformLogicValidator {
     static constexpr bool validate(TransformRequirement requirements, BufferLayoutType supported_layouts, ViewCapability view_caps, BufferLayoutType buffer_layout) {
         
@@ -63,6 +59,7 @@ concept IsTransformLogic = requires {
     
     { T::requirements } -> std::convertible_to<TransformRequirement>;
     { T::supported_layouts } -> std::convertible_to<BufferLayoutType>;
+    { T::supported_types } -> std::convertible_to<DataType>;
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
 
     // Must implement templated execute_transform handling the injected Context and View
@@ -70,9 +67,9 @@ concept IsTransformLogic = requires {
         std::declval<T>().template execute_transform<typename T::DefaultView, typename T::DefaultStrategy>(
             std::declval<const TaskContextPOD&>(), 
             std::declval<typename T::DefaultView&>()
-        ) 
+        )
     } -> std::same_as<void>;
-} && std::is_trivially_copyable_v<T>;
+};
 
 } // namespace ideam::core
 

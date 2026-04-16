@@ -23,6 +23,7 @@ struct SpatialInclusionBridgeQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::REQUIRES_SPATIAL;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType supported_types = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4D;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;

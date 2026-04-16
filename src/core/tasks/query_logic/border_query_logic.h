@@ -18,15 +18,16 @@ namespace ideam::core {
  * CULL: Strips the halo (keeps strictly interior elements).
  * ADD: Spatially dilates the selection by queueing unselected neighbors.
  */
-template <typename T, typename T_Strategy, uint32_t DimCount>
+template <typename T, typename T_Strategy>
 struct BorderQueryLogic {
     using ValueType       = T; 
     using DefaultStrategy = T_Strategy;
-    using DefaultView     = StencilView<T, T_Strategy, DimCount>;
+    using DefaultView     = StencilView<T, T_Strategy>;
 
     static constexpr LogicRequirement requirements = LogicRequirement::REQUIRES_SPATIAL;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
-
+    static constexpr DataType supported_types = DataType::ANY;
+    
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 

@@ -41,26 +41,27 @@ public:
     using ViewType     = T_View;
     using StrategyType = T_Strategy;
 
+    // --- NEW: Expose the supported types bitmask to the Registry Builder for O(1) pruning ---
+    static constexpr DataType supported_types = T_Logic::supported_types;
+
     explicit QueryTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~QueryTask() override = default;
 
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {
-        // Only fire during the setup wave if we are actively pruning.
+        // Only CULL operations manipulate the active working set bitmask immediately.
         if constexpr (Op != QueryOp::CULL) return;
 
         const uint32_t target_id = logic.get_target_buffer_id();
         
         const GrantPartPOD* part = p_context.get_grant_part(target_id);
-        if (!part) return;
+        if (!part) return; // Silent abort if DAG failed to secure lease
 
         MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
-        
-        const uint32_t actual_idx = static_cast<uint32_t>(part - p_context.grant->parts);
-        if (!selection || !(p_dirty_mask & (1 << actual_idx))) return;
+        if (!selection) return;
 
         T_View view = _create_view(p_context, part);
         
-        // Zero-overhead route into immediate bitwise manipulation
+        // Zero-overhead dispatch into the optimized logic payload
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
 
@@ -95,10 +96,6 @@ private:
         view.count                  = p_part->selection.capacity;
         view.baked_buffer_version   = p_part->buffer_version_at_issue;
         view.baked_manager_version  = p_context.grant->manager_version_at_issue;
-        
-        if constexpr (requires { logic.configure_view(view, p_context, p_part); }) {
-            logic.configure_view(view, p_context, p_part);
-        }
         
         return view;
     }

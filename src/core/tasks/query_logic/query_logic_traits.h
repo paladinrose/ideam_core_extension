@@ -1,6 +1,7 @@
 #ifndef IDEAM_CORE_QUERY_LOGIC_TRAITS_H
 #define IDEAM_CORE_QUERY_LOGIC_TRAITS_H
 
+#include "../../memory/memory_common.h"
 #include "../../memory/memory_buffer_pod.h"
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/view_traits.h"
@@ -38,12 +39,8 @@ constexpr LogicRequirement operator|(LogicRequirement a, LogicRequirement b) noe
     return static_cast<LogicRequirement>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
 
-constexpr bool has_logic_requirement(LogicRequirement p_mask, LogicRequirement p_req) noexcept {
-    return (static_cast<uint32_t>(p_mask) & static_cast<uint32_t>(p_req)) != 0;
-}
-
 struct QueryLogicValidator {
-    static constexpr bool validate(LogicRequirement requirements, BufferLayoutType supported_layouts, ViewCapability p_view_caps, BufferLayoutType p_buffer_layout) {
+    static constexpr bool validate(LogicRequirement requirements, BufferLayoutType buffer_layout, ViewCapability p_view_caps, BufferLayoutType p_view_layout) {
         if ((static_cast<uint32_t>(requirements) & static_cast<uint32_t>(LogicRequirement::REQUIRES_SPATIAL)) &&
             !has_capability(p_view_caps, ViewCapability::SPATIAL_ACCESS)) {
             return false;
@@ -70,18 +67,19 @@ concept IsQueryLogic = requires {
     
     { T::requirements } -> std::convertible_to<LogicRequirement>;
     { T::supported_layouts } -> std::convertible_to<BufferLayoutType>;
+    { T::supported_types } -> std::convertible_to<DataType>; // NEW: Registry pruning dependency
     { T::supports_cull } -> std::convertible_to<bool>;
     { T::supports_addition } -> std::convertible_to<bool>;
 
     // Must implement pure 'execute' handling the selection mutation.
     { 
         std::declval<T>().template execute<QueryOp::CULL, typename T::DefaultView, typename T::DefaultStrategy>(
-            std::declval<MemoryBufferSelectionPOD&>(),
+            std::declval<MemoryBufferSelectionPOD&>(), 
             std::declval<const TaskContextPOD&>(), 
             std::declval<typename T::DefaultView&>()
         ) 
     } -> std::same_as<void>;
-} && std::is_trivially_copyable_v<T>;
+};
 
 } // namespace ideam::core
 

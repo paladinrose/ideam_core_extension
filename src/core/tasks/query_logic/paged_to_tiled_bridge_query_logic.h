@@ -22,6 +22,7 @@ struct PagedToTiledBridgeQueryLogic {
 
     static constexpr LogicRequirement requirements = LogicRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::TILED_SOA;
+    static constexpr DataType supported_types = DataType::ANY;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;

@@ -33,6 +33,9 @@ public:
     using ViewType     = T_View;
     using StrategyType = T_Strategy;
 
+    // --- NEW: Expose the supported types bitmask to the Registry Builder for O(1) pruning ---
+    static constexpr DataType supported_types = T_Logic::supported_types;
+
     explicit TransformTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~TransformTask() override = default;
 
