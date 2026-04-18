@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_TASK_SELECTION_COMMAND_POD_H
-#define IDEAM_CORE_TASK_SELECTION_COMMAND_POD_H
+#pragma once
 
 #include <cstdint>
 #include <cassert>
@@ -56,4 +55,4 @@ static_assert(sizeof(TaskSelectionCommandPOD) == 32, "TaskSelectionCommandPOD al
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_TASK_SELECTION_COMMAND_POD_H
+ // IDEAM_CORE_TASK_SELECTION_COMMAND_POD_H

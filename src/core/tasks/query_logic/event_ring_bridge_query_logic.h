@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_EVENT_RING_BRIDGE_QUERY_LOGIC_H
-#define IDEAM_CORE_EVENT_RING_BRIDGE_QUERY_LOGIC_H
+#pragma once
 
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/ring_view.h"
@@ -50,4 +49,4 @@ struct EventRingBridgeQueryLogic {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_EVENT_RING_BRIDGE_QUERY_LOGIC_H
+ // IDEAM_CORE_EVENT_RING_BRIDGE_QUERY_LOGIC_H

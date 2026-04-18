@@ -1,5 +1,4 @@
 #include "query_task_registry.h"
-#include "query_task.h"
 
 // --- Logics ---
 #include "query_logic/aabb_query_logic.h"
@@ -28,117 +27,211 @@
 #include "query_logic/swap_eruption_bridge_query_logic.h"
 
 // --- Views & Strategies ---
+#include "../memory/views/aosoa_view.h"
+#include "../memory/views/atomic_view.h"
+#include "../memory/views/bridge_view.h"
+#include "../memory/views/multi_element_view.h"
+#include "../memory/views/paged_view.h"
+#include "../memory/views/ring_view.h"
 #include "../memory/views/single_element_view.h"
+#include "../memory/views/sparse_set_view.h"
+#include "../memory/views/static_stencil_view.h"
+#include "../memory/views/stencil_view.h"
+#include "../memory/views/swap_view.h"
 #include "../memory/views/strategies.h"
 
-#include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/variant/array.hpp>
-#include <tuple>
+#include <godot_cpp/variant/string.hpp>
 
 namespace ideam::core {
 
-// ============================================================================
-// THE TRANSLATION UNIT FIREWALL (4D Metaprogramming)
-// ============================================================================
-namespace { 
-    // Note: Assuming primitive baselines (float, Vector3) based on standard traits.
-    // Adjust template parameters if a specific query enforces a different type structure.
-    using Logics = std::tuple<
-        AABBQueryLogic,
-        ArchetypeQueryLogic,
-        BitmaskQueryLogic,
-        BooleanQueryLogic,
-        BorderQueryLogic<godot::Vector3>,
-        ColorQueryLogic,
-        ComponentQueryLogic,
-        DataComparisonQueryLogic<float>,
-        DataRangeQueryLogic<float>,
-        DirectionalQueryLogic<godot::Vector3>,
-        DistanceQueryLogic<godot::Vector3>,
-        EventRingBridgeQueryLogic,
-        FrustumQueryLogic<godot::Vector3>,
-        HierarchicalBridgeQueryLogic,
-        LimitQueryLogic,
-        MorphologicalQueryLogic,
-        PagedToTiledBridgeQueryLogic,
-        PredicateQueryLogic<float>,
-        RelationalBridgeQueryLogic,
-        SpatialInclusionBridgeQueryLogic<godot::Vector3>,
-        SpatialProjectionBridgeQueryLogic<godot::Vector3>,
-        StencilDilationBridgeQueryLogic,
-        StochasticQueryLogic,
-        SwapEruptionBridgeQueryLogic
-    >;
+namespace { // TU Firewall
 
-    using Views = std::tuple<
-        SingleElementView<float, FlatStrategy>
-    >;
-    
-    using Strats = std::tuple<
-        FlatStrategy, 
-        Spatial2DStrategy, 
-        Spatial3DStrategy
-    >;
-
-    // Factory Template: Validates BOTH the Layout/View support AND the QueryOp support
-    template<typename T_Logic, QueryOp Op, typename T_View, typename T_Strategy>
-    INativeTask* create_query_task() {
-        // Compile-time Op check: Does this logic actually support CULL or ADD?
-        if constexpr ((Op == QueryOp::CULL && T_Logic::supports_cull) ||
-                      (Op == QueryOp::ADD && T_Logic::supports_addition)) {
-            
-            // Compile-time Layout check: Does the view meet the logic's hardware requirements?
-            if constexpr (QueryLogicValidator::validate(
-                T_Logic::requirements, 
-                T_Logic::supported_layouts, 
-                ViewTraits<T_View>::capabilities, 
-                BufferLayoutType::NONE)) 
-            {
-                return new QueryTask<T_Logic, Op, T_View, T_Strategy>(T_Logic{});
-            }
-        }
-        return nullptr;
+    // --- AOSOA Lane Width Calculator (Mirrored from TransformTaskRegistry) ---
+    consteval size_t floor_power_of_2(size_t n) {
+        if (n == 0) return 1;
+        size_t res = 1;
+        while ((res << 1) <= n) res <<= 1;
+        return res;
     }
 
-    // Recursive 4D Metaprogramming filler
-    template<size_t L, size_t O, size_t V, size_t S>
+    template <MemoryTypes MemType, BufferAlignmentMode AlignMode, size_t TargetVectorWidthBytes>
+    struct AOSOALaneCalculator {
+        static constexpr DataType DataFlag = NativeMemoryTraits<MemType>::DataFlag;
+        static constexpr size_t get_lane_width() {
+            if constexpr (DataFlag == DataType::CUSTOM) return 4;
+            else {
+                constexpr size_t byte_size = MemoryUtilities::get_type_byte_size(DataFlag, AlignMode);
+                if constexpr (byte_size == 0) return 1;
+                constexpr size_t raw_lanes = TargetVectorWidthBytes / byte_size;
+                return floor_power_of_2(raw_lanes > 0 ? raw_lanes : 1);
+            }
+        }
+    };
+
+    // --- Helper Extractors ---
+    template <typename S, typename = void> struct StrategyDimExtractor { static constexpr size_t value = 1; };
+    template <typename S> struct StrategyDimExtractor<S, std::void_t<decltype(S::dimensions)>> { static constexpr size_t value = S::dimensions; };
+
+    template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
+    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::KernelSize)>> { static constexpr size_t value = T_Resolver::KernelSize; static constexpr bool has_kernel = true; };
+
+    // --- 1. Query Logic Resolver ---
+    template <QueryLogicID ID, typename T_Concrete, typename T_Strategy> struct QueryLogicResolver { static constexpr bool is_valid = false; };
+
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::AABB, C, S> { using Type = AABBQueryLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Archetype, C, S> { using Type = ArchetypeQueryLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Bitmask, C, S> { using Type = BitmaskQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Boolean, C, S> { using Type = BooleanQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Border, C, S> { using Type = BorderQueryLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Color, C, S> { using Type = ColorQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Component, C, S> { using Type = ComponentQueryLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::DataComparison, C, S> { using Type = DataComparisonQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::DataRange, C, S> { using Type = DataRangeQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Directional, C, S> { using Type = DirectionalQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Distance, C, S> { using Type = DistanceQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::EventRingBridge, C, S> { using Type = EventRingBridgeQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Frustum, C, S> { using Type = FrustumQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::HierarchicalBridge, C, S> { using Type = HierarchicalBridgeQueryLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Limit, C, S> { using Type = LimitQueryLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological, C, S> { using Type = MorphologicalQueryLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::PagedToTiledBridge, C, S> { using Type = PagedToTiledBridgeQueryLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Predicate, C, S> { using Type = PredicateQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::RelationalBridge, C, S> { using Type = RelationalBridgeQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::SpatialInclusionBridge, C, S> { using Type = SpatialInclusionBridgeQueryLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::SpatialProjectionBridge, C, S> { using Type = SpatialProjectionBridgeQueryLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::StencilDilationBridge, C, S> { using Type = StencilDilationBridgeQueryLogic<C, S, StrategyDimExtractor<S>::value>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Stochastic, C, S> { using Type = StochasticQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::SwapEruptionBridge, C, S> { using Type = SwapEruptionBridgeQueryLogic<C>; static constexpr bool is_valid = true; };
+
+    template <QueryLogicID LogicID, typename C, typename S> struct LogicKernelExtractor : KernelExtractorImpl<QueryLogicResolver<LogicID, C, S>> {};
+
+    // --- 2. Strategy Resolver ---
+    template <MemoryStrategy ID> struct StrategyResolver { static constexpr bool is_valid = false; };
+    template <> struct StrategyResolver<MemoryStrategy::FlatStrategy> { using Type = FlatStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::SoAStrategy> { using Type = SoAStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::AoSStrategy> { using Type = AoSStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::Spatial2DStrategy> { using Type = Spatial2DStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::Spatial3DStrategy> { using Type = Spatial3DStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::Spatial4DStrategy> { using Type = Spatial4DStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::TiledSoAStrategy> { using Type = TiledSoAStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::RingStrategy> { using Type = RingStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::PagedStrategy> { using Type = PagedStrategy; static constexpr bool is_valid = true; };
+
+    // --- 3. View Resolver ---
+    template <MemoryView ViewID, QueryLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy>
+    struct QueryViewResolver { static constexpr bool is_valid = false; };
+
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::PagedView, LogicID, MemType, C, S> { using Type = PagedView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::RingView, LogicID, MemType, C, S> { using Type = RingView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::StencilView, LogicID, MemType, C, S> { using Type = StencilView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AtomicView, LogicID, MemType, C, S> { using Type = AtomicView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::SwapView, LogicID, MemType, C, S> { using Type = SwapView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::BridgeView, LogicID, MemType, C, S> { static constexpr size_t DimCount = StrategyDimExtractor<S>::value; using Type = BridgeView<C, C, DimCount, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::StaticStencilView, LogicID, MemType, C, S> { using Extractor = LogicKernelExtractor<LogicID, C, S>; static constexpr size_t PointCount = Extractor::has_kernel ? Extractor::value : 1; using Type = StaticStencilView<C, S, PointCount>; static constexpr bool is_valid = Extractor::has_kernel; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_Tight_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_Tight_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD430_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD430_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD140_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD140_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+
+    template <typename T_Array> inline void _append_unique(T_Array& p_array, const godot::String& p_val) { if (!p_array.has(p_val)) p_array.push_back(p_val); }
+
+    // --- 5D Matrix Builder ---
+    template <size_t O, size_t L, size_t V, size_t S, size_t T>
     struct QueryFactoryMatrix {
         static void fill(std::array<QueryTaskFactoryFn, QueryTaskRegistry::TOTAL_COMBINATIONS>& arr) {
-            
-            // 4D array flattened to 1D index
-            size_t idx = (L * QueryTaskRegistry::O_COUNT * QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT) + 
-                         (O * QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT) +
-                         (V * QueryTaskRegistry::S_COUNT) + S;
-            
-            constexpr QueryOp op_val = (O == 0) ? QueryOp::CULL : QueryOp::ADD;
+            constexpr QueryLogicID LogicEnum = static_cast<QueryLogicID>(L);
+            constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
+            constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
+            constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
+            constexpr QueryOp OpEnum = (O == 0) ? QueryOp::CULL : QueryOp::ADD;
 
-            arr[idx] = create_query_task<
-                std::tuple_element_t<L, Logics>, 
-                op_val,
-                std::tuple_element_t<V, Views>, 
-                std::tuple_element_t<S, Strats>
-            >();
+            using Traits = NativeMemoryTraits<MemTypeEnum>;
+            using ConcreteType = typename Traits::ConcreteType;
 
-            // Recursive stepping (Inner-most loop to outer-most loop)
-            if constexpr (S + 1 < QueryTaskRegistry::S_COUNT) {
-                fill<L, O, V, S + 1>(arr);
+            using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+            using T_Strategy = typename ResolvedStrategy::Type;
+
+            using ResolvedLogic = QueryLogicResolver<LogicEnum, ConcreteType, T_Strategy>;
+            using ResolvedView = QueryViewResolver<ViewEnum, LogicEnum, MemTypeEnum, ConcreteType, T_Strategy>;
+
+            constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
+
+            constexpr bool is_fully_valid = []() consteval {
+                if constexpr (!combo_valid) return false;
+                else {
+                    constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
+                    constexpr bool is_op_supported = (OpEnum == QueryOp::CULL) ? ResolvedLogic::Type::supports_cull : ResolvedLogic::Type::supports_addition;
+                    
+                    if constexpr (!is_type_supported || !is_op_supported) return false;
+                    else {
+                        return QueryLogicValidator::validate(
+                            ResolvedLogic::Type::requirements, 
+                            ResolvedLogic::Type::supported_layouts, 
+                            ViewTraits<typename ResolvedView::Type>::capabilities, 
+                            BufferLayoutType::NONE
+                        );
+                    }
+                }
+            }();
+
+            constexpr size_t flat_idx = 
+                O * (QueryTaskRegistry::L_COUNT * QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) +
+                L * (QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) + 
+                V * (QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) + 
+                S * (QueryTaskRegistry::T_COUNT) + T;
+
+            if constexpr (is_fully_valid) {
+                arr[flat_idx] = []() -> INativeTask* {
+                    return new QueryTask<typename ResolvedLogic::Type, OpEnum, typename ResolvedView::Type, T_Strategy>();
+                };
+
+                if constexpr (O == 0) { // Populate UI once per config
+                    if (QueryTaskRegistry::ui_query_matrix) {
+                        godot::String logic_name(ResolvedLogic::Type::type_name);
+                        if (!QueryTaskRegistry::ui_query_matrix->has(logic_name)) {
+                            godot::Dictionary dict;
+                            dict["ops"] = godot::Array(); dict["views"] = godot::Array(); dict["strategies"] = godot::Array();
+                            (*QueryTaskRegistry::ui_query_matrix)[logic_name] = dict;
+                        }
+                        godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[logic_name];
+                        _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                        _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
+                    }
+                }
+                
+                // Add the specific operations supported to the UI Dict
+                if (QueryTaskRegistry::ui_query_matrix) {
+                    godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[ResolvedLogic::Type::type_name];
+                    _append_unique<godot::Array>(dict["ops"], (O == 0) ? "CULL" : "ADD");
+                }
+            }
+
+            // Recursive 5D Tail Traversal Escalation
+            if constexpr (T + 1 < QueryTaskRegistry::T_COUNT) {
+                QueryFactoryMatrix<O, L, V, S, T + 1>::fill(arr);
+            } else if constexpr (S + 1 < QueryTaskRegistry::S_COUNT) {
+                QueryFactoryMatrix<O, L, V, S + 1, 0>::fill(arr);
             } else if constexpr (V + 1 < QueryTaskRegistry::V_COUNT) {
-                fill<L, O, V + 1, 0>(arr);
-            } else if constexpr (O + 1 < QueryTaskRegistry::O_COUNT) {
-                fill<L, O + 1, 0, 0>(arr);
+                QueryFactoryMatrix<O, L, V + 1, 0, 0>::fill(arr);
             } else if constexpr (L + 1 < QueryTaskRegistry::L_COUNT) {
-                fill<L + 1, 0, 0, 0>(arr);
+                QueryFactoryMatrix<O, L + 1, 0, 0, 0>::fill(arr);
+            } else if constexpr (O + 1 < QueryTaskRegistry::O_COUNT) {
+                QueryFactoryMatrix<O + 1, 0, 0, 0, 0>::fill(arr);
             }
         }
     };
 } // end anonymous namespace
 
-// Global static initialization
 const std::array<QueryTaskFactoryFn, QueryTaskRegistry::TOTAL_COMBINATIONS> 
 QueryTaskRegistry::factories = []{
     std::array<QueryTaskFactoryFn, QueryTaskRegistry::TOTAL_COMBINATIONS> arr;
     arr.fill(nullptr);
-    QueryFactoryMatrix<0, 0, 0, 0>::fill(arr);
     return arr;
 }();
 
@@ -146,7 +239,10 @@ godot::Dictionary* QueryTaskRegistry::ui_query_matrix = nullptr;
 
 void QueryTaskRegistry::init() {
     ui_query_matrix = new godot::Dictionary();
-    // Population logic identical to Metadata/Transform registries
+    
+    std::array<QueryTaskFactoryFn, TOTAL_COMBINATIONS> dummy_arr;
+    dummy_arr.fill(nullptr);
+    QueryFactoryMatrix<0, 0, 0, 0, 0>::fill(dummy_arr);
 }
 
 void QueryTaskRegistry::cleanup() {
@@ -154,15 +250,22 @@ void QueryTaskRegistry::cleanup() {
     ui_query_matrix = nullptr;
 }
 
-std::unique_ptr<INativeTask> QueryTaskRegistry::create(uint32_t p_logic_id, uint32_t p_op_id, uint32_t p_view_id, uint32_t p_strategy_id) {
-    size_t flat_idx = (p_logic_id * O_COUNT * V_COUNT * S_COUNT) + 
-                      (p_op_id * V_COUNT * S_COUNT) + 
-                      (p_view_id * S_COUNT) + p_strategy_id;
-    
-    if (flat_idx < TOTAL_COMBINATIONS && factories[flat_idx] != nullptr) {
+std::unique_ptr<INativeTask> QueryTaskRegistry::create(uint32_t p_op_id, uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id) {
+    if (p_op_id >= O_COUNT || p_logic_id >= L_COUNT || p_view_id >= V_COUNT || p_strategy_id >= S_COUNT || p_type_id >= T_COUNT) {
+        return nullptr;
+    }
+
+    size_t flat_idx = 
+        p_op_id * (L_COUNT * V_COUNT * S_COUNT * T_COUNT) +
+        p_logic_id * (V_COUNT * S_COUNT * T_COUNT) + 
+        p_view_id * (S_COUNT * T_COUNT) + 
+        p_strategy_id * (T_COUNT) + 
+        p_type_id;
+
+    if (factories[flat_idx]) {
         return std::unique_ptr<INativeTask>(factories[flat_idx]());
     }
-    
+
     return nullptr;
 }
 

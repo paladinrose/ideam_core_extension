@@ -1,6 +1,5 @@
 // transform_task_registry.h
-#ifndef IDEAM_CORE_TRANSFORM_TASK_REGISTRY_H
-#define IDEAM_CORE_TRANSFORM_TASK_REGISTRY_H
+#pragma once
 
 #include "i_native_task.h"
 #include "../memory/memory_common.h"
@@ -58,4 +57,4 @@ public:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_TRANSFORM_TASK_REGISTRY_H
+ // IDEAM_CORE_TRANSFORM_TASK_REGISTRY_H

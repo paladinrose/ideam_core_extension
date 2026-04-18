@@ -1,5 +1,4 @@
-#ifndef IDEAM_EDITOR_INSPECTOR_PLUGIN_H
-#define IDEAM_EDITOR_INSPECTOR_PLUGIN_H
+#pragma once
 
 #include <godot_cpp/classes/editor_inspector_plugin.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
@@ -21,10 +20,11 @@ public:
 
 	virtual bool _can_handle(godot::Object *p_object);
 	virtual void _parse_begin(godot::Object *p_object) override;
-
-    virtual godot::Object *get_undo_redo() const;
+	virtual bool _parse_property(godot::Object *p_object, godot::Variant::Type p_type, const godot::String &p_name, godot::PropertyHint p_hint_type, const godot::String &p_hint_string, godot::BitField<godot::PropertyUsageFlags> p_usage_flags, bool p_wide) override = 0;
+    
+	virtual godot::Object *get_undo_redo() const;
 };
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_EDITOR_INSPECTOR_PLUGIN_H
+ // IDEAM_EDITOR_INSPECTOR_PLUGIN_H

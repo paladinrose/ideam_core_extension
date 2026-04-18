@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_SIMULATION_TASK_H
-#define IDEAM_CORE_SIMULATION_TASK_H
+#pragma once
 
 #include "simulation_logic/simulation_logic_traits.h"
 #include "../tasks/i_native_task.h"
@@ -79,4 +78,4 @@ private:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_SIMULATION_TASK_H
+ // IDEAM_CORE_SIMULATION_TASK_H

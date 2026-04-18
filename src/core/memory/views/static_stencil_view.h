@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_STATIC_STENCIL_VIEW_H
-#define IDEAM_CORE_STATIC_STENCIL_VIEW_H
+#pragma once
 
 #include "strategies.h"
 #include "../memory_grant_pod.h"
@@ -189,4 +188,4 @@ struct StaticStencilView {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_STATIC_STENCIL_VIEW_H
+ // IDEAM_CORE_STATIC_STENCIL_VIEW_H

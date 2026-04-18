@@ -1,5 +1,4 @@
-#ifndef IDEAM_MEMORY_PLUGIN_H
-#define IDEAM_MEMORY_PLUGIN_H
+#pragma once
 
 #include "../editor/ideam_editor_plugin.h"
 #include <godot_cpp/classes/editor_inspector_plugin.hpp>
@@ -35,4 +34,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_MEMORY_PLUGIN_H
+ // IDEAM_MEMORY_PLUGIN_H

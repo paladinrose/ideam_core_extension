@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_MEMORY_GRAPH_EDIT_H
-#define IDEAM_GODOT_MEMORY_GRAPH_EDIT_H
+#pragma once
 
 #include "../graphs/ideam_graph_edit.h"
 #include "memory_graph_resource.h"
@@ -63,4 +62,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GODOT_MEMORY_GRAPH_EDIT_H
+ // IDEAM_GODOT_MEMORY_GRAPH_EDIT_H

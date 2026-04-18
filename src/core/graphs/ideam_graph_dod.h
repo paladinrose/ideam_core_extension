@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_GRAPH_DOD_H
-#define IDEAM_CORE_GRAPH_DOD_H
+#pragma once
 
 #include "../memory/memory_manager_dod.h"
 #include "../memory/memory_common.h"
@@ -219,4 +218,4 @@ public:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_GRAPH_DOD_H
+ // IDEAM_CORE_GRAPH_DOD_H

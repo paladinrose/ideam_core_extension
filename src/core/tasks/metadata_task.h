@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_METADATA_TASK_H
-#define IDEAM_CORE_METADATA_TASK_H
+#pragma once
 
 #include "metadata_logic/metadata_logic_traits.h"
 #include "i_native_task.h"
@@ -82,4 +81,4 @@ private:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_METADATA_TASK_H
+ // IDEAM_CORE_METADATA_TASK_H

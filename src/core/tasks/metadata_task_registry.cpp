@@ -7,169 +7,244 @@
 #include "metadata_logic/lod_metadata_logic.h"
 #include "metadata_logic/partition_metadata_logic.h"
 
-// --- Views ---
+// --- Views & Strategies ---
+#include "../memory/views/aosoa_view.h"
+#include "../memory/views/atomic_view.h"
+#include "../memory/views/bridge_view.h"
+#include "../memory/views/multi_element_view.h"
+#include "../memory/views/paged_view.h"
+#include "../memory/views/ring_view.h"
 #include "../memory/views/single_element_view.h"
+#include "../memory/views/sparse_set_view.h"
 #include "../memory/views/static_stencil_view.h"
-
-// --- Strategies ---
+#include "../memory/views/stencil_view.h"
+#include "../memory/views/swap_view.h"
 #include "../memory/views/strategies.h"
 
-#include <godot_cpp/variant/utility_functions.hpp>
+// --- Resolvers & Memory Core ---
+#include "../memory/views/view_traits.h"
 #include <godot_cpp/variant/array.hpp>
-#include <utility>
+#include <godot_cpp/variant/string.hpp>
 
 namespace ideam::core {
 
-// ============================================================================
-// THE TRANSLATION UNIT FIREWALL
-// Everything inside this anonymous namespace is invisible to the rest of the 
-// program. It executes entirely during compilation, bakes into the .rdata 
-// segment, and leaves the global symbol table completely clean.
-// ============================================================================
-namespace { 
+namespace { // Translation Unit Firewall
 
-    // --- 1. The Tuples (Mapping Types to Enum IDs by Index Order) ---
-    // [FUTURE NOTE FOR QUERY/TRANSFORM REGISTRIES]:
-    // Metadata tasks have fixed output types, so we used `float` as a baseline here to 
-    // satisfy the compiler. For Query and Transform tasks, the Logic depends heavily on 
-    // the Buffer Type (e.g., StochasticQuery<Vector3> vs StochasticQuery<int>).
-    // For those registries, you MUST add a 4th Dimension: `DataTypeID`.
-    // You will iterate over a `CoreDataTypes` tuple first, and dynamically construct
-    // `T_Logic<T>` instead of hardcoding `float`.
-    using LogicTuple = std::tuple<
-        DSUClusterMetadataLogic<float, 9>,
-        GroupMaskMetadataLogic<float, 1>,
-        LODMetadataLogic<float, 1>,
-        PartitionMetadataLogic<float, 1>
-    >;
+    // --- AOSOA Lane Width Calculator (Mirrored from TransformTaskRegistry) ---
+    consteval size_t floor_power_of_2(size_t n) {
+        if (n == 0) return 1;
+        size_t res = 1;
+        while ((res << 1) <= n) res <<= 1;
+        return res;
+    }
 
-    using StratTuple = std::tuple<
-        FlatStrategy,
-        Spatial2DStrategy,
-        Spatial3DStrategy,
-        Spatial4DStrategy
-    >;
+    template <MemoryTypes MemType, BufferAlignmentMode AlignMode, size_t TargetVectorWidthBytes>
+    struct AOSOALaneCalculator {
+        static constexpr DataType DataFlag = NativeMemoryTraits<MemType>::DataFlag;
+        static constexpr size_t get_lane_width() {
+            if constexpr (DataFlag == DataType::CUSTOM) return 4;
+            else {
+                constexpr size_t byte_size = MemoryUtilities::get_type_byte_size(DataFlag, AlignMode);
+                if constexpr (byte_size == 0) return 1;
+                constexpr size_t raw_lanes = TargetVectorWidthBytes / byte_size;
+                return floor_power_of_2(raw_lanes > 0 ? raw_lanes : 1);
+            }
+        }
+    };
 
-    // --- 2. The Hole Puncher (Constexpr Matrix Builder) ---
-    template <size_t L_ID, size_t V_ID, size_t S_ID>
-    consteval MetadataTaskFactoryFn build_single_factory() {
-        // Extract the raw types from the tuples using the Enum integer coordinates
-        using T_Logic = std::tuple_element_t<L_ID, LogicTuple>;
-        using T_Strat = std::tuple_element_t<S_ID, StratTuple>;
-        using VType   = typename T_Logic::ValueType;
+    // --- Helper Extractors (SFINAE Safety Firewall) ---
+    template <typename S, typename = void> struct StrategyDimExtractor { static constexpr size_t value = 1; };
+    template <typename S> struct StrategyDimExtractor<S, std::void_t<decltype(S::dimensions)>> { static constexpr size_t value = S::dimensions; };
 
-        // Map View ID to Type (Note: 9 is used as a baseline point count for Stencils)
-        using T_View = std::conditional_t<V_ID == static_cast<size_t>(MetadataViewID::SingleElement), 
-            SingleElementView<VType, T_Strat>, 
-            StaticStencilView<VType, T_Strat, 9> 
-        >;
+    template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
+    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::Type::KERNEL_POINTS)>> { static constexpr size_t value = T_Resolver::Type::KERNEL_POINTS; static constexpr bool has_kernel = true; };
 
-        // VALIDATION: This is where we save Megabytes of binary bloat.
-        // We check if the View provides the capabilities the Logic demands.
-        constexpr ViewCapability CAPS = ViewTraits<T_View>::capabilities;
-        constexpr bool is_valid = MetadataLogicValidator::validate(
-            T_Logic::requirements, T_Logic::supported_layouts, CAPS, BufferLayoutType::ANY_LINEAR
-        );
+    // --- 1. Metadata Logic Resolver ---
+    template <MetadataLogicID ID, typename T_Concrete, typename T_Strategy> struct MetadataLogicResolver { static constexpr bool is_valid = false; };
 
-        if constexpr (is_valid) {
-            // The combination is geometrically sound. Generate the instantiation pointer.
-            return []() -> INativeTask* { 
-                return new MetadataTask<T_Logic, T_View, T_Strat>(T_Logic{}); 
-            };
-        } else {
-            // THE HOLE: This combination makes no sense (e.g., Spatial Strategy on a Non-Spatial Logic).
-            // Do not compile the class. Just drop a null pointer.
-            return nullptr;
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::DSUCluster_Moore_R1, C, S>  { using Type = DSUClusterMetadataLogic<C, 9>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::DSUCluster_VonNeumann_R1, C, S> { using Type = DSUClusterMetadataLogic<C, 5>; static constexpr bool is_valid = true; };
+    
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::GroupMask_1Bit, C, S> { using Type = GroupMaskMetadataLogic<C, 1>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::GroupMask_2Bit, C, S> { using Type = GroupMaskMetadataLogic<C, 2>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::GroupMask_3Bit, C, S> { using Type = GroupMaskMetadataLogic<C, 3>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::GroupMask_4Bit, C, S> { using Type = GroupMaskMetadataLogic<C, 4>; static constexpr bool is_valid = true; };
+    
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::LOD_1Level, C, S> { using Type = LODMetadataLogic<C, 1>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::LOD_2Level, C, S> { using Type = LODMetadataLogic<C, 2>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::LOD_3Level, C, S> { using Type = LODMetadataLogic<C, 3>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::LOD_4Level, C, S> { using Type = LODMetadataLogic<C, 4>; static constexpr bool is_valid = true; };
+    
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::Partition_1, C, S> { using Type = PartitionMetadataLogic<C, 1>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::Partition_2, C, S> { using Type = PartitionMetadataLogic<C, 2>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::Partition_3, C, S> { using Type = PartitionMetadataLogic<C, 3>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::Partition_4, C, S> { using Type = PartitionMetadataLogic<C, 4>; static constexpr bool is_valid = true; };
+
+    template <MetadataLogicID LogicID, typename C, typename S> struct LogicKernelExtractor : KernelExtractorImpl<MetadataLogicResolver<LogicID, C, S>> {};
+
+    // --- 2. Strategy Resolver ---
+    template <MemoryStrategy ID> struct StrategyResolver { static constexpr bool is_valid = false; };
+    template <> struct StrategyResolver<MemoryStrategy::FlatStrategy> { using Type = FlatStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::SoAStrategy> { using Type = SoAStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::AoSStrategy> { using Type = AoSStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::Spatial2DStrategy> { using Type = Spatial2DStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::Spatial3DStrategy> { using Type = Spatial3DStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::Spatial4DStrategy> { using Type = Spatial4DStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::TiledSoAStrategy> { using Type = TiledSoAStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::RingStrategy> { using Type = RingStrategy; static constexpr bool is_valid = true; };
+    template <> struct StrategyResolver<MemoryStrategy::PagedStrategy> { using Type = PagedStrategy; static constexpr bool is_valid = true; };
+
+    // --- 3. View Resolver ---
+    template <MemoryView ViewID, MetadataLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy>
+    struct MetadataViewResolver { static constexpr bool is_valid = false; };
+
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::PagedView, LogicID, MemType, C, S> { using Type = PagedView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::RingView, LogicID, MemType, C, S> { using Type = RingView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::StencilView, LogicID, MemType, C, S> { using Type = StencilView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AtomicView, LogicID, MemType, C, S> { using Type = AtomicView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::SwapView, LogicID, MemType, C, S> { using Type = SwapView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::BridgeView, LogicID, MemType, C, S> { static constexpr size_t DimCount = StrategyDimExtractor<S>::value; using Type = BridgeView<C, C, DimCount, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::StaticStencilView, LogicID, MemType, C, S> { using Extractor = LogicKernelExtractor<LogicID, C, S>; static constexpr size_t PointCount = Extractor::has_kernel ? Extractor::value : 1; using Type = StaticStencilView<C, S, PointCount>; static constexpr bool is_valid = Extractor::has_kernel; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_Tight_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_Tight_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_STD430_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_STD430_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_STD140_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_STD140_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+
+    // --- Helper for UI String Population ---
+    template <typename T_Array>
+    inline void _append_unique(T_Array& p_array, const godot::String& p_val) {
+        if (!p_array.has(p_val)) {
+            p_array.push_back(p_val);
         }
     }
 
-    // --- 3. Flat Array Expansion ---
-    constexpr size_t L_COUNT = static_cast<size_t>(MetadataLogicID::Count);
-    constexpr size_t V_COUNT = static_cast<size_t>(MetadataViewID::Count);
-    constexpr size_t S_COUNT = static_cast<size_t>(MetadataStrategyID::Count);
-    constexpr size_t TOTAL_COMBINATIONS = L_COUNT * V_COUNT * S_COUNT;
+    // --- 4D Matrix Builder ---
+    template <size_t L, size_t V, size_t S, size_t T>
+    struct MetadataFactoryMatrix {
+        static void fill(std::array<MetadataTaskFactoryFn, MetadataTaskRegistry::TOTAL_COMBINATIONS>& arr) {
+            
+            constexpr MetadataLogicID LogicEnum = static_cast<MetadataLogicID>(L);
+            constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
+            constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
+            constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
 
-    // This magic function turns a 1D sequence (0 to N) into 3D coordinates via stride math,
-    // feeding them into the Hole Puncher to build the final flat array.
-    template <size_t... Indices>
-    consteval std::array<MetadataTaskFactoryFn, TOTAL_COMBINATIONS> build_flat_matrix(std::index_sequence<Indices...>) {
-        return { build_single_factory<
-            (Indices / (V_COUNT * S_COUNT)) % L_COUNT, // Extract L_ID
-            (Indices / S_COUNT) % V_COUNT,             // Extract V_ID
-            Indices % S_COUNT                          // Extract S_ID
-        >()... };
-    }
+            // Resolve Core Type Traits
+            using Traits = NativeMemoryTraits<MemTypeEnum>;
+            using ConcreteType = typename Traits::ConcreteType;
 
-    // Force the compiler to build the array right now.
-    constexpr auto INTERNAL_FACTORIES = build_flat_matrix(std::make_index_sequence<TOTAL_COMBINATIONS>{});
+            // Resolve Axes
+            using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+            using T_Strategy = typename ResolvedStrategy::Type;
 
-    // --- 4. String Maps for the UI Dictionary ---
-    constexpr const char* LOGIC_NAMES[] = { "DSUCluster", "GroupMask", "LOD", "Partition" };
-    constexpr const char* VIEW_NAMES[] = { "SingleElement", "StaticStencil" };
-    constexpr const char* STRATEGY_NAMES[] = { "Flat", "Spatial2D", "Spatial3D", "Spatial4D" };
+            // Inject ConcreteType into Logic & View resolution
+            using ResolvedLogic = MetadataLogicResolver<LogicEnum, ConcreteType, T_Strategy>;
+            using ResolvedView = MetadataViewResolver<ViewEnum, LogicEnum, MemTypeEnum, ConcreteType, T_Strategy>;
 
-} // namespace (End Firewall)
+            // Compile-time validity checks
+            constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
 
-// ============================================================================
-// REGISTRY IMPLEMENTATION
-// ============================================================================
+            // Filter Pass: Verify type bitmasks and hardware layout logic
+            constexpr bool is_fully_valid = []() consteval {
+                if constexpr (!combo_valid) return false;
+                else {
+                    constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
+                    if constexpr (!is_type_supported) return false;
+                    else {
+                        return MetadataLogicValidator::validate(
+                            ResolvedLogic::Type::requirements, 
+                            ResolvedLogic::Type::supported_layouts, 
+                            ViewTraits<typename ResolvedView::Type>::capabilities, 
+                            BufferLayoutType::NONE
+                        );
+                    }
+                }
+            }();
 
-// Assign the constexpr internal array to the public-facing static member
-const std::array<MetadataTaskFactoryFn, TOTAL_COMBINATIONS> MetadataTaskRegistry::factories = INTERNAL_FACTORIES;
+            // Flat Index Calculation (4D Offset)
+            constexpr size_t flat_idx = 
+                (L * MetadataTaskRegistry::V_COUNT * MetadataTaskRegistry::S_COUNT * MetadataTaskRegistry::T_COUNT) + 
+                (V * MetadataTaskRegistry::S_COUNT * MetadataTaskRegistry::T_COUNT) + 
+                (S * MetadataTaskRegistry::T_COUNT) + T;
+
+            if constexpr (is_fully_valid) {
+                arr[flat_idx] = []() -> INativeTask* {
+                    // Logic structs are instantiated inline
+                    return new MetadataTask<typename ResolvedLogic::Type, typename ResolvedView::Type, T_Strategy>(typename ResolvedLogic::Type{});
+                };
+
+                // Populate UI Dict (Only executed at compile-time resolution layer)
+                if (MetadataTaskRegistry::ui_metadata_matrix) {
+                    godot::String logic_name(ResolvedLogic::Type::type_name);
+                    if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_name)) {
+                        godot::Dictionary dict;
+                        dict["views"] = godot::Array(); 
+                        dict["strategies"] = godot::Array();
+                        (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name] = dict;
+                    }
+                    godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name];
+                    _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                    _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
+                }
+            }
+
+            // Recursive 4D Tail Traversal Escalation
+            if constexpr (T + 1 < MetadataTaskRegistry::T_COUNT) {
+                MetadataFactoryMatrix<L, V, S, T + 1>::fill(arr);
+            } else if constexpr (S + 1 < MetadataTaskRegistry::S_COUNT) {
+                MetadataFactoryMatrix<L, V, S + 1, 0>::fill(arr);
+            } else if constexpr (V + 1 < MetadataTaskRegistry::V_COUNT) {
+                MetadataFactoryMatrix<L, V + 1, 0, 0>::fill(arr);
+            } else if constexpr (L + 1 < MetadataTaskRegistry::L_COUNT) {
+                MetadataFactoryMatrix<L + 1, 0, 0, 0>::fill(arr);
+            }
+        }
+    };
+} // end anonymous namespace
+
+const std::array<MetadataTaskFactoryFn, MetadataTaskRegistry::TOTAL_COMBINATIONS> 
+MetadataTaskRegistry::factories = []{
+    std::array<MetadataTaskFactoryFn, MetadataTaskRegistry::TOTAL_COMBINATIONS> arr;
+    arr.fill(nullptr);
+    return arr;
+}();
 
 godot::Dictionary* MetadataTaskRegistry::ui_metadata_matrix = nullptr;
 
 void MetadataTaskRegistry::init() {
-    if (!ui_metadata_matrix) {
-        ui_metadata_matrix = new godot::Dictionary();
-    }
-
-    // We crawl the compiled array to build the Godot UI.
-    // The UI is built ENTIRELY around the "Holes" left by the compiler.
-    for (uint32_t l = 0; l < L_COUNT; ++l) {
-        godot::Array valid_views;
-        godot::Array valid_strats;
-
-        for (uint32_t v = 0; v < V_COUNT; ++v) {
-            for (uint32_t s = 0; s < S_COUNT; ++s) {
-                size_t flat_idx = (l * V_COUNT * S_COUNT) + (v * S_COUNT) + s;
-                
-                // If the pointer isn't null, it survived compilation pruning!
-                if (factories[flat_idx] != nullptr) {
-                    if (!valid_views.has(VIEW_NAMES[v])) valid_views.push_back(VIEW_NAMES[v]);
-                    if (!valid_strats.has(STRATEGY_NAMES[s])) valid_strats.push_back(STRATEGY_NAMES[s]);
-                }
-            }
-        }
-
-        // Only register Logics that have at least one valid View/Strategy path
-        if (valid_views.size() > 0) {
-            godot::Dictionary dict;
-            dict["views"] = valid_views;
-            dict["strategies"] = valid_strats;
-            (*ui_metadata_matrix)[LOGIC_NAMES[l]] = dict;
-        }
-    }
+    ui_metadata_matrix = new godot::Dictionary();
+    
+    // Rerun traversal for UI population decoupled from static init
+    std::array<MetadataTaskFactoryFn, TOTAL_COMBINATIONS> dummy_arr;
+    dummy_arr.fill(nullptr);
+    MetadataFactoryMatrix<0, 0, 0, 0>::fill(dummy_arr);
 }
 
 void MetadataTaskRegistry::cleanup() {
-    delete ui_metadata_matrix; 
+    delete ui_metadata_matrix;
     ui_metadata_matrix = nullptr;
 }
 
-std::unique_ptr<INativeTask> MetadataTaskRegistry::create(uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id) {
-    // Zero-overhead O(1) lookup. No string hashing, no HashMaps.
-    size_t flat_idx = (p_logic_id * V_COUNT * S_COUNT) + (p_view_id * S_COUNT) + p_strategy_id;
-    
-    if (flat_idx < TOTAL_COMBINATIONS && factories[flat_idx] != nullptr) {
-        // Instantiate the specific templated class and wrap it
+std::unique_ptr<INativeTask> MetadataTaskRegistry::create(uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id) {
+    if (p_logic_id >= L_COUNT || p_view_id >= V_COUNT || p_strategy_id >= S_COUNT || p_type_id >= T_COUNT) {
+        return nullptr;
+    }
+
+    // Direct pointer arithmetic calculation
+    size_t flat_idx = 
+        (p_logic_id * V_COUNT * S_COUNT * T_COUNT) + 
+        (p_view_id * S_COUNT * T_COUNT) + 
+        (p_strategy_id * T_COUNT) + 
+        p_type_id;
+
+    if (factories[flat_idx]) {
         return std::unique_ptr<INativeTask>(factories[flat_idx]());
     }
 
-    godot::UtilityFunctions::printerr(
-        "MetadataTaskRegistry: Attempted to instantiate an invalid task combination! "
-        "Logic: ", p_logic_id, " View: ", p_view_id, " Strat: ", p_strategy_id
-    );
     return nullptr;
 }
 

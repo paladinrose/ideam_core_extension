@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_STENCIL_DILATION_BRIDGE_QUERY_LOGIC_H
-#define IDEAM_CORE_STENCIL_DILATION_BRIDGE_QUERY_LOGIC_H
+#pragma once
 
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/static_stencil_view.h"
@@ -100,4 +99,4 @@ struct StencilDilationBridgeQueryLogic {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_STENCIL_DILATION_BRIDGE_QUERY_LOGIC_H
+ // IDEAM_CORE_STENCIL_DILATION_BRIDGE_QUERY_LOGIC_H

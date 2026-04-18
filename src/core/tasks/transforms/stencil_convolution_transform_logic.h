@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_STENCIL_CONVOLUTION_TRANSFORM_LOGIC_H
-#define IDEAM_CORE_STENCIL_CONVOLUTION_TRANSFORM_LOGIC_H
+#pragma once
 
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/swap_view.h"
@@ -70,4 +69,4 @@ struct alignas(64) StencilConvolutionTransformLogic {
 };
 
 } // namespace ideam::core
-#endif // IDEAM_CORE_STENCIL_CONVOLUTION_TRANSFORM_LOGIC_H
+ // IDEAM_CORE_STENCIL_CONVOLUTION_TRANSFORM_LOGIC_H

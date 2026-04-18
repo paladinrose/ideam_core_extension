@@ -1,5 +1,4 @@
-#ifndef MEMORY_GRAPH_INSPECTOR_H
-#define MEMORY_GRAPH_INSPECTOR_H
+#pragma once
 
 #include "../editor/ideam_editor_inspector_plugin.h"
 #include "ideam_memory_plugin.h"
@@ -32,4 +31,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // MEMORY_GRAPH_INSPECTOR_H
+ // MEMORY_GRAPH_INSPECTOR_H

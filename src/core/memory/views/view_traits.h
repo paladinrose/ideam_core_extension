@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_VIEW_TRAITS_H
-#define IDEAM_CORE_VIEW_TRAITS_H
+#pragma once
 
 #include "../memory_common.h" // Required for DataType bitmask
 #include <type_traits>
@@ -45,4 +44,4 @@ struct ViewTraits {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_VIEW_TRAITS_H
+ // IDEAM_CORE_VIEW_TRAITS_H

@@ -1,5 +1,4 @@
-#ifndef IDEAM_GRAPH_EDIT_H
-#define IDEAM_GRAPH_EDIT_H
+#pragma once
 
 #include <godot_cpp/classes/graph_edit.hpp>
 #include <godot_cpp/classes/popup_menu.hpp>
@@ -63,4 +62,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GRAPH_EDIT_H
+ // IDEAM_GRAPH_EDIT_H

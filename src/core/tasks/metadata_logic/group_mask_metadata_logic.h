@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_GROUP_MASK_METADATA_LOGIC_H
-#define IDEAM_CORE_GROUP_MASK_METADATA_LOGIC_H
+#pragma once
 
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/single_element_view.h"
@@ -162,4 +161,4 @@ private:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_GROUP_MASK_METADATA_LOGIC_H
+ // IDEAM_CORE_GROUP_MASK_METADATA_LOGIC_H

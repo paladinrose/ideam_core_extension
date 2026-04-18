@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_TASK_GRAPH_COMMAND_POD_H
-#define IDEAM_CORE_TASK_GRAPH_COMMAND_POD_H
+#pragma once
 
 #include <cstdint>
 
@@ -34,4 +33,4 @@ struct TaskGraphCommandPOD {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_TASK_GRAPH_COMMAND_POD_H
+ // IDEAM_CORE_TASK_GRAPH_COMMAND_POD_H

@@ -1,5 +1,4 @@
-#ifndef IDEAM_GRAPH_COMPOSER_H
-#define IDEAM_GRAPH_COMPOSER_H
+#pragma once
 
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/classes/tab_container.hpp>
@@ -49,4 +48,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GRAPH_COMPOSER_H
+ // IDEAM_GRAPH_COMPOSER_H

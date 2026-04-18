@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_TASK_GRAPH_NODE_H
-#define IDEAM_GODOT_TASK_GRAPH_NODE_H
+#pragma once
 
 #include "../memory/memory_graph_node.h"
 #include <godot_cpp/classes/label.hpp>
@@ -29,4 +28,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GODOT_TASK_GRAPH_NODE_H
+ // IDEAM_GODOT_TASK_GRAPH_NODE_H

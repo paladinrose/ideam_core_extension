@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_TASK_GRAPH_RESOURCE_H
-#define IDEAM_GODOT_TASK_GRAPH_RESOURCE_H
+#pragma once
 
 #include "../memory/memory_graph_resource.h"
 #include "../../core/tasks/task_graph_dod.h"
@@ -59,4 +58,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GODOT_TASK_GRAPH_RESOURCE_H
+ // IDEAM_GODOT_TASK_GRAPH_RESOURCE_H

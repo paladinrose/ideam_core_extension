@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_EULER_INTEGRATION_TRANSFORM_LOGIC_H
-#define IDEAM_CORE_EULER_INTEGRATION_TRANSFORM_LOGIC_H
+#pragma once
 
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/swap_view.h"
@@ -52,4 +51,3 @@ struct alignas(64) EulerIntegrationTransformLogic {
 };
 
 } // namespace ideam::core
-#endif

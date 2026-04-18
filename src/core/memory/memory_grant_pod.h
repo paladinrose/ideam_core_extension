@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_MEMORY_GRANT_POD_H
-#define IDEAM_CORE_MEMORY_GRANT_POD_H
+#pragma once
 
 #include "memory_common.h"
 #include "memory_buffer_selection_pod.h"
@@ -118,4 +117,4 @@ static_assert(sizeof(MemoryGrantHeavyPOD) == 1152, "MemoryGrantHeavyPOD broke 18
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_MEMORY_GRANT_POD_H
+ // IDEAM_CORE_MEMORY_GRANT_POD_H

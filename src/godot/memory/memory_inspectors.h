@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_MEMORY_INSPECTORS_H
-#define IDEAM_GODOT_MEMORY_INSPECTORS_H
+#pragma once
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -95,4 +94,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GODOT_MEMORY_INSPECTORS_H
+ // IDEAM_GODOT_MEMORY_INSPECTORS_H

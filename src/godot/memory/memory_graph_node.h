@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_MEMORY_GRAPH_NODE_H
-#define IDEAM_GODOT_MEMORY_GRAPH_NODE_H
+#pragma once
 
 #include "../graphs/ideam_graph_node.h"
 #include "memory_inspectors.h"
@@ -64,4 +63,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GODOT_MEMORY_GRAPH_NODE_H
+ // IDEAM_GODOT_MEMORY_GRAPH_NODE_H

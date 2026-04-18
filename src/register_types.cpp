@@ -57,7 +57,7 @@
 #include "core/memory/views/strategies.h"
 
 
-// --- Narratives UI & Editor ---
+// --- Narratives Plugin ---
 #include "godot/narratives/narreme.h"
 #include "godot/narratives/narremes/character.h"
 #include "godot/narratives/narremes/location.h"
@@ -73,11 +73,38 @@
 #include "godot/narratives/helpers/narrative_condition.h"
 #include "godot/narratives/helpers/plot_event.h"
 
-// Utility Wrapper for the QueryOp enum to be type-passed to the MatrixBuilder
-template <ideam::core::QueryOp Op>
-struct QueryOpTag { 
-    static constexpr ideam::core::QueryOp value = Op; 
-};
+// --- Games Plugin ---
+#include "godot/games/ideam_games_plugin.h"
+
+#include "godot/games/game_hub.h"
+#include "godot/games/game.h"
+
+#include "godot/games/game_player_manager.h"
+#include "godot/games/game_player.h"
+#include "godot/games/game_player_profile.h"
+
+#include "godot/games/game_entity.h"
+#include "godot/games/game_entities/game_board.h"
+#include "godot/games/game_entities/game_agent.h"
+#include "godot/games/game_entities/actions/game_agent_action.h"
+#include "godot/games/game_entities/game_piece.h"
+#include "godot/games/game_entities/actions/game_piece_action.h"
+
+#include "godot/games/game_entities/actions/game_interaction.h"
+
+// --- Games UI ---
+#include "godot/games/ui/game_hub_ui.h"
+#include "godot/games/ui/game_menu.h"
+#include "godot/games/ui/game_options_menu.h"
+#include "godot/games/ui/game_pause_menu.h"
+#include "godot/games/ui/chapter_select.h"
+
+#include "godot/games/ui/game_agent_action_tool.h"
+#include "godot/games/ui/game_agent_action_sequencer.h"
+
+// --- Games Editors ---
+#include "godot/games/editor/game_agent_editor_inspector_plugin.h"
+#include "godot/games/editor/game_agent_action_editor_inspector_plugin.h"
 
 using namespace godot;
 using namespace ideam::core;
@@ -93,19 +120,20 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::GameEntity);
 		
-        // Graph UI elements needed at runtime/scene level
+        // Graphs UI
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphNode);
 
-		// Memory UI elements needed at runtime/scene level
+		// Memory UI
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
 		GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphEdit);
         GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphNode);
 
-		// Task UI elements needed at runtime/scene level
+		// Tasks UI 
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
@@ -127,75 +155,32 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::Narrative_Condition);
 		GDREGISTER_CLASS(ideam::godot_ext::Plot_Event);
 
+		// --- Games ---
+		GDREGISTER_CLASS(ideam::godot_ext::Game);
+		GDREGISTER_CLASS(ideam::godot_ext::GameHub);
+		GDREGISTER_CLASS(ideam::godot_ext::GamePlayer);
+		GDREGISTER_CLASS(ideam::godot_ext::GamePlayerProfile);
+		GDREGISTER_CLASS(ideam::godot_ext::GamePlayerManager);
+		GDREGISTER_CLASS(ideam::godot_ext::GameBoard);
+		GDREGISTER_CLASS(ideam::godot_ext::GameAgent);
+		GDREGISTER_CLASS(ideam::godot_ext::GameAgentAction);
+		GDREGISTER_CLASS(ideam::godot_ext::GamePiece);
+		GDREGISTER_CLASS(ideam::godot_ext::GamePieceAction);
+		GDREGISTER_CLASS(ideam::godot_ext::GameInteraction);
+
+		// --- Games UI ---
+		GDREGISTER_CLASS(ideam::godot_ext::GameHubUI);
+		GDREGISTER_CLASS(ideam::godot_ext::GameMenu);
+		GDREGISTER_CLASS(ideam::godot_ext::GameOptionsMenu);
+		GDREGISTER_CLASS(ideam::godot_ext::GamePauseMenu);
+		GDREGISTER_CLASS(ideam::godot_ext::ChapterSelect);
+
+		GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionTool);
+		GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionSequencer);
+
 		// --- Native Task Registration ---
 		NativeTaskRegistry::init();
-		NativeTaskRegistry::register_task<EntryFillTask>("Entry Fill Task");
-
-		// 1. Comprehensive Operations
-    	// StochasticQueryLogic supports both CULL and ADD out of the box.
-		using QueryOpsMatrix = std::tuple<
-			QueryOpTag<QueryOp::CULL>, 
-			QueryOpTag<QueryOp::ADD>
-		>;
-
-		// 2. Comprehensive Data Types (Stochastic Logics)
-		// Registering the core DOD primitives defined in MemoryUtilities::get_type_byte_size.
-		// Using explicit sizes guarantees uniform stride boundaries for the View iterators.
-		using StochasticLogicsMatrix = std::tuple<
-			StochasticQueryLogic<float>,
-			StochasticQueryLogic<double>,
-			StochasticQueryLogic<int32_t>,
-			StochasticQueryLogic<int64_t>,
-			StochasticQueryLogic<uint8_t>, // Mapped to DataType::BYTE
-			StochasticQueryLogic<bool>     // Mapped to DataType::BOOL
-		>;
-
-		// 3. Comprehensive Strategies
-		// The permutations of how the execution wave resolves the actual memory pointers.
-		using StrategiesMatrix = std::tuple<
-			FlatStrategy,
-			SoAStrategy,
-			AoSStrategy,
-			Spatial2DStrategy,
-			Spatial3DStrategy,
-			Spatial4DStrategy,
-			TiledSoAStrategy,
-			RingStrategy,
-			PagedStrategy
-		>;
-
-		// 4. Comprehensive Views
-		// Lenses into the memory footprint. Supplying base primitive float as the anchor for the generic setup.
-		using ViewsMatrix = std::tuple<
-			SingleElementView<float>,
-			MultiElementView<AoSStrategy>,
-			AOSOAView<float>,
-			AtomicView<float>,
-			PagedView<float>,
-			RingView<float>,
-			SparseSetView<float>,
-			SwapView<float>,
-
-			StencilView<float, Spatial2DStrategy>,
-			StencilView<float, Spatial3DStrategy>,
-			StencilView<float, Spatial4DStrategy>,
-
-			StaticStencilView<float, Spatial2DStrategy, stencil_math::von_neumann_size<2,1>()>,   // e.g., 2D Von Neumann (Center + 4 dirs)
-			StaticStencilView<float, Spatial2DStrategy, 9>,   // e.g., 2D Moore Radius 1 (3x3 grid)
-			StaticStencilView<float, Spatial3DStrategy, 27>,  // e.g., 3D Moore Radius 1 (3x3x3 grid)
-			StaticStencilView<float, Spatial4DStrategy, 81>   // e.g., 4D Moore Radius 1 (3x3x3x3 grid)
-			
-		>;
-
-		// 5. Build the Factory Matrix
-		// This unfolds the tuples via fold expressions in NativeTaskRegistry, computing the `constexpr`
-		// validity of every (Logic x Op x View x Strategy) combination at compile-time.
-		NativeTaskRegistry::QueryMatrixBuilder<
-			StochasticLogicsMatrix, 
-			QueryOpsMatrix, 
-			ViewsMatrix, 
-			StrategiesMatrix
-		>::build();
+		
 	}
 
 	// ========================================================================
@@ -209,35 +194,33 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorPlugin);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorInspectorPlugin);
 		
-        // Editor-only Graph tooling
+        // Graph tooling
 		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphInspector);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphsPlugin);
 
-		// Editor-only Memory tooling
+		// Memory tooling
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphInspector);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamMemoryPlugin);
 
-		// Editor-only Tasks tooling
+		// Tasks tooling
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphInspector);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamTasksPlugin);
+
+		// --- Games Editors ---
+		GDREGISTER_CLASS(ideam::godot_ext::GameAgentEditorInspectorPlugin);
+		GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionEditorInspectorPlugin);
 	}
 }
 
 void uninitialize_ideam_core_module(ModuleInitializationLevel p_level) {
-	// Add teardown logic here if your Singletons or static managers need explicit cleanup.
-	// Failing to clean up allocated static pointers here will cause Godot to flag memory 
-	// leaks in the console on exit.
-	
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-		// Cleanup Scene level statics/singletons
-		
 		// Flush the static factories and dictionaries to prevent Godot memory leak warnings on exit
 		ideam::core::NativeTaskRegistry::cleanup();
 	}
 
 	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-		// Cleanup Editor level statics/singletons
+		
 	}
 }
 

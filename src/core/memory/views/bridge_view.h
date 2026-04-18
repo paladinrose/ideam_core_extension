@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_BRIDGE_VIEW_H
-#define IDEAM_CORE_BRIDGE_VIEW_H
+#pragma once
 
 #include "strategies.h"
 #include "../memory_grant_pod.h"
@@ -158,4 +157,4 @@ struct BridgeView {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_BRIDGE_VIEW_H
+ // IDEAM_CORE_BRIDGE_VIEW_H

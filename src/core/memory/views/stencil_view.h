@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_STENCIL_VIEW_H
-#define IDEAM_CORE_STENCIL_VIEW_H
+#pragma once
 
 #include "strategies.h"
 #include "../memory_grant_pod.h"
@@ -208,4 +207,4 @@ static_assert(sizeof(StencilView<int, FlatStrategy, 1>) == 48, "StencilView base
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_STENCIL_VIEW_H
+ // IDEAM_CORE_STENCIL_VIEW_H

@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_MEMORY_RING_VIEW_H
-#define IDEAM_CORE_MEMORY_RING_VIEW_H
+#pragma once
 
 #include "strategies.h"
 #include "../memory_grant_pod.h"
@@ -159,4 +158,4 @@ static_assert(sizeof(RingView<int, FlatStrategy>) == 48, "RingView base layout a
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_MEMORY_RING_VIEW_H
+ // IDEAM_CORE_MEMORY_RING_VIEW_H

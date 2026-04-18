@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_MEMORY_MANAGER_DOD_H
-#define IDEAM_CORE_MEMORY_MANAGER_DOD_H
+#pragma once
 
 #include "memory_buffer_pod.h"
 #include "memory_grant_pod.h"
@@ -209,4 +208,4 @@ public:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_MEMORY_MANAGER_DOD_H
+ // IDEAM_CORE_MEMORY_MANAGER_DOD_H

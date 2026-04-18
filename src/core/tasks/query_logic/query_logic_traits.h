@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_QUERY_LOGIC_TRAITS_H
-#define IDEAM_CORE_QUERY_LOGIC_TRAITS_H
+#pragma once
 
 #include "../../memory/memory_common.h"
 #include "../../memory/memory_buffer_pod.h"
@@ -83,4 +82,4 @@ concept IsQueryLogic = requires {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_QUERY_LOGIC_TRAITS_H
+ // IDEAM_CORE_QUERY_LOGIC_TRAITS_H

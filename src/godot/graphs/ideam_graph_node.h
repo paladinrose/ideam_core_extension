@@ -1,5 +1,4 @@
-#ifndef IDEAM_GRAPH_NODE_H
-#define IDEAM_GRAPH_NODE_H
+#pragma once
 
 #include <godot_cpp/classes/graph_node.hpp>
 #include <godot_cpp/classes/input_event_mouse_button.hpp>
@@ -69,4 +68,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GRAPH_NODE_H
+ // IDEAM_GRAPH_NODE_H

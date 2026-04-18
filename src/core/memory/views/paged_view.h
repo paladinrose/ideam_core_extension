@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_PAGED_VIEW_H
-#define IDEAM_CORE_PAGED_VIEW_H
+#pragma once
 
 #include "strategies.h"
 #include "../memory_grant_pod.h"
@@ -169,4 +168,4 @@ static_assert(sizeof(PagedView<int, FlatStrategy>) == 48, "PagedView base layout
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_PAGED_VIEW_H
+ // IDEAM_CORE_PAGED_VIEW_H

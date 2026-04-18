@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_MANAGED_BUFFER_PROFILE_H
-#define IDEAM_GODOT_MANAGED_BUFFER_PROFILE_H
+#pragma once
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/string_name.hpp>
@@ -40,4 +39,3 @@ public:
 };
 
 } // namespace ideam::godot_ext
-#endif

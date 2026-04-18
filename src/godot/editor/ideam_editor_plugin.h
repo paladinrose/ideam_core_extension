@@ -1,5 +1,4 @@
-#ifndef IDEAM_EDITOR_PLUGIN_H
-#define IDEAM_EDITOR_PLUGIN_H
+#pragma once
 
 #include <godot_cpp/classes/editor_plugin.hpp>
 #include <godot_cpp/classes/dir_access.hpp>
@@ -74,4 +73,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_EDITOR_PLUGIN_H
+ // IDEAM_EDITOR_PLUGIN_H

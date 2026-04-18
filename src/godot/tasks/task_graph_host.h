@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_TASK_GRAPH_HOST_H
-#define IDEAM_GODOT_TASK_GRAPH_HOST_H
+#pragma once
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/class_db.hpp>
@@ -53,4 +52,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GODOT_TASK_GRAPH_HOST_H
+ // IDEAM_GODOT_TASK_GRAPH_HOST_H

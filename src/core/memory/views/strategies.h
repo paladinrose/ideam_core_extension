@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_MEMORY_STRATEGIES_H
-#define IDEAM_CORE_MEMORY_STRATEGIES_H
+#pragma once
 
 #include "../memory_common.h"
 #include <cstdint>
@@ -176,4 +175,4 @@ struct PagedStrategy {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_MEMORY_STRATEGIES_H
+ // IDEAM_CORE_MEMORY_STRATEGIES_H

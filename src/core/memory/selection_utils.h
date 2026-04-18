@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_SELECTION_UTILS_H
-#define IDEAM_CORE_SELECTION_UTILS_H
+#pragma once
 
 #include "memory_buffer_selection_pod.h"
 #include <cstdint>
@@ -101,4 +100,4 @@ struct SelectionUtils {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_SELECTION_UTILS_H
+ // IDEAM_CORE_SELECTION_UTILS_H

@@ -1,5 +1,4 @@
-#ifndef TASK_GRAPH_INSPECTOR_H
-#define TASK_GRAPH_INSPECTOR_H
+#pragma once
 
 #include "../editor/ideam_editor_inspector_plugin.h"
 #include "../graphs/ideam_graphs_plugin.h"
@@ -28,4 +27,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // TASK_GRAPH_INSPECTOR_H
+ // TASK_GRAPH_INSPECTOR_H

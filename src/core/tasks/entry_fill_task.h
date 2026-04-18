@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_ENTRY_FILL_TASK_H
-#define IDEAM_CORE_ENTRY_FILL_TASK_H
+#pragma once
 
 #include "i_native_task.h"
 
@@ -36,4 +35,4 @@ public:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_ENTRY_FILL_TASK_H
+ // IDEAM_CORE_ENTRY_FILL_TASK_H

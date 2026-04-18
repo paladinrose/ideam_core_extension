@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_MEMORY_BUFFER_RESOURCE_H
-#define IDEAM_GODOT_MEMORY_BUFFER_RESOURCE_H
+#pragma once
 
 #include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
@@ -79,4 +78,4 @@ public:
 VARIANT_ENUM_CAST(ideam::godot_ext::MemoryBufferResource::LayoutType);
 VARIANT_ENUM_CAST(ideam::godot_ext::MemoryBufferResource::SelectionMode);
 
-#endif // IDEAM_GODOT_MEMORY_BUFFER_RESOURCE_H
+ // IDEAM_GODOT_MEMORY_BUFFER_RESOURCE_H

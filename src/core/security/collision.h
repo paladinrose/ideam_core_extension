@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_COLLISION_H
-#define IDEAM_CORE_COLLISION_H
+#pragma once
 
 #include <cstdint>
 #include <cstddef>
@@ -166,4 +165,4 @@ struct CollisionUtils {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_COLLISION_H
+ // IDEAM_CORE_COLLISION_H

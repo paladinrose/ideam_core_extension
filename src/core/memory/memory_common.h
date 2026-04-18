@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_MEMORY_COMMON_H
-#define IDEAM_CORE_MEMORY_COMMON_H
+#pragma once
 
 #include <cstdint>
 #include <cstddef>
@@ -194,4 +193,4 @@ struct MemoryUtilities {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_MEMORY_COMMON_H
+ // IDEAM_CORE_MEMORY_COMMON_H

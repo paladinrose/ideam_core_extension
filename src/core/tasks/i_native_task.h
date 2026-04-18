@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_I_NATIVE_TASK_H
-#define IDEAM_CORE_I_NATIVE_TASK_H
+#pragma once
 
 #include "../memory/memory_grant_pod.h"
 #include "../memory/memory_manager_dod.h"
@@ -94,4 +93,4 @@ public:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_I_NATIVE_TASK_H
+ // IDEAM_CORE_I_NATIVE_TASK_H

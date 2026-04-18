@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_MEMORY_BUFFER_SELECTION_POD_H
-#define IDEAM_CORE_MEMORY_BUFFER_SELECTION_POD_H
+#pragma once
 
 #include "memory_common.h"
 #include <cstdint>
@@ -100,4 +99,4 @@ static_assert(sizeof(MemoryBufferSelectionPOD) == 104, "MemoryBufferSelectionPOD
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_MEMORY_BUFFER_SELECTION_POD_H
+ // IDEAM_CORE_MEMORY_BUFFER_SELECTION_POD_H

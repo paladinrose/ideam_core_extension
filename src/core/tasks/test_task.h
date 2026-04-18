@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_TEST_TASK_H
-#define IDEAM_CORE_TEST_TASK_H
+#pragma once
 
 #include "i_native_task.h"
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -29,4 +28,4 @@ public:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_TEST_TASK_H
+ // IDEAM_CORE_TEST_TASK_H

@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_TASK_GRAPH_EDIT_H
-#define IDEAM_GODOT_TASK_GRAPH_EDIT_H
+#pragma once
 
 #include "../memory/memory_graph_edit.h"
 #include <godot_cpp/variant/typed_array.hpp>
@@ -28,4 +27,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GODOT_TASK_GRAPH_EDIT_H
+ // IDEAM_GODOT_TASK_GRAPH_EDIT_H

@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_SINGLE_ELEMENT_VIEW_H
-#define IDEAM_CORE_SINGLE_ELEMENT_VIEW_H
+#pragma once
 
 #include "../memory_common.h"
 #include "strategies.h"
@@ -161,4 +160,4 @@ static_assert(sizeof(SingleElementView<int, FlatStrategy>) == 32, "SingleElement
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_SINGLE_ELEMENT_VIEW_H
+ // IDEAM_CORE_SINGLE_ELEMENT_VIEW_H

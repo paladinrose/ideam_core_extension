@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_METADATA_LOGIC_TRAITS_H
-#define IDEAM_CORE_METADATA_LOGIC_TRAITS_H
+#pragma once
 
 #include "../../memory/memory_buffer_pod.h"
 #include "../../memory/views/view_traits.h"
@@ -67,4 +66,4 @@ concept IsMetadataLogic = requires {
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_METADATA_LOGIC_TRAITS_H
+ // IDEAM_CORE_METADATA_LOGIC_TRAITS_H

@@ -1,5 +1,4 @@
-#ifndef IDEAM_GODOT_GRAPH_RESOURCE_H
-#define IDEAM_GODOT_GRAPH_RESOURCE_H
+#pragma once
 
 #include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
@@ -80,4 +79,3 @@ public:
 };
 
 } // namespace ideam::godot_ext
-#endif

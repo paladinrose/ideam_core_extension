@@ -1,5 +1,4 @@
-#ifndef IDEAM_GRAPH_INSPECTOR_H
-#define IDEAM_GRAPH_INSPECTOR_H
+#pragma once
 
 #include "../editor/ideam_editor_inspector_plugin.h"
 #include "ideam_graphs_plugin.h"
@@ -32,4 +31,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GRAPH_INSPECTOR_H
+ // IDEAM_GRAPH_INSPECTOR_H

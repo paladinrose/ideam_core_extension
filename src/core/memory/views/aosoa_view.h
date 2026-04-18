@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_AOSOA_VIEW_H
-#define IDEAM_CORE_AOSOA_VIEW_H
+#pragma once
 
 #include "strategies.h"
 #include "../memory_grant_pod.h"
@@ -209,4 +208,4 @@ static_assert(sizeof(AOSOAView<int, 8, FlatStrategy>) == 32, "AOSOAView base lay
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_AOSOA_VIEW_H
+ // IDEAM_CORE_AOSOA_VIEW_H

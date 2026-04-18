@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_QUERY_TASK_H
-#define IDEAM_CORE_QUERY_TASK_H
+#pragma once
 
 #include "i_native_task.h"
 #include "query_logic/query_logic_traits.h"
@@ -103,4 +102,4 @@ private:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_QUERY_TASK_H
+ // IDEAM_CORE_QUERY_TASK_H

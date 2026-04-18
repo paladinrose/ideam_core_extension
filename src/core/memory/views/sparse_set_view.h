@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_SPARSE_SET_VIEW_H
-#define IDEAM_CORE_SPARSE_SET_VIEW_H
+#pragma once
 
 #include "strategies.h"
 #include "../memory_grant_pod.h"
@@ -201,4 +200,4 @@ static_assert(sizeof(SparseSetView<int, FlatStrategy>) == 48, "SparseSetView bas
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_SPARSE_SET_VIEW_H
+ // IDEAM_CORE_SPARSE_SET_VIEW_H

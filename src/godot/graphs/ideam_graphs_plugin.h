@@ -1,5 +1,4 @@
-#ifndef IDEAM_GRAPHS_PLUGIN_H
-#define IDEAM_GRAPHS_PLUGIN_H
+#pragma once
 
 #include "../editor/ideam_editor_plugin.h"
 #include "graph_composer.h"
@@ -50,4 +49,4 @@ public:
 
 } // namespace ideam::godot_ext
 
-#endif // IDEAM_GRAPHS_PLUGIN_H
+ // IDEAM_GRAPHS_PLUGIN_H

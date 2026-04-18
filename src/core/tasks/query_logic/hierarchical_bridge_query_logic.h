@@ -1,5 +1,4 @@
-#ifndef IDEAM_CORE_HIERARCHICAL_BRIDGE_QUERY_LOGIC_H
-#define IDEAM_CORE_HIERARCHICAL_BRIDGE_QUERY_LOGIC_H
+#pragma once
 
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/bridge_view.h"
@@ -99,4 +98,4 @@ private:
 
 } // namespace ideam::core
 
-#endif // IDEAM_CORE_HIERARCHICAL_BRIDGE_QUERY_LOGIC_H
+ // IDEAM_CORE_HIERARCHICAL_BRIDGE_QUERY_LOGIC_H
