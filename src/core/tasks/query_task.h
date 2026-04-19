@@ -60,7 +60,7 @@ public:
         MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
         if (!selection) return;
 
-        T_View view = _create_view(p_context, part);
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
         // Zero-overhead dispatch into the optimized logic payload
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
@@ -78,7 +78,7 @@ public:
         MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
         if (!selection) return;
 
-        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, p_part);
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }

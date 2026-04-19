@@ -52,7 +52,7 @@ public:
         MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
         if (!selection) return;
 
-        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, p_part);
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
         logic.template execute_metadata<T_View, T_Strategy>(*selection, p_context, view);
     }

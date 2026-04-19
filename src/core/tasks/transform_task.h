@@ -49,7 +49,7 @@ public:
         const GrantPartPOD* part = p_context.get_grant_part(target_id);
         if (!part) return; // Silent abort if DAG failed to secure lease
         
-        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, p_part);
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
         // Zero-overhead dispatch into the optimized math payload
         logic.template execute_transform<T_View, T_Strategy>(p_context, view);

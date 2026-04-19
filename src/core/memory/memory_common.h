@@ -6,6 +6,8 @@
 
 namespace ideam::core {
 
+static constexpr uint32_t INVALID_ID = 0xFFFFFFFF;
+
 /**
  * DataType
  * Standardized COMMON for the simulation backend.

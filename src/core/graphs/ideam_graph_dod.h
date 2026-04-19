@@ -13,7 +13,7 @@ namespace ideam::core {
 
 using NodeID = uint32_t;
 using EdgeID = uint32_t;
-static constexpr uint32_t INVALID_ID = 0xFFFFFFFF;
+
 
 /**
  * @enum GraphDirtyFlags
