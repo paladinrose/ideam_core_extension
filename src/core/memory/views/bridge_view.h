@@ -76,6 +76,33 @@ struct BridgeView {
     }
 
     /**
+     * Binds the primary (Parent) memory block.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_primary_part) noexcept {
+        parent_head = reinterpret_cast<TParent*>(p_primary_part->raw_base_ptr);
+    }
+
+    /**
+     * Binds the secondary (Child) memory block. 
+     * Called exclusively by Logics that manage cross-buffer contexts.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind_secondary(const GrantPartPOD* p_secondary_part) noexcept {
+        if (p_secondary_part) {
+            child_head = reinterpret_cast<TChild*>(p_secondary_part->raw_base_ptr);
+        }
+    }
+    
+    /**
      * operator[] (C++23/26 Multidimensional Hierarchical Subscript)
      * Accesses a specific child element localized to a parent's block.
      * Usage: view[parent_idx, child_local_x, child_local_y]

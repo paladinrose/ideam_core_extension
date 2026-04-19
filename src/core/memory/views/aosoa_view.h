@@ -69,12 +69,12 @@ struct AOSOAView {
      * Returns a pointer to the start of a SIMD lane.
      * C++26 Optimizer Hinting ensures zero-cost execution and maximizes autovectorization.
      */
+    template<typename... Coords>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    template<typename... Coords>
     inline T* get_lane(size_t p_lane_index, Coords... p_coords) const noexcept {
         const auto& part = grant->parts[grant_part_index];
         const auto& selection = part.selection;
@@ -119,6 +119,18 @@ struct AOSOAView {
         return static_cast<size_t>(grant->parts[grant_part_index].selection.element_count) / LaneWidth;
     }
 
+    /**
+     * Binds the raw memory block to the View's typed primary pointer.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_part) noexcept {
+        head_ptr = reinterpret_cast<T*>(p_part->raw_base_ptr);
+    }
+    
     /**
      * operator[] (C++23/26 Multidimensional Subscript)
      * Unified scalar fallback access for tail-loops or debugging.

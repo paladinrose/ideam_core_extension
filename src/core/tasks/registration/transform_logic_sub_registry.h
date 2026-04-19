@@ -59,7 +59,7 @@ namespace {
     template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::KernelSize)>> { static constexpr size_t value = T_Resolver::KernelSize; static constexpr bool has_kernel = true; };
     
     // Note: LogicResolver is provided by transform_logic_traits.h in your setup
-    template <TransformLogicID LogicID, typename T_Concrete, typename T_Strategy> struct LogicKernelExtractor : KernelExtractorImpl<LogicResolver<LogicID, T_Concrete, T_Strategy>> {};
+    template <TransformLogicID LogicID, typename T_Concrete, typename T_Strategy> struct LogicKernelExtractor : KernelExtractorImpl<TransformLogicResolver<LogicID, T_Concrete, T_Strategy>> {};
 
     template <MemoryStrategy ID> struct StrategyResolver { static constexpr bool is_valid = false; };
     template <> struct StrategyResolver<MemoryStrategy::FlatStrategy> { using Type = FlatStrategy; static constexpr bool is_valid = true; };
@@ -74,7 +74,7 @@ namespace {
 
     template <MemoryView ViewID, TransformLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy> struct ViewResolver { static constexpr bool is_valid = false; };
     template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<S>; static constexpr bool is_valid = true; };
     template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
     template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::PagedView, LogicID, MemType, C, S> { using Type = PagedView<C, S>; static constexpr bool is_valid = true; };
     template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::RingView, LogicID, MemType, C, S> { using Type = RingView<C, S>; static constexpr bool is_valid = true; };
@@ -103,7 +103,7 @@ struct TransformLogicSubRegistry {
     static std::array<TransformTaskFactoryFn, TransformTaskRegistry::SUB_MATRIX_SIZE> factories;
 
     static void init() {
-        SubMatrixBuilder<0, 0, 0>::fill(factories);
+        _fill_matrix(std::make_index_sequence<TransformTaskRegistry::SUB_MATRIX_SIZE>{});
     }
 
     static void cleanup() {
@@ -111,73 +111,72 @@ struct TransformLogicSubRegistry {
     }
 
 private:
-    template <size_t V, size_t S, size_t T>
-    struct SubMatrixBuilder {
-        static void fill(std::array<TransformTaskFactoryFn, TransformTaskRegistry::SUB_MATRIX_SIZE>& arr) {
-            constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
-            constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
-            constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
+    template <size_t... Indices>
+    static void _fill_matrix(std::index_sequence<Indices...>) {
+        (_fill_single<Indices>(), ...);
+    }
 
-            using Traits = NativeMemoryTraits<MemTypeEnum>;
-            using ConcreteType = typename Traits::ConcreteType;
-            using ResolvedStrategy = StrategyResolver<StrategyEnum>;
-            using T_Strategy = typename ResolvedStrategy::Type;
-            
-            using ResolvedLogic = LogicResolver<L, ConcreteType, T_Strategy>;
-            using ResolvedView = ViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+    template <size_t FlatIdx>
+    static void _fill_single() {
+        constexpr size_t T_COUNT = TransformTaskRegistry::T_COUNT;
+        constexpr size_t S_COUNT = TransformTaskRegistry::S_COUNT;
 
-            constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
+        // Decode the flat index back into 3D coordinates
+        constexpr size_t T = FlatIdx % T_COUNT;
+        constexpr size_t S = (FlatIdx / T_COUNT) % S_COUNT;
+        constexpr size_t V = FlatIdx / (T_COUNT * S_COUNT);
 
-            constexpr bool is_fully_valid = []() consteval {
-                if constexpr (!combo_valid) return false;
+        constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
+        constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
+        constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
+
+        using Traits = NativeMemoryTraits<MemTypeEnum>;
+        using ConcreteType = typename Traits::ConcreteType;
+        using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+        using T_Strategy = typename ResolvedStrategy::Type;
+        using ResolvedLogic = TransformLogicResolver<L, ConcreteType, T_Strategy>;
+        using ResolvedView = ViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+
+        constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
+
+        constexpr bool is_fully_valid = []() consteval {
+            if constexpr (!combo_valid) return false;
+            else {
+                constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
+                if constexpr (!is_type_supported) return false;
                 else {
-                    constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
-                    if constexpr (!is_type_supported) return false;
-                    else {
-                        return TransformLogicValidator::validate(
-                            ResolvedLogic::Type::requirements, 
-                            ResolvedLogic::Type::supported_layouts, 
-                            ViewTraits<typename ResolvedView::Type>::capabilities, 
-                            BufferLayoutType::NONE
-                        );
-                    }
-                }
-            }();
-
-            constexpr size_t flat_idx = 
-                V * (TransformTaskRegistry::S_COUNT * TransformTaskRegistry::T_COUNT) +
-                S * (TransformTaskRegistry::T_COUNT) + T;
-
-            if constexpr (is_fully_valid) {
-                arr[flat_idx] = []() -> INativeTask* {
-                    return new TransformTask<typename ResolvedLogic::Type, typename ResolvedView::Type, T_Strategy>(typename ResolvedLogic::Type{});
-                };
-
-                // UI Dict Population safely added
-                if (TransformTaskRegistry::ui_transform_matrix) {
-                    godot::String logic_name(ResolvedLogic::Type::type_name);
-                    if (!TransformTaskRegistry::ui_transform_matrix->has(logic_name)) {
-                        godot::Dictionary dict;
-                        dict["views"] = godot::Array(); 
-                        dict["strategies"] = godot::Array();
-                        (*TransformTaskRegistry::ui_transform_matrix)[logic_name] = dict;
-                    }
-                    godot::Dictionary dict = (*TransformTaskRegistry::ui_transform_matrix)[logic_name];
-                    _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
-                    _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
+                    return TransformLogicValidator::validate(
+                        ResolvedLogic::Type::requirements, 
+                        ResolvedLogic::Type::supported_layouts, 
+                        ViewTraits<typename ResolvedView::Type>::capabilities, 
+                        BufferLayoutType::NONE
+                    );
                 }
             }
+        }();
 
-            // 3D Recursive Loop
-            if constexpr (T + 1 < TransformTaskRegistry::T_COUNT) {
-                SubMatrixBuilder<V, S, T + 1>::fill(arr);
-            } else if constexpr (S + 1 < TransformTaskRegistry::S_COUNT) {
-                SubMatrixBuilder<V, S + 1, 0>::fill(arr);
-            } else if constexpr (V + 1 < TransformTaskRegistry::V_COUNT) {
-                SubMatrixBuilder<V + 1, 0, 0>::fill(arr);
+        if constexpr (is_fully_valid) {
+            factories[FlatIdx] = []() -> INativeTask* {
+                return new TransformTask<typename ResolvedLogic::Type, typename ResolvedView::Type, T_Strategy>();
+            };
+
+            /*
+            // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
+            if (TransformTaskRegistry::ui_transform_matrix) {
+                godot::String logic_name(ResolvedLogic::Type::type_name);
+                if (!TransformTaskRegistry::ui_transform_matrix->has(logic_name)) {
+                    godot::Dictionary dict;
+                    dict["views"] = godot::Array(); 
+                    dict["strategies"] = godot::Array();
+                    (*TransformTaskRegistry::ui_transform_matrix)[logic_name] = dict;
+                }
+                godot::Dictionary dict = (*TransformTaskRegistry::ui_transform_matrix)[logic_name];
+                _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
             }
+            */
         }
-    };
+    }
 };
 
 template <TransformLogicID L>

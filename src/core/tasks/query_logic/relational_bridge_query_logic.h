@@ -50,6 +50,7 @@ struct RelationalBridgeQueryLogic {
     }
 
 private:
+    template <typename T_View>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else

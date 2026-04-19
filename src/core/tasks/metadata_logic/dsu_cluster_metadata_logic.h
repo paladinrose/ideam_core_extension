@@ -53,7 +53,7 @@ struct DSUClusterMetadataLogic {
 
         const int64_t total_capacity = r_selection.capacity;
         
-        // 1. Transient Arena Allocations (Replaces std::vector)
+        // 1. Transient Arena Allocations (O(1) stack-like allocation)
         int32_t* global_to_local = static_cast<int32_t*>(p_context.local_workspace);
         int64_t* local_to_global = reinterpret_cast<int64_t*>(global_to_local + total_capacity);
         
@@ -78,7 +78,6 @@ struct DSUClusterMetadataLogic {
 
         if (n == 0) return;
 
-        // More transient arrays mapped right after local_to_global
         int32_t* dsu_map = reinterpret_cast<int32_t*>(local_to_global + total_capacity);
         int32_t* root_sizes = dsu_map + total_capacity;
 
@@ -88,25 +87,35 @@ struct DSUClusterMetadataLogic {
             root_sizes[i] = 0;
         }
 
-        const GrantPartPOD* part = p_context.get_grant_part(r_selection.target_buffer_id);
+        const GrantPartPOD* part = p_context.get_grant_part(target_buffer_id);
         const intptr_t stride = part->element_stride;
+        
+        // SINGLE SOURCE OF TRUTH: Hardware base pointer from the Grant
+        const uint8_t* raw_base = static_cast<const uint8_t*>(part->raw_base_ptr);
 
         // 3. Unify Neighbors
         for (int32_t i = 0; i < n; ++i) {
-            const int64_t g_idx = local_to_global[i];
-            
-            p_view.center_ptr = reinterpret_cast<uint8_t*>(p_view.head_ptr) + (g_idx * stride);
-            const T& val_a = p_view.center();
+            // CLEAN ABSTRACTION: 
+            // 'i' maps perfectly to the View's logical selection coordinate.
+            // Calling operator[] correctly positions the View's internal mutable cursor.
+            const T& val_a = p_view[i];
 
-            for (size_t p = 0; p < PointCount; ++p) {
-                const T& neigh_val = p_view.neighbor(p);
-                const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - reinterpret_cast<const uint8_t*>(p_view.head_ptr);
-                const int64_t neigh_g_idx = byte_diff / stride;
-                
-                if (neigh_g_idx >= 0 && neigh_g_idx < total_capacity && global_to_local[neigh_g_idx] != -1) {
-                    const int32_t local_neigh = global_to_local[neigh_g_idx];
-                    if (local_neigh > i && _evaluate(val_a, neigh_val)) {
-                        _unite(dsu_map, i, local_neigh);
+            // C++17 compile-time gate ensures SingleElementView (PointCount = 0) is pruned 
+            // and never attempts to call neighbor().
+            if constexpr (PointCount > 0) {
+                for (size_t p = 0; p < PointCount; ++p) {
+                    const T& neigh_val = p_view.neighbor(p);
+                    
+                    // SAFE HARDWARE MATH: Calculate global index offset against the GrantPart base, 
+                    // completely independent of the View's internal naming structure.
+                    const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
+                    const int64_t neigh_g_idx = byte_diff / stride;
+                    
+                    if (neigh_g_idx >= 0 && neigh_g_idx < total_capacity && global_to_local[neigh_g_idx] != -1) {
+                        const int32_t local_neigh = global_to_local[neigh_g_idx];
+                        if (local_neigh > i && _evaluate(val_a, neigh_val)) {
+                            _unite(dsu_map, i, local_neigh);
+                        }
                     }
                 }
             }
@@ -135,7 +144,7 @@ struct DSUClusterMetadataLogic {
         
         if (r_selection.mode == SelectionMode::SPARSE) _repack_sparse(r_selection);
     }
-
+    
 private:
     inline int32_t _find_root(int32_t* dsu_map, int32_t i) const {
         while (i != dsu_map[i]) {

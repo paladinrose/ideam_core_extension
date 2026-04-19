@@ -32,6 +32,8 @@ public:
     using ViewType     = T_View;
     using StrategyType = T_Strategy;
 
+    TransformTask() = default;
+
     // --- NEW: Expose the supported types bitmask to the Registry Builder for O(1) pruning ---
     static constexpr DataType supported_types = T_Logic::supported_types;
 
@@ -47,31 +49,12 @@ public:
         const GrantPartPOD* part = p_context.get_grant_part(target_id);
         if (!part) return; // Silent abort if DAG failed to secure lease
         
-        T_View view = _create_view(p_context, part);
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, p_part);
         
         // Zero-overhead dispatch into the optimized math payload
         logic.template execute_transform<T_View, T_Strategy>(p_context, view);
     }
 
-private:
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T_View _create_view(const TaskContextPOD& p_context, const GrantPartPOD* p_part) const {
-        T_View view;
-        using VType = typename T_View::ValueType;
-        
-        view.head_ptr = reinterpret_cast<VType*>(p_part->raw_base_ptr);
-        view.count    = p_part->selection.capacity;
-        
-        if constexpr (requires { logic.configure_view(view, p_context, p_part); }) {
-            logic.configure_view(view, p_context, p_part);
-        }
-        
-        return view;
-    }
 };
 
 } // namespace ideam::core

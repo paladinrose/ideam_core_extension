@@ -33,6 +33,26 @@ struct SwapEruptionBridgeQueryLogic {
 
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    /**
+     * configure_view
+     * Binds the secondary (Write/Previous) state into the SwapView.
+     * Assumes ping-pong buffers are packed sequentially in the same Memory Grant.
+     */
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void configure_view(T_View& view, const TaskContextPOD& p_context, const GrantPartPOD* p_part) const noexcept {
+        if constexpr (requires { view.bind_secondary(p_part); }) {
+            // In a Swap configuration, Part[0] is typically Read, Part[1] is Write.
+            // We fetch the adjacent memory block in the array.
+            const GrantPartPOD* secondary_part = p_part + 1; 
+            view.bind_secondary(secondary_part);
+        }
+    }
+    
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

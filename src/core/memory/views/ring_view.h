@@ -66,6 +66,18 @@ struct RingView {
     }
 
     /**
+     * Binds the raw memory block to the View's circular buffer pointer.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_part) noexcept {
+        head_ptr = reinterpret_cast<T*>(p_part->raw_base_ptr);
+    }
+    
+    /**
      * operator[] (C++23/26 Multidimensional Subscript)
      * Handles both 1D Stream polling and ND Spatial Ring mapping.
      */

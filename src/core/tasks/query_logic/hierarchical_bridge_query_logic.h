@@ -31,6 +31,24 @@ struct HierarchicalBridgeQueryLogic {
 
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    /**
+     * configure_view
+     * Bridges the target (child) buffer into the BridgeView using the Execution Context.
+     */
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void configure_view(T_View& view, const TaskContextPOD& p_context, const GrantPartPOD* p_part) const noexcept {
+        if constexpr (requires { view.bind_secondary(p_part); }) {
+            // Fetch the child buffer block and pass it to the BridgeView
+            const GrantPartPOD* child_part = p_context.get_grant_part(target_buffer_id);
+            view.bind_secondary(child_part);
+        }
+    }
+    
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

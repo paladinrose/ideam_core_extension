@@ -116,7 +116,7 @@ namespace {
 
     template <MemoryView ViewID, QueryLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy> struct QueryViewResolver { static constexpr bool is_valid = false; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
-    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<C, S>; static constexpr bool is_valid = true; };
+    template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<S>; static constexpr bool is_valid = true; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::PagedView, LogicID, MemType, C, S> { using Type = PagedView<C, S>; static constexpr bool is_valid = true; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::RingView, LogicID, MemType, C, S> { using Type = RingView<C, S>; static constexpr bool is_valid = true; };
@@ -140,7 +140,7 @@ struct QueryLogicSubRegistry {
     static std::array<QueryTaskFactoryFn, QueryTaskRegistry::SUB_MATRIX_SIZE> factories;
 
     static void init() {
-        SubMatrixBuilder<0, 0, 0, 0>::fill(factories);
+        _fill_matrix(std::make_index_sequence<QueryTaskRegistry::SUB_MATRIX_SIZE>{});
     }
 
     static void cleanup() {
@@ -148,84 +148,82 @@ struct QueryLogicSubRegistry {
     }
 
 private:
-    template <size_t O, size_t V, size_t S, size_t T>
-    struct SubMatrixBuilder {
-        static void fill(std::array<QueryTaskFactoryFn, QueryTaskRegistry::SUB_MATRIX_SIZE>& arr) {
-            constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
-            constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
-            constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
-            constexpr QueryOp OpEnum = (O == 0) ? QueryOp::CULL : QueryOp::ADD;
+    template <size_t... Indices>
+    static void _fill_matrix(std::index_sequence<Indices...>) {
+        (_fill_single<Indices>(), ...);
+    }
 
-            using Traits = NativeMemoryTraits<MemTypeEnum>;
-            using ConcreteType = typename Traits::ConcreteType;
-            using ResolvedStrategy = StrategyResolver<StrategyEnum>;
-            using T_Strategy = typename ResolvedStrategy::Type;
-            using ResolvedLogic = QueryLogicResolver<L, ConcreteType, T_Strategy>;
-            using ResolvedView = QueryViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+    template <size_t FlatIdx>
+    static void _fill_single() {
+        constexpr size_t T_COUNT = QueryTaskRegistry::T_COUNT;
+        constexpr size_t S_COUNT = QueryTaskRegistry::S_COUNT;
+        constexpr size_t V_COUNT = QueryTaskRegistry::V_COUNT;
 
-            constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
+        // Decode the flat index back into 4D coordinates
+        constexpr size_t T = FlatIdx % T_COUNT;
+        constexpr size_t S = (FlatIdx / T_COUNT) % S_COUNT;
+        constexpr size_t V = (FlatIdx / (T_COUNT * S_COUNT)) % V_COUNT;
+        constexpr size_t O = FlatIdx / (T_COUNT * S_COUNT * V_COUNT);
 
-            constexpr bool is_fully_valid = []() consteval {
-                if constexpr (!combo_valid) return false;
-                else {
-                    constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
-                    constexpr bool is_op_supported = (OpEnum == QueryOp::CULL) ? ResolvedLogic::Type::supports_cull : ResolvedLogic::Type::supports_addition;
-                    
-                    if constexpr (!is_type_supported || !is_op_supported) return false;
-                    else {
-                        return QueryLogicValidator::validate(
-                            ResolvedLogic::Type::requirements, 
-                            ResolvedLogic::Type::supported_layouts, 
-                            ViewTraits<typename ResolvedView::Type>::capabilities, 
-                            BufferLayoutType::NONE
-                        );
-                    }
-                }
-            }();
+        constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
+        constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
+        constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
+        constexpr QueryOp OpEnum = (O == 0) ? QueryOp::CULL : QueryOp::ADD;
 
-            // Note: The 'L' dimension multiplier is completely gone
-            constexpr size_t flat_idx = 
-                O * (QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) +
-                V * (QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) + 
-                S * (QueryTaskRegistry::T_COUNT) + T;
+        using Traits = NativeMemoryTraits<MemTypeEnum>;
+        using ConcreteType = typename Traits::ConcreteType;
+        using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+        using T_Strategy = typename ResolvedStrategy::Type;
+        using ResolvedLogic = QueryLogicResolver<L, ConcreteType, T_Strategy>;
+        using ResolvedView = QueryViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
 
-            if constexpr (is_fully_valid) {
-                arr[flat_idx] = []() -> INativeTask* {
-                    return new QueryTask<typename ResolvedLogic::Type, OpEnum, typename ResolvedView::Type, T_Strategy>();
-                };
+        constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
 
-                if constexpr (O == 0) {
-                    if (QueryTaskRegistry::ui_query_matrix) {
-                        godot::String logic_name(ResolvedLogic::Type::type_name);
-                        if (!QueryTaskRegistry::ui_query_matrix->has(logic_name)) {
-                            godot::Dictionary dict;
-                            dict["ops"] = godot::Array(); dict["views"] = godot::Array(); dict["strategies"] = godot::Array();
-                            (*QueryTaskRegistry::ui_query_matrix)[logic_name] = dict;
-                        }
-                        godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[logic_name];
-                        _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
-                        _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
-                    }
-                }
+        constexpr bool is_fully_valid = []() consteval {
+            if constexpr (!combo_valid) return false;
+            else {
+                constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
+                constexpr bool is_op_supported = (OpEnum == QueryOp::CULL) ? ResolvedLogic::Type::supports_cull : ResolvedLogic::Type::supports_addition;
                 
-                if (QueryTaskRegistry::ui_query_matrix) {
-                    godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[ResolvedLogic::Type::type_name];
-                    _append_unique<godot::Array>(dict["ops"], (O == 0) ? "CULL" : "ADD");
+                if constexpr (!is_type_supported || !is_op_supported) return false;
+                else {
+                    return QueryLogicValidator::validate(
+                        ResolvedLogic::Type::requirements, 
+                        ResolvedLogic::Type::supported_layouts, 
+                        ViewTraits<typename ResolvedView::Type>::capabilities, 
+                        BufferLayoutType::NONE
+                    );
                 }
             }
+        }();
 
-            // Standard 4D Recursive Loop
-            if constexpr (T + 1 < QueryTaskRegistry::T_COUNT) {
-                SubMatrixBuilder<O, V, S, T + 1>::fill(arr);
-            } else if constexpr (S + 1 < QueryTaskRegistry::S_COUNT) {
-                SubMatrixBuilder<O, V, S + 1, 0>::fill(arr);
-            } else if constexpr (V + 1 < QueryTaskRegistry::V_COUNT) {
-                SubMatrixBuilder<O, V + 1, 0, 0>::fill(arr);
-            } else if constexpr (O + 1 < QueryTaskRegistry::O_COUNT) {
-                SubMatrixBuilder<O + 1, 0, 0, 0>::fill(arr);
+        if constexpr (is_fully_valid) {
+            factories[FlatIdx] = []() -> INativeTask* {
+                return new QueryTask<typename ResolvedLogic::Type, OpEnum, typename ResolvedView::Type, T_Strategy>();
+            };
+
+            /*
+            // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
+            if constexpr (O == 0) {
+                if (QueryTaskRegistry::ui_query_matrix) {
+                    godot::String logic_name(ResolvedLogic::Type::type_name);
+                    if (!QueryTaskRegistry::ui_query_matrix->has(logic_name)) {
+                        godot::Dictionary dict;
+                        dict["ops"] = godot::Array(); dict["views"] = godot::Array(); dict["strategies"] = godot::Array();
+                        (*QueryTaskRegistry::ui_query_matrix)[logic_name] = dict;
+                    }
+                    godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[logic_name];
+                    _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                    _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
+                }
             }
+            if (QueryTaskRegistry::ui_query_matrix) {
+                godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[ResolvedLogic::Type::type_name];
+                _append_unique<godot::Array>(dict["ops"], (O == 0) ? "CULL" : "ADD");
+            }
+            */
         }
-    };
+    }
 };
 
 template <QueryLogicID L>

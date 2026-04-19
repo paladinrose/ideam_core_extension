@@ -68,6 +68,18 @@ struct PagedView {
     }
 
     /**
+     * Binds the raw memory block to the View's virtual page table.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_part) noexcept {
+        page_table = reinterpret_cast<uint8_t**>(p_part->raw_base_ptr);
+    }
+    
+    /**
      * operator[] (C++23/26 Multidimensional Subscript)
      * Extremely fast Virtual Memory lookup. Resolves N-Dimensional spatial coordinates
      * into a flat index, then uses bitwise operations to resolve the hardware page table.

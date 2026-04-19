@@ -45,8 +45,6 @@ struct StaticStencilView {
     // --- Array Block ---
     std::array<intptr_t, PointCount> baked_offsets;
 
-    
-
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
@@ -71,6 +69,19 @@ struct StaticStencilView {
         return part.selection.is_valid();
     }
 
+    /**
+     * Binds the raw memory block to the View's typed primary pointer.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_part) noexcept {
+        head_ptr = reinterpret_cast<T*>(p_part->raw_base_ptr);
+        // Note: center_ptr is left null here. It is assigned dynamically during the kernel execution.
+    }
+    
     /**
      * operator[] (C++23/26 Multidimensional Subscript)
      * Sets the "Center" focus of the stencil to the specified coordinates.

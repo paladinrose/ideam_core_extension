@@ -64,6 +64,21 @@ struct SparseSetView {
     }
 
     /**
+     * Binds the raw memory block to the View's dense data array.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_part) noexcept {
+        data_ptr = reinterpret_cast<T*>(p_part->raw_base_ptr);
+        
+        // If your allocator provides sparse_ptr and dense_ptr from different GrantPartPODs,
+        // you will need to map them inside a bind_secondary() method triggered by your Logic.
+    }
+    
+    /**
      * operator[] (C++23/26 Multidimensional Subscript)
      * 1D: Cache-friendly Dense Iteration.
      * ND: Spatial Entity ID Lookup.

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../memory/memory_common.h"
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/stencil_view.h"
 #include "../../memory/views/strategies.h"
@@ -87,7 +88,7 @@ private:
 
                 bool should_erode = false;
 
-                for (uint32_t d = 0; d < DimCount; ++d) {
+                for (uint32_t d = 0; d < T_Strategy::dimensions; ++d) {
                     for (int32_t step : {-1, 1}) {
                         int64_t neighbor_idx = strategy.get_neighbor_index(i, d, step);
                         if (!_evaluate_neighbor(neighbor_idx, snapshot, capacity)) {
@@ -119,7 +120,7 @@ private:
         for (int64_t i = 0; i < capacity; ++i) {
             if (!(bitset[i >> 6] & (1ULL << (i & 63)))) continue;
 
-            for (uint32_t d = 0; d < DimCount; ++d) {
+            for (uint32_t d = 0; d < T_Strategy::dimensions; ++d) {
                 for (int32_t step : {-1, 1}) {
                     int64_t neighbor_idx = strategy.get_neighbor_index(i, d, step);
                     

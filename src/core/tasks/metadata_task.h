@@ -32,6 +32,8 @@ public:
     using ViewType     = T_View;
     using StrategyType = T_Strategy;
 
+    MetadataTask() = default;
+
     // --- NEW: Expose the supported types bitmask to the Registry Builder for O(1) pruning ---
     static constexpr DataType supported_types = T_Logic::supported_types;
 
@@ -50,33 +52,11 @@ public:
         MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
         if (!selection) return;
 
-        T_View view = _create_view(p_context, part);
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, p_part);
         
         logic.template execute_metadata<T_View, T_Strategy>(*selection, p_context, view);
     }
 
-private:
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T_View _create_view(const TaskContextPOD& p_context, const GrantPartPOD* p_part) const {
-        T_View view;
-        
-        // Extract the underlying C++ primitive/struct type from the View
-        // (Assuming ViewTraits or the View itself exposes ValueType)
-        using VType = typename T_View::ValueType; 
-        
-        view.head_ptr = reinterpret_cast<VType*>(p_part->raw_base_ptr);
-        view.count    = p_part->selection.capacity;
-        
-        if constexpr (requires { logic.configure_view(view, p_context, p_part); }) {
-            logic.configure_view(view, p_context, p_part);
-        }
-        
-        return view;
-    }
 };
 
 } // namespace ideam::core

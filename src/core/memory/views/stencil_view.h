@@ -69,6 +69,19 @@ struct StencilView {
     }
 
     /**
+     * Binds the raw memory block to the View's typed primary pointer.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_part) noexcept {
+        head_ptr = reinterpret_cast<T*>(p_part->raw_base_ptr);
+        // Note: center_ptr is left null here. It is assigned dynamically during the kernel execution.
+    }
+    
+    /**
      * operator[] (C++23/26 Multidimensional Subscript)
      * Focuses the Stencil cursor at the specified spatial/linear coordinates.
      */
@@ -182,7 +195,8 @@ struct StencilView {
 
         // Compile-time folding of the geometric strides
         if constexpr (sizeof...(Offsets) == 1) {
-            byte_offset = static_cast<intptr_t>((p_offsets)...) * part.element_stride;
+            auto [dx] = std::tuple{static_cast<intptr_t>(p_offsets)...};
+            byte_offset = dx * part.element_stride;
         } 
         else if constexpr (sizeof...(Offsets) == 2) {
             auto [dx, dy] = std::tuple{static_cast<intptr_t>(p_offsets)...};
@@ -202,7 +216,7 @@ struct StencilView {
 };
 
 #ifndef __INTELLISENSE__
-static_assert(sizeof(StencilView<int, FlatStrategy, 1>) == 48, "StencilView base layout alignment failed!");
+static_assert(sizeof(StencilView<int, FlatStrategy>) == 48, "StencilView base layout alignment failed!");
 #endif
 
 } // namespace ideam::core

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../memory/memory_common.h"
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/stencil_view.h"
 #include "../../memory/views/strategies.h"
@@ -62,7 +63,7 @@ private:
             const int64_t current_idx = r_selection.data.indices[i];
             bool is_border = false;
 
-            for (uint32_t d = 0; d < DimCount; ++d) {
+            for (uint32_t d = 0; d < T_Strategy::dimensions; ++d) {
                 for (int32_t step : {-1, 1}) {
                     int64_t neighbor_idx = strategy.get_neighbor_index(current_idx, d, step);
 
@@ -94,7 +95,7 @@ private:
         for (int64_t i = 0; i < original_count; ++i) {
             const int64_t current_idx = r_selection.data.indices[i];
 
-            for (uint32_t d = 0; d < DimCount; ++d) {
+            for (uint32_t d = 0; d < T_Strategy::dimensions; ++d) {
                 for (int32_t step : {-1, 1}) {
                     int64_t neighbor_idx = strategy.get_neighbor_index(current_idx, d, step);
 

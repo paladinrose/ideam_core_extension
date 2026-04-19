@@ -82,6 +82,29 @@ struct TaskContextPOD {
     }
 };
 
+template <typename T_Logic, typename T_View>
+#if defined(_MSC_VER)
+    [[msvc::forceinline]]
+#else
+    [[gnu::always_inline]]
+#endif
+static inline T_View assemble_view(const T_Logic& p_logic, const TaskContextPOD& p_context, const GrantPartPOD* p_part) {
+    T_View view;
+    
+    // 1. Primary Memory Binding (Agnostic to execution context)
+    if constexpr (requires { view.bind(p_part); }) {
+        view.bind(p_part);
+    }
+    
+    // 2. Logic-Specific Configuration (Handles secondary buffers)
+    // Because p_logic knows about TaskContextPOD, IT does the heavy lifting.
+    if constexpr (requires { p_logic.configure_view(view, p_context, p_part); }) {
+        p_logic.configure_view(view, p_context, p_part);
+    }
+    
+    return view;
+}
+
 class INativeTask {
 public:
     virtual ~INativeTask() = default;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../../memory/memory_common.h"
+#include "../../memory/memory_manager_dod.h"
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/single_element_view.h"
 #include "../../memory/views/strategies.h"
@@ -30,7 +32,7 @@ struct DataSortTransformLogic {
 
     static constexpr TransformRequirement requirements = TransformRequirement::NONE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::ANY_VECTOR;
+    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
     static constexpr size_t transient_workspace_bytes = 0; // Output vector is externally provided via Graph Port
 
     // --- Configuration ---

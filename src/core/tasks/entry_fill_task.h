@@ -31,7 +31,9 @@ public:
             p_context.manager->populate_inverse_selection(target_buffer_id, *selection);
         }
     }
+    virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
 };
+
 
 } // namespace ideam::core
 

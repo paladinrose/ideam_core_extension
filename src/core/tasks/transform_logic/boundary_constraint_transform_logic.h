@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../memory/memory_manager_dod.h"
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/single_element_view.h"
 #include "../../memory/views/strategies.h"

@@ -93,6 +93,35 @@ struct SwapView {
     }
 
     /**
+     * Binds the primary (Read/Current State) memory block.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind(const GrantPartPOD* p_read_part) noexcept {
+        read_head = reinterpret_cast<T*>(p_read_part->raw_base_ptr);
+        // Note: If read_grant and read_part_idx aren't mapped automatically by your generic Task wrapper, 
+        // map them here so swap_buffers() functions correctly.
+    }
+
+    /**
+     * Binds the secondary (Write/Next State) memory block.
+     * Called exclusively by Logics that manage temporal buffers (e.g., EulerIntegration).
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void bind_secondary(const GrantPartPOD* p_write_part) noexcept {
+        if (p_write_part) {
+            write_head = reinterpret_cast<T*>(p_write_part->raw_base_ptr);
+        }
+    }
+    
+    /**
      * operator[] (C++23/26 Multidimensional Subscript)
      * Replaces both read_at and write_at. Returns a zero-overhead SwapElementProxy.
      */

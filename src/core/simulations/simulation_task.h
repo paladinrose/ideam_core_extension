@@ -48,32 +48,12 @@ public:
         if (!part) return; // Silent abort if DAG failed to secure lease
         
         // Instantiate the View entirely on the stack (zero allocation overhead)
-        T_View view = _create_view(p_context, part);
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
         // Zero-overhead dispatch into the optimized payload
         logic.template execute_sim<T_View, T_Strategy>(p_context, view);
     }
 
-private:
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline T_View _create_view(const TaskContextPOD& p_context, const GrantPartPOD* p_part) const {
-        T_View view;
-        using VType = typename T_View::ValueType;
-        
-        view.head_ptr = reinterpret_cast<VType*>(p_part->raw_base_ptr);
-        view.count    = p_part->selection.capacity; // Bind to capacity to respect dense bitsets
-        
-        // Allow the logic to inject shadow buffers/metadata if the view needs it
-        if constexpr (requires { logic.configure_view(view, p_context, p_part); }) {
-            logic.configure_view(view, p_context, p_part);
-        }
-        
-        return view;
-    }
 };
 
 } // namespace ideam::core

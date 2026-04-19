@@ -88,7 +88,7 @@ namespace {
 
     template <MemoryView ViewID, MetadataLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy> struct MetadataViewResolver { static constexpr bool is_valid = false; };
     template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
-    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<C, S>; static constexpr bool is_valid = true; };
+    template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<S>; static constexpr bool is_valid = true; };
     template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
     template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::PagedView, LogicID, MemType, C, S> { using Type = PagedView<C, S>; static constexpr bool is_valid = true; };
     template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::RingView, LogicID, MemType, C, S> { using Type = RingView<C, S>; static constexpr bool is_valid = true; };
@@ -117,7 +117,7 @@ struct MetadataLogicSubRegistry {
     static std::array<MetadataTaskFactoryFn, MetadataTaskRegistry::SUB_MATRIX_SIZE> factories;
 
     static void init() {
-        SubMatrixBuilder<0, 0, 0>::fill(factories);
+        _fill_matrix(std::make_index_sequence<MetadataTaskRegistry::SUB_MATRIX_SIZE>{});
     }
 
     static void cleanup() {
@@ -125,71 +125,72 @@ struct MetadataLogicSubRegistry {
     }
 
 private:
-    template <size_t V, size_t S, size_t T>
-    struct SubMatrixBuilder {
-        static void fill(std::array<MetadataTaskFactoryFn, MetadataTaskRegistry::SUB_MATRIX_SIZE>& arr) {
-            constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
-            constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
-            constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
+    template <size_t... Indices>
+    static void _fill_matrix(std::index_sequence<Indices...>) {
+        (_fill_single<Indices>(), ...);
+    }
 
-            using Traits = NativeMemoryTraits<MemTypeEnum>;
-            using ConcreteType = typename Traits::ConcreteType;
-            using ResolvedStrategy = StrategyResolver<StrategyEnum>;
-            using T_Strategy = typename ResolvedStrategy::Type;
-            using ResolvedLogic = MetadataLogicResolver<L, ConcreteType, T_Strategy>;
-            using ResolvedView = MetadataViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+    template <size_t FlatIdx>
+    static void _fill_single() {
+        constexpr size_t T_COUNT = MetadataTaskRegistry::T_COUNT;
+        constexpr size_t S_COUNT = MetadataTaskRegistry::S_COUNT;
 
-            constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
+        // Decode the flat index back into 3D coordinates
+        constexpr size_t T = FlatIdx % T_COUNT;
+        constexpr size_t S = (FlatIdx / T_COUNT) % S_COUNT;
+        constexpr size_t V = FlatIdx / (T_COUNT * S_COUNT);
 
-            constexpr bool is_fully_valid = []() consteval {
-                if constexpr (!combo_valid) return false;
+        constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
+        constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
+        constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
+
+        using Traits = NativeMemoryTraits<MemTypeEnum>;
+        using ConcreteType = typename Traits::ConcreteType;
+        using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+        using T_Strategy = typename ResolvedStrategy::Type;
+        using ResolvedLogic = MetadataLogicResolver<L, ConcreteType, T_Strategy>;
+        using ResolvedView = MetadataViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+
+        constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
+
+        constexpr bool is_fully_valid = []() consteval {
+            if constexpr (!combo_valid) return false;
+            else {
+                constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
+                if constexpr (!is_type_supported) return false;
                 else {
-                    constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
-                    if constexpr (!is_type_supported) return false;
-                    else {
-                        return MetadataLogicValidator::validate(
-                            ResolvedLogic::Type::requirements, 
-                            ResolvedLogic::Type::supported_layouts, 
-                            ViewTraits<typename ResolvedView::Type>::capabilities, 
-                            BufferLayoutType::NONE
-                        );
-                    }
-                }
-            }();
-
-            constexpr size_t flat_idx = 
-                V * (MetadataTaskRegistry::S_COUNT * MetadataTaskRegistry::T_COUNT) + 
-                S * (MetadataTaskRegistry::T_COUNT) + T;
-
-            if constexpr (is_fully_valid) {
-                arr[flat_idx] = []() -> INativeTask* {
-                    return new MetadataTask<typename ResolvedLogic::Type, typename ResolvedView::Type, T_Strategy>(typename ResolvedLogic::Type{});
-                };
-
-                if (MetadataTaskRegistry::ui_metadata_matrix) {
-                    godot::String logic_name(ResolvedLogic::Type::type_name);
-                    if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_name)) {
-                        godot::Dictionary dict;
-                        dict["views"] = godot::Array(); 
-                        dict["strategies"] = godot::Array();
-                        (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name] = dict;
-                    }
-                    godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name];
-                    _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
-                    _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
+                    return MetadataLogicValidator::validate(
+                        ResolvedLogic::Type::requirements, 
+                        ResolvedLogic::Type::supported_layouts, 
+                        ViewTraits<typename ResolvedView::Type>::capabilities, 
+                        BufferLayoutType::NONE
+                    );
                 }
             }
+        }();
 
-            // 3D Recursive Loop
-            if constexpr (T + 1 < MetadataTaskRegistry::T_COUNT) {
-                SubMatrixBuilder<V, S, T + 1>::fill(arr);
-            } else if constexpr (S + 1 < MetadataTaskRegistry::S_COUNT) {
-                SubMatrixBuilder<V, S + 1, 0>::fill(arr);
-            } else if constexpr (V + 1 < MetadataTaskRegistry::V_COUNT) {
-                SubMatrixBuilder<V + 1, 0, 0>::fill(arr);
+        if constexpr (is_fully_valid) {
+            factories[FlatIdx] = []() -> INativeTask* {
+                return new MetadataTask<typename ResolvedLogic::Type, typename ResolvedView::Type, T_Strategy>();
+            };
+
+            /*
+            // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
+            if (MetadataTaskRegistry::ui_metadata_matrix) {
+                godot::String logic_name(ResolvedLogic::Type::type_name);
+                if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_name)) {
+                    godot::Dictionary dict;
+                    dict["views"] = godot::Array(); 
+                    dict["strategies"] = godot::Array();
+                    (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name] = dict;
+                }
+                godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name];
+                _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
             }
+            */
         }
-    };
+    }
 };
 
 template <MetadataLogicID L>
