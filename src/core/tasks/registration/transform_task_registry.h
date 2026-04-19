@@ -1,9 +1,8 @@
-// transform_task_registry.h
 #pragma once
 
-#include "i_native_task.h"
-#include "../memory/memory_common.h"
-#include "native_task_registry.h" // Assumptions: Provides MemoryView, MemoryStrategy, MemoryTypes, and NativeMemoryTraits
+#include "../i_native_task.h"
+#include "../../memory/memory_common.h"
+#include "native_task_registry.h" 
 #include <godot_cpp/variant/dictionary.hpp>
 #include <memory>
 #include <array>
@@ -30,23 +29,22 @@ enum class TransformLogicID : uint32_t {
     Count
 };
 
-// Raw function pointer for zero-overhead instantiation
 using TransformTaskFactoryFn = INativeTask* (*)();
 
 class TransformTaskRegistry {
 public:
-    // --- DOD Matrix Bounds ---
     static constexpr size_t L_COUNT = static_cast<size_t>(TransformLogicID::Count);
     static constexpr size_t V_COUNT = static_cast<size_t>(MemoryView::Count);
     static constexpr size_t S_COUNT = static_cast<size_t>(MemoryStrategy::Count);
     static constexpr size_t T_COUNT = static_cast<size_t>(MemoryTypes::Count);
     
-    static constexpr size_t TOTAL_COMBINATIONS = L_COUNT * V_COUNT * S_COUNT * T_COUNT;
+    // --- DOD Matrix Bounds (3D Sub-Matrix) ---
+    static constexpr size_t SUB_MATRIX_SIZE = V_COUNT * S_COUNT * T_COUNT;
 
-    // --- The O(1) Multi-Dimensional Factory Matrix ---
-    static const std::array<TransformTaskFactoryFn, TOTAL_COMBINATIONS> factories;
+    using SubMatrix = std::array<TransformTaskFactoryFn, SUB_MATRIX_SIZE>;
 
-    // --- UX Layer ---
+    // --- The O(1) Multi-Dimensional Factory Routers ---
+    static std::array<const SubMatrix*, L_COUNT> logic_matrices;
     static godot::Dictionary* ui_transform_matrix;
 
     static void init();
@@ -56,5 +54,3 @@ public:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_TRANSFORM_TASK_REGISTRY_H

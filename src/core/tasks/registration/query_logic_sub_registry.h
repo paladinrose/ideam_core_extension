@@ -1,53 +1,53 @@
+#pragma once
+
 #include "query_task_registry.h"
-
-// --- Logics ---
-#include "query_logic/aabb_query_logic.h"
-#include "query_logic/archetype_query_logic.h"
-#include "query_logic/bitmask_query_logic.h"
-#include "query_logic/boolean_query_logic.h"
-#include "query_logic/border_query_logic.h"
-#include "query_logic/color_query_logic.h"
-#include "query_logic/component_query_logic.h"
-#include "query_logic/data_comparison_query_logic.h"
-#include "query_logic/data_range_query_logic.h"
-#include "query_logic/directional_query_logic.h"
-#include "query_logic/distance_query_logic.h"
-#include "query_logic/event_ring_bridge_query_logic.h"
-#include "query_logic/frustum_query_logic.h"
-#include "query_logic/hierarchical_bridge_query_logic.h"
-#include "query_logic/limit_query_logic.h"
-#include "query_logic/morphological_query_logic.h"
-#include "query_logic/paged_to_tiled_bridge_query_logic.h"
-#include "query_logic/predicate_query_logic.h"
-#include "query_logic/relational_bridge_query_logic.h"
-#include "query_logic/spatial_inclusion_bridge_query_logic.h"
-#include "query_logic/spatial_projection_bridge_query_logic.h"
-#include "query_logic/stencil_dilation_bridge_query_logic.h"
-#include "query_logic/stochastic_query_logic.h"
-#include "query_logic/swap_eruption_bridge_query_logic.h"
-
-// --- Views & Strategies ---
-#include "../memory/views/aosoa_view.h"
-#include "../memory/views/atomic_view.h"
-#include "../memory/views/bridge_view.h"
-#include "../memory/views/multi_element_view.h"
-#include "../memory/views/paged_view.h"
-#include "../memory/views/ring_view.h"
-#include "../memory/views/single_element_view.h"
-#include "../memory/views/sparse_set_view.h"
-#include "../memory/views/static_stencil_view.h"
-#include "../memory/views/stencil_view.h"
-#include "../memory/views/swap_view.h"
-#include "../memory/views/strategies.h"
-
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/string.hpp>
 
+// --- Logics ---
+#include "../query_logic/aabb_query_logic.h"
+#include "../query_logic/archetype_query_logic.h"
+#include "../query_logic/bitmask_query_logic.h"
+#include "../query_logic/boolean_query_logic.h"
+#include "../query_logic/border_query_logic.h"
+#include "../query_logic/color_query_logic.h"
+#include "../query_logic/component_query_logic.h"
+#include "../query_logic/data_comparison_query_logic.h"
+#include "../query_logic/data_range_query_logic.h"
+#include "../query_logic/directional_query_logic.h"
+#include "../query_logic/distance_query_logic.h"
+#include "../query_logic/event_ring_bridge_query_logic.h"
+#include "../query_logic/frustum_query_logic.h"
+#include "../query_logic/hierarchical_bridge_query_logic.h"
+#include "../query_logic/limit_query_logic.h"
+#include "../query_logic/morphological_query_logic.h"
+#include "../query_logic/paged_to_tiled_bridge_query_logic.h"
+#include "../query_logic/predicate_query_logic.h"
+#include "../query_logic/relational_bridge_query_logic.h"
+#include "../query_logic/spatial_inclusion_bridge_query_logic.h"
+#include "../query_logic/spatial_projection_bridge_query_logic.h"
+#include "../query_logic/stencil_dilation_bridge_query_logic.h"
+#include "../query_logic/stochastic_query_logic.h"
+#include "../query_logic/swap_eruption_bridge_query_logic.h"
+
+// --- Views & Strategies ---
+#include "../../memory/views/aosoa_view.h"
+#include "../../memory/views/atomic_view.h"
+#include "../../memory/views/bridge_view.h"
+#include "../../memory/views/multi_element_view.h"
+#include "../../memory/views/paged_view.h"
+#include "../../memory/views/ring_view.h"
+#include "../../memory/views/single_element_view.h"
+#include "../../memory/views/sparse_set_view.h"
+#include "../../memory/views/static_stencil_view.h"
+#include "../../memory/views/stencil_view.h"
+#include "../../memory/views/swap_view.h"
+#include "../../memory/views/strategies.h"
+
 namespace ideam::core {
 
-namespace { // TU Firewall
-
-    // --- AOSOA Lane Width Calculator (Mirrored from TransformTaskRegistry) ---
+namespace {
+    // --- Resolvers (Moved from Registry) ---
     consteval size_t floor_power_of_2(size_t n) {
         if (n == 0) return 1;
         size_t res = 1;
@@ -69,16 +69,13 @@ namespace { // TU Firewall
         }
     };
 
-    // --- Helper Extractors ---
     template <typename S, typename = void> struct StrategyDimExtractor { static constexpr size_t value = 1; };
     template <typename S> struct StrategyDimExtractor<S, std::void_t<decltype(S::dimensions)>> { static constexpr size_t value = S::dimensions; };
 
     template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
     template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::KernelSize)>> { static constexpr size_t value = T_Resolver::KernelSize; static constexpr bool has_kernel = true; };
 
-    // --- 1. Query Logic Resolver ---
     template <QueryLogicID ID, typename T_Concrete, typename T_Strategy> struct QueryLogicResolver { static constexpr bool is_valid = false; };
-
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::AABB, C, S> { using Type = AABBQueryLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Archetype, C, S> { using Type = ArchetypeQueryLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Bitmask, C, S> { using Type = BitmaskQueryLogic<C>; static constexpr bool is_valid = true; };
@@ -106,7 +103,6 @@ namespace { // TU Firewall
 
     template <QueryLogicID LogicID, typename C, typename S> struct LogicKernelExtractor : KernelExtractorImpl<QueryLogicResolver<LogicID, C, S>> {};
 
-    // --- 2. Strategy Resolver ---
     template <MemoryStrategy ID> struct StrategyResolver { static constexpr bool is_valid = false; };
     template <> struct StrategyResolver<MemoryStrategy::FlatStrategy> { using Type = FlatStrategy; static constexpr bool is_valid = true; };
     template <> struct StrategyResolver<MemoryStrategy::SoAStrategy> { using Type = SoAStrategy; static constexpr bool is_valid = true; };
@@ -118,10 +114,7 @@ namespace { // TU Firewall
     template <> struct StrategyResolver<MemoryStrategy::RingStrategy> { using Type = RingStrategy; static constexpr bool is_valid = true; };
     template <> struct StrategyResolver<MemoryStrategy::PagedStrategy> { using Type = PagedStrategy; static constexpr bool is_valid = true; };
 
-    // --- 3. View Resolver ---
-    template <MemoryView ViewID, QueryLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy>
-    struct QueryViewResolver { static constexpr bool is_valid = false; };
-
+    template <MemoryView ViewID, QueryLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy> struct QueryViewResolver { static constexpr bool is_valid = false; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<C, S>; static constexpr bool is_valid = true; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
@@ -140,12 +133,24 @@ namespace { // TU Firewall
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD140_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
 
     template <typename T_Array> inline void _append_unique(T_Array& p_array, const godot::String& p_val) { if (!p_array.has(p_val)) p_array.push_back(p_val); }
+}
 
-    // --- 5D Matrix Builder ---
-    template <size_t O, size_t L, size_t V, size_t S, size_t T>
-    struct QueryFactoryMatrix {
-        static void fill(std::array<QueryTaskFactoryFn, QueryTaskRegistry::TOTAL_COMBINATIONS>& arr) {
-            constexpr QueryLogicID LogicEnum = static_cast<QueryLogicID>(L);
+template <QueryLogicID L>
+struct QueryLogicSubRegistry {
+    static std::array<QueryTaskFactoryFn, QueryTaskRegistry::SUB_MATRIX_SIZE> factories;
+
+    static void init() {
+        SubMatrixBuilder<0, 0, 0, 0>::fill(factories);
+    }
+
+    static void cleanup() {
+        factories.fill(nullptr);
+    }
+
+private:
+    template <size_t O, size_t V, size_t S, size_t T>
+    struct SubMatrixBuilder {
+        static void fill(std::array<QueryTaskFactoryFn, QueryTaskRegistry::SUB_MATRIX_SIZE>& arr) {
             constexpr MemoryView ViewEnum = static_cast<MemoryView>(V);
             constexpr MemoryStrategy StrategyEnum = static_cast<MemoryStrategy>(S);
             constexpr MemoryTypes MemTypeEnum = static_cast<MemoryTypes>(T);
@@ -153,12 +158,10 @@ namespace { // TU Firewall
 
             using Traits = NativeMemoryTraits<MemTypeEnum>;
             using ConcreteType = typename Traits::ConcreteType;
-
             using ResolvedStrategy = StrategyResolver<StrategyEnum>;
             using T_Strategy = typename ResolvedStrategy::Type;
-
-            using ResolvedLogic = QueryLogicResolver<LogicEnum, ConcreteType, T_Strategy>;
-            using ResolvedView = QueryViewResolver<ViewEnum, LogicEnum, MemTypeEnum, ConcreteType, T_Strategy>;
+            using ResolvedLogic = QueryLogicResolver<L, ConcreteType, T_Strategy>;
+            using ResolvedView = QueryViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
 
             constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
 
@@ -180,9 +183,9 @@ namespace { // TU Firewall
                 }
             }();
 
+            // Note: The 'L' dimension multiplier is completely gone
             constexpr size_t flat_idx = 
-                O * (QueryTaskRegistry::L_COUNT * QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) +
-                L * (QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) + 
+                O * (QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) +
                 V * (QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT) + 
                 S * (QueryTaskRegistry::T_COUNT) + T;
 
@@ -191,7 +194,7 @@ namespace { // TU Firewall
                     return new QueryTask<typename ResolvedLogic::Type, OpEnum, typename ResolvedView::Type, T_Strategy>();
                 };
 
-                if constexpr (O == 0) { // Populate UI once per config
+                if constexpr (O == 0) {
                     if (QueryTaskRegistry::ui_query_matrix) {
                         godot::String logic_name(ResolvedLogic::Type::type_name);
                         if (!QueryTaskRegistry::ui_query_matrix->has(logic_name)) {
@@ -205,68 +208,32 @@ namespace { // TU Firewall
                     }
                 }
                 
-                // Add the specific operations supported to the UI Dict
                 if (QueryTaskRegistry::ui_query_matrix) {
                     godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[ResolvedLogic::Type::type_name];
                     _append_unique<godot::Array>(dict["ops"], (O == 0) ? "CULL" : "ADD");
                 }
             }
 
-            // Recursive 5D Tail Traversal Escalation
+            // Standard 4D Recursive Loop
             if constexpr (T + 1 < QueryTaskRegistry::T_COUNT) {
-                QueryFactoryMatrix<O, L, V, S, T + 1>::fill(arr);
+                SubMatrixBuilder<O, V, S, T + 1>::fill(arr);
             } else if constexpr (S + 1 < QueryTaskRegistry::S_COUNT) {
-                QueryFactoryMatrix<O, L, V, S + 1, 0>::fill(arr);
+                SubMatrixBuilder<O, V, S + 1, 0>::fill(arr);
             } else if constexpr (V + 1 < QueryTaskRegistry::V_COUNT) {
-                QueryFactoryMatrix<O, L, V + 1, 0, 0>::fill(arr);
-            } else if constexpr (L + 1 < QueryTaskRegistry::L_COUNT) {
-                QueryFactoryMatrix<O, L + 1, 0, 0, 0>::fill(arr);
+                SubMatrixBuilder<O, V + 1, 0, 0>::fill(arr);
             } else if constexpr (O + 1 < QueryTaskRegistry::O_COUNT) {
-                QueryFactoryMatrix<O + 1, 0, 0, 0, 0>::fill(arr);
+                SubMatrixBuilder<O + 1, 0, 0, 0>::fill(arr);
             }
         }
     };
-} // end anonymous namespace
+};
 
-const std::array<QueryTaskFactoryFn, QueryTaskRegistry::TOTAL_COMBINATIONS> 
-QueryTaskRegistry::factories = []{
-    std::array<QueryTaskFactoryFn, QueryTaskRegistry::TOTAL_COMBINATIONS> arr;
+template <QueryLogicID L>
+std::array<QueryTaskFactoryFn, QueryTaskRegistry::SUB_MATRIX_SIZE> 
+QueryLogicSubRegistry<L>::factories = []{
+    std::array<QueryTaskFactoryFn, QueryTaskRegistry::SUB_MATRIX_SIZE> arr;
     arr.fill(nullptr);
     return arr;
 }();
-
-godot::Dictionary* QueryTaskRegistry::ui_query_matrix = nullptr;
-
-void QueryTaskRegistry::init() {
-    ui_query_matrix = new godot::Dictionary();
-    
-    std::array<QueryTaskFactoryFn, TOTAL_COMBINATIONS> dummy_arr;
-    dummy_arr.fill(nullptr);
-    QueryFactoryMatrix<0, 0, 0, 0, 0>::fill(dummy_arr);
-}
-
-void QueryTaskRegistry::cleanup() {
-    delete ui_query_matrix;
-    ui_query_matrix = nullptr;
-}
-
-std::unique_ptr<INativeTask> QueryTaskRegistry::create(uint32_t p_op_id, uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id) {
-    if (p_op_id >= O_COUNT || p_logic_id >= L_COUNT || p_view_id >= V_COUNT || p_strategy_id >= S_COUNT || p_type_id >= T_COUNT) {
-        return nullptr;
-    }
-
-    size_t flat_idx = 
-        p_op_id * (L_COUNT * V_COUNT * S_COUNT * T_COUNT) +
-        p_logic_id * (V_COUNT * S_COUNT * T_COUNT) + 
-        p_view_id * (S_COUNT * T_COUNT) + 
-        p_strategy_id * (T_COUNT) + 
-        p_type_id;
-
-    if (factories[flat_idx]) {
-        return std::unique_ptr<INativeTask>(factories[flat_idx]());
-    }
-
-    return nullptr;
-}
 
 } // namespace ideam::core

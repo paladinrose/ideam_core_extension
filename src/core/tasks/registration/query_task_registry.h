@@ -1,9 +1,9 @@
 #pragma once
 
-#include "i_native_task.h"
-#include "../memory/memory_common.h"
+#include "../i_native_task.h"
+#include "../../memory/memory_common.h"
 #include "native_task_registry.h"
-#include "query_task.h" // Supplies QueryOp
+#include "../query_task.h" // Supplies QueryOp
 #include <godot_cpp/variant/dictionary.hpp>
 #include <memory>
 #include <array>
@@ -44,19 +44,19 @@ using QueryTaskFactoryFn = INativeTask* (*)();
 
 class QueryTaskRegistry {
 public:
-    // --- DOD Matrix Bounds (5D) ---
-    // QueryTask requires QueryOp (CULL/ADD) as a template parameter. 
+    // --- DOD Matrix Bounds (4D Sub-Matrix) ---
     static constexpr size_t O_COUNT = 2; // 0 = CULL, 1 = ADD
     static constexpr size_t L_COUNT = static_cast<size_t>(QueryLogicID::Count);
     static constexpr size_t V_COUNT = static_cast<size_t>(MemoryView::Count);
     static constexpr size_t S_COUNT = static_cast<size_t>(MemoryStrategy::Count);
     static constexpr size_t T_COUNT = static_cast<size_t>(MemoryTypes::Count);
     
-    static constexpr size_t TOTAL_COMBINATIONS = O_COUNT * L_COUNT * V_COUNT * S_COUNT * T_COUNT;
+    static constexpr size_t SUB_MATRIX_SIZE = O_COUNT * V_COUNT * S_COUNT * T_COUNT;
 
-    // --- The O(1) Multi-Dimensional Factory Matrix ---
-    static const std::array<QueryTaskFactoryFn, TOTAL_COMBINATIONS> factories;
+    using SubMatrix = std::array<QueryTaskFactoryFn, SUB_MATRIX_SIZE>;
 
+    // --- The O(1) Multi-Dimensional Factory Routers ---
+    static std::array<const SubMatrix*, L_COUNT> logic_matrices;
     static godot::Dictionary* ui_query_matrix;
 
     static void init();
@@ -67,5 +67,3 @@ public:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_QUERY_TASK_REGISTRY_H

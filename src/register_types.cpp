@@ -38,7 +38,7 @@
 #include "godot/tasks/task_graph_host.h" 
 
 // Native task registration
-#include "core/tasks/native_task_registry.h"
+#include "core/tasks/registration/native_task_registry.h"
 // --- Views ---
 #include "core/memory/views/single_element_view.h"
 #include "core/memory/views/multi_element_view.h"
@@ -216,7 +216,7 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 void uninitialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		// Flush the static factories and dictionaries to prevent Godot memory leak warnings on exit
-		ideam::core::NativeTaskRegistry::cleanup();
+		NativeTaskRegistry::cleanup();
 	}
 
 	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {

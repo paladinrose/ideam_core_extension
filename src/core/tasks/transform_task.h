@@ -1,6 +1,6 @@
 #pragma once
 
-#include "transforms/transform_logic_traits.h"
+#include "transform_logic/transform_logic_traits.h"
 #include "i_native_task.h"
 #include "../memory/views/view_traits.h"
 

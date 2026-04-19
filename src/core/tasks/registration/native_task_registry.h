@@ -1,6 +1,6 @@
 #pragma once
 
-#include "i_native_task.h"
+#include "../i_native_task.h"
 
 // --- Centralized Enums & Traits (Required by Sub-Registries) ---
 #include <godot_cpp/templates/hash_map.hpp>
@@ -105,11 +105,12 @@ public:
     static void cleanup();
 
     // --- Dynamic Creation for Manual Tasks ---
-    static std::unique_ptr<INativeTask> create(const godot::StringName& p_name);
+    [[nodiscard]] static std::unique_ptr<INativeTask> create(const godot::StringName& p_name);
 
     // --- Variadic Registration (Added Args support for EntryFillTask's buffer_id) ---
     template <typename T_Task, typename... Args>
     static void register_task(const godot::StringName& p_name, Args... args) {
+        if (!manual_factories) return; // Safety check
         (*manual_factories)[p_name] = [args...]() -> std::unique_ptr<INativeTask> {
             return std::make_unique<T_Task>(args...);
         };
@@ -123,5 +124,3 @@ public:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_NATIVE_TASK_REGISTRY_H

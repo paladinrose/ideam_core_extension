@@ -1,7 +1,7 @@
 #pragma once
 
-#include "i_native_task.h"
-#include "../memory/memory_common.h"
+#include "../i_native_task.h"
+#include "../../memory/memory_common.h"
 #include "native_task_registry.h"
 #include <godot_cpp/variant/dictionary.hpp>
 #include <memory>
@@ -42,10 +42,14 @@ public:
     static constexpr size_t S_COUNT = static_cast<size_t>(MemoryStrategy::Count);
     static constexpr size_t T_COUNT = static_cast<size_t>(MemoryTypes::Count);
     
-    static constexpr size_t TOTAL_COMBINATIONS = L_COUNT * V_COUNT * S_COUNT * T_COUNT;
+    // --- DOD Matrix Bounds (3D Sub-Matrix) ---
+    // Metadata tasks lack the 'QueryOp' dimension.
+    static constexpr size_t SUB_MATRIX_SIZE = V_COUNT * S_COUNT * T_COUNT;
 
-    static const std::array<MetadataTaskFactoryFn, TOTAL_COMBINATIONS> factories;
+    using SubMatrix = std::array<MetadataTaskFactoryFn, SUB_MATRIX_SIZE>;
 
+    // --- The O(1) Multi-Dimensional Factory Routers ---
+    static std::array<const SubMatrix*, L_COUNT> logic_matrices;
     static godot::Dictionary* ui_metadata_matrix;
 
     static void init();
@@ -55,5 +59,3 @@ public:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_METADATA_TASK_REGISTRY_H

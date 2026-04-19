@@ -34,6 +34,14 @@ for root, dirs, files in os.walk("src"):
             full_path = os.path.join(root, file).replace("\\", "/")
             sources.append(full_path)
 
+if env["platform"] == "windows":
+    # Godot's SConstruct usually sets 'is_msvc' to True for Visual Studio
+    if env.get("is_msvc", False):
+        env.Append(CXXFLAGS=["/bigobj"])
+    else:
+        # For MinGW on Windows (GCC/Clang targeting PE/COFF)
+        env.Append(CXXFLAGS=["-Wa,-mbig-obj"])
+        
 # --- BUILD LOGIC ---
 if env["platform"] == "macos":
     # Using format for the nested framework structure

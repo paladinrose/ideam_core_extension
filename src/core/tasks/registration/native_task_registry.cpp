@@ -6,7 +6,7 @@
 #include "metadata_task_registry.h"
 
 // --- Manual Tasks ---
-#include "entry_fill_task.h"
+#include "../entry_fill_task.h"
 
 #include <godot_cpp/variant/utility_functions.hpp>
 
@@ -21,6 +21,7 @@ void NativeTaskRegistry::init() {
     }
 
     // 2. Delegate O(1) Matrix Initializations
+    // This safely triggers the SubMatrixBuilders to fill pointers and instantiate Godot UI Dictionaries!
     QueryTaskRegistry::init();
     TransformTaskRegistry::init();
     MetadataTaskRegistry::init();
@@ -39,15 +40,17 @@ std::unique_ptr<INativeTask> NativeTaskRegistry::create(const godot::StringName&
 }
 
 void NativeTaskRegistry::cleanup() {
-    // 1. Delegate Cleanup
+    // 1. Delegate Cleanup (Flushes Godot UI dictionaries)
     QueryTaskRegistry::cleanup();
     TransformTaskRegistry::cleanup();
     MetadataTaskRegistry::cleanup();
     // SimulationTaskRegistry::cleanup(); // Uncomment when implemented
 
     // 2. Self Cleanup
-    delete manual_factories; 
-    manual_factories = nullptr;
+    if (manual_factories) {
+        delete manual_factories; 
+        manual_factories = nullptr;
+    }
 }
 
 // --- Routing UI Dictionary Getters to Sub-Registries ---
