@@ -116,7 +116,7 @@ private:
 
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                const uint32_t flags = _get_flags(p_view[i]);
+                const uint32_t flags = _get_flags(*reinterpret_cast<const T*>(p_view[i]));
                 if (flags != 0) {
                     if constexpr (O == GroupMaskOp::SET)         masks[i] = flags;
                     else if constexpr (O == GroupMaskOp::ADD)    masks[i] |= flags;
@@ -134,7 +134,7 @@ private:
 
         for (int64_t i = 0; i < count; ++i) {
             const int64_t idx = indices[i];
-            const uint32_t flags = _get_flags(p_view[idx]);
+            const uint32_t flags = _get_flags(*reinterpret_cast<const T*>(p_view[idx]));
             if (flags != 0) {
                 if constexpr (O == GroupMaskOp::SET)         masks[idx] = flags;
                 else if constexpr (O == GroupMaskOp::ADD)    masks[idx] |= flags;
@@ -149,7 +149,7 @@ private:
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
-            const uint32_t flags = _get_flags(p_view[i]);
+            const uint32_t flags = _get_flags(*reinterpret_cast<const T*>(p_view[i]));
             if (flags != 0) {
                 if constexpr (O == GroupMaskOp::SET)         masks[i] = flags;
                 else if constexpr (O == GroupMaskOp::ADD)    masks[i] |= flags;

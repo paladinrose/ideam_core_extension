@@ -83,7 +83,7 @@ struct DataComparisonQueryLogic {
                         if (global_index >= r_selection.capacity) break;
 
                         // Compare primary (View Lens) to secondary (Raw Pointer)
-                        if (!_evaluate(p_view[global_index], buffer_b[global_index])) {
+                        if (_evaluate(*reinterpret_cast<const T*>(p_view[global_index]), buffer_b[global_index])) {
                             bitset[w] &= ~(1ULL << bit_index);
                             r_selection.element_count--;
                         }
@@ -99,7 +99,7 @@ struct DataComparisonQueryLogic {
                 
                 for (int64_t i = 0; i < r_selection.element_count; ++i) {
                     int64_t global_index = indices[i];
-                    if (_evaluate(p_view[global_index], buffer_b[global_index])) {
+                    if (_evaluate(*reinterpret_cast<const T*>(p_view[global_index]), buffer_b[global_index])) {
                         indices[write_ptr++] = global_index;
                     }
                 }
@@ -122,7 +122,7 @@ struct DataComparisonQueryLogic {
                     
                     if (global_index >= r_selection.capacity) break;
 
-                    if (_evaluate(p_view[global_index], buffer_b[global_index])) {
+                    if (_evaluate(*reinterpret_cast<const T*>(p_view[global_index]), buffer_b[global_index])) {
                         if (r_selection.mode == SelectionMode::DENSE) {
                             r_selection.data.bitset[w] |= (1ULL << bit_index);
                             r_selection.element_count++;

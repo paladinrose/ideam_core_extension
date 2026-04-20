@@ -78,7 +78,6 @@ struct StencilView {
     #endif
     inline void bind(const GrantPartPOD* p_part) noexcept {
         head_ptr = reinterpret_cast<T*>(p_part->raw_base_ptr);
-        // Note: center_ptr is left null here. It is assigned dynamically during the kernel execution.
     }
     
     /**

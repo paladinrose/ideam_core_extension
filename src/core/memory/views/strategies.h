@@ -68,6 +68,11 @@ struct Spatial2DStrategy {
     inline int64_t get_index_2d(int64_t p_x, int64_t p_y, size_t p_stride) const noexcept {
         return ((p_x * static_cast<int64_t>(p_stride)) + (p_y * stride_y)) / static_cast<int64_t>(p_stride);
     }
+
+    [[nodiscard]] inline intptr_t get_relative_offset(int64_t p_dx, int64_t p_dy, size_t p_stride) const noexcept {
+        return static_cast<intptr_t>((p_dx * static_cast<int64_t>(p_stride)) + (p_dy * stride_y));
+    }
+    
 };
 
 struct Spatial3DStrategy {
@@ -91,6 +96,11 @@ struct Spatial3DStrategy {
     inline int64_t get_index_3d(int64_t p_x, int64_t p_y, int64_t p_z, size_t p_stride) const noexcept {
         return ((p_x * static_cast<int64_t>(p_stride)) + (p_y * stride_y) + (p_z * stride_z)) / static_cast<int64_t>(p_stride);
     }
+
+    [[nodiscard]] inline intptr_t get_relative_offset(int64_t p_dx, int64_t p_dy, int64_t p_dz, size_t p_stride) const noexcept {
+        return static_cast<intptr_t>((p_dx * static_cast<int64_t>(p_stride)) + (p_dy * stride_y) + (p_dz * stride_z));
+    }
+
 };
 
 struct Spatial4DStrategy {
@@ -114,6 +124,10 @@ struct Spatial4DStrategy {
 
     inline int64_t get_index_4d(int64_t p_x, int64_t p_y, int64_t p_z, int64_t p_w, size_t p_stride) const noexcept {
         return ((p_x * static_cast<int64_t>(p_stride)) + (p_y * stride_y) + (p_z * stride_z) + (p_w * stride_w)) / static_cast<int64_t>(p_stride);
+    }
+
+    [[nodiscard]] inline intptr_t get_relative_offset(int64_t p_dx, int64_t p_dy, int64_t p_dz, int64_t p_dw, size_t p_stride) const noexcept {
+        return static_cast<intptr_t>((p_dx * static_cast<int64_t>(p_stride)) + (p_dy * stride_y) + (p_dz * stride_z) + (p_dw * stride_w));
     }
 };
 

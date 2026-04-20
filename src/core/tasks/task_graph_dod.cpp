@@ -199,9 +199,12 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
 
         _batch_setup_wave(current_wave_nodes.data(), wave.count);
         
+        _batch_prepare_wave(current_wave_nodes.data(), wave.count, p_delta, wave_workspaces.data());
+
         _batch_execute_wave(current_wave_nodes.data(), wave.count, p_delta, wave_workspaces.data());
         
         _process_tier2_commands(current_wave_nodes.data(), wave.count);
+        
         _batch_resolve_wave(current_wave_nodes.data(), wave.count);
     }
 
@@ -270,6 +273,28 @@ void TaskGraphDOD::_bake_port_connections() {
         if (conn.src_ptr && conn.dst_ptr) {
             if (edge.to_node >= baked_connections.size()) baked_connections.resize(edge.to_node + 1);
             baked_connections[edge.to_node].push_back(conn);
+        }
+    }
+}
+
+void TaskGraphDOD::_batch_prepare_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, void** p_workspaces) {
+    for (uint32_t i = 0; i < p_count; ++i) {
+        NodeID id = p_nodes[i];
+        TaskTypeDOD type = task_types[id];
+
+        // Only Native CPU/Query tasks have the INativeTask interface with our prepare hook
+        if (type == TaskTypeDOD::NATIVE_CPU || type == TaskTypeDOD::QUERY_CULLER) {
+            TaskCPUMetadata& meta = cpu_metadata[id];
+            MemoryGrantPOD* grant = get_grant_mutable(id);
+            
+            if (meta.native_interface && grant) {
+                // Construct the context. 
+                // Note: tier2_meta uses the wave-local index 'i', tier1 uses absolute 'id'
+                TaskContextPOD ctx{ p_delta, grant, manager, &tier1_meta[id], &tier2_meta[i], p_workspaces[i] };
+                
+                // Phase 0: Execute single-threaded memory topology baking
+                meta.native_interface->prepare(ctx);
+            }
         }
     }
 }

@@ -82,7 +82,7 @@ private:
 
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                lods[i] = _get_lod(p_view[i]);
+                lods[i] = _get_lod(*reinterpret_cast<const T*>(p_view[i]));
             }
         }
     }
@@ -95,7 +95,7 @@ private:
 
         for (int64_t i = 0; i < count; ++i) {
             const int64_t idx = indices[i];
-            lods[idx] = _get_lod(p_view[idx]);
+            lods[idx] = _get_lod(*reinterpret_cast<const T*>(p_view[idx]));
         }
     }
 
@@ -105,7 +105,7 @@ private:
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
-            lods[i] = _get_lod(p_view[i]);
+            lods[i] = _get_lod(*reinterpret_cast<const T*>(p_view[i]));
         }
     }
 };

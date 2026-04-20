@@ -10,6 +10,8 @@
 
 namespace ideam::core {
 
+
+    
 /**
  * StaticStencilView<T, Strategy, PointCount>
  * Optimized for fixed-pattern kernels (Blur, Erosion, Game of Life).
@@ -194,6 +196,39 @@ struct StaticStencilView {
         #endif
 
         return *reinterpret_cast<T*>(center_ptr + baked_offsets[p_point_index]);
+    }
+
+    /**
+     * bake_spatial_offsets
+     * Translates a conceptual neighborhood (deltas) into exact hardware byte-offsets.
+     * @param p_strategy The runtime memory strategy containing grid strides.
+     * @param p_element_stride The AoS footprint of the data type.
+     * @param p_deltas A generic array of coordinate offsets [PointCount][Dimensions].
+     */
+    template <typename DeltaArray>
+    [[nodiscard]] static std::array<intptr_t, PointCount> bake_spatial_offsets(
+        const Strategy& p_strategy, 
+        uint32_t p_element_stride,
+        const DeltaArray& p_deltas
+    ) noexcept {
+        std::array<intptr_t, PointCount> offsets{};
+
+        for (size_t i = 0; i < PointCount; ++i) {
+            if constexpr (Strategy::dimensions == 1) {
+                // Flat linear offset
+                offsets[i] = static_cast<intptr_t>(p_deltas[i][0] * p_element_stride);
+            } 
+            else if constexpr (Strategy::dimensions == 2) {
+                offsets[i] = p_strategy.get_relative_offset(p_deltas[i][0], p_deltas[i][1], p_element_stride);
+            } 
+            else if constexpr (Strategy::dimensions == 3) {
+                offsets[i] = p_strategy.get_relative_offset(p_deltas[i][0], p_deltas[i][1], p_deltas[i][2], p_element_stride);
+            }
+            else if constexpr (Strategy::dimensions == 4) {
+                offsets[i] = p_strategy.get_relative_offset(p_deltas[i][0], p_deltas[i][1], p_deltas[i][2], p_deltas[i][3], p_element_stride);
+            }
+        }
+        return offsets;
     }
 };
 

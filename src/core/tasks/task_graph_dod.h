@@ -92,6 +92,7 @@ protected:
     void _bake_port_connections();
     void _clean_selections(NodeID p_id, void* p_workspace);
     
+    void _batch_prepare_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, void** p_workspaces);
     void _batch_setup_wave(const NodeID* p_nodes, uint32_t p_count);
     void _batch_execute_wave(const NodeID* p_nodes, uint32_t p_count, double p_delta, void** p_workspaces);
     void _batch_resolve_wave(const NodeID* p_nodes, uint32_t p_count);

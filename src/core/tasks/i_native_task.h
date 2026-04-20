@@ -109,7 +109,7 @@ class INativeTask {
 public:
     virtual ~INativeTask() = default;
     
-    // Virtual interfaces are strictly reserved for the Wave batcher, NEVER the hot loop
+    virtual void prepare(const TaskContextPOD& p_context) = 0;
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) = 0;
     virtual void execute(const TaskContextPOD& p_context) = 0;
 };

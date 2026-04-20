@@ -58,7 +58,6 @@ namespace {
     template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
     template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::KernelSize)>> { static constexpr size_t value = T_Resolver::KernelSize; static constexpr bool has_kernel = true; };
     
-    // Note: LogicResolver is provided by transform_logic_traits.h in your setup
     template <TransformLogicID LogicID, typename T_Concrete, typename T_Strategy> struct LogicKernelExtractor : KernelExtractorImpl<TransformLogicResolver<LogicID, T_Concrete, T_Strategy>> {};
 
     template <MemoryStrategy ID> struct StrategyResolver { static constexpr bool is_valid = false; };

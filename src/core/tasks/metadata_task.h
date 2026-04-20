@@ -40,6 +40,14 @@ public:
     explicit MetadataTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~MetadataTask() override = default;
 
+    virtual void prepare(const TaskContextPOD& p_context) override {
+        // Compile-time check: Only call prepare if the Logic struct defines it.
+        // This keeps simple logic structs lightweight without forcing empty virtuals.
+        if constexpr (requires { logic.prepare(p_context); }) {
+            logic.prepare(p_context);
+        }
+    }
+    
     // MetadataTasks do not cull selections proactively.
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
 
