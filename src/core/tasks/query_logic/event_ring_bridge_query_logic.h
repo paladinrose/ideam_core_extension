@@ -19,7 +19,7 @@ struct EventRingBridgeQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = RingView<T_Event, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
+    static constexpr LogicRequirement requirements = LogicRequirement::ReQUIRES_QUEUE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::RING;
     static constexpr DataType supported_types = DataType::CUSTOM;
 
@@ -38,10 +38,11 @@ struct EventRingBridgeQueryLogic {
         // Ring bridges are strictly additive. You "pull" events to wake entities up.
         if constexpr (Op == QueryOp::ADD) {
             T_Event evt;
-            // Drain the Ring View and route the payloads
+            // No SFINAE required. The Registry guarantees p_view is a RingView (or similar queue)
             while (p_view.pop(evt)) {
-                // Assuming T_Event structs adhere to a standard DOD interface requiring `entity_id`
-                p_context.queue_selection_command(target_buffer_id, evt.entity_id);
+                if constexpr (requires { evt.entity_id; }) { // Keep the payload trait check
+                    p_context.queue_selection_command(target_buffer_id, evt.entity_id);
+                }
             }
         }
     }

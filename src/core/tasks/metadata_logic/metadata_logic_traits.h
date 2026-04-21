@@ -14,9 +14,17 @@ namespace ideam::core {
  * Bitmask defining the structural/hardware dependencies of a metadata logic struct.
  */
 enum class MetadataRequirement : uint32_t {
-    NONE                  = 0,
-    REQUIRES_SPATIAL      = 1 << 0, 
-    REQUIRES_SIMD         = 1 << 1  
+    NONE                     = 0,
+    REQUIRES_SPATIAL         = 1 << 0, 
+    REQUIRES_SIMD            = 1 << 1,
+    REQUIRES_ATOMIC          = 1 << 2, 
+    REQUIRES_PAGED           = 1 << 3, 
+    READ_ONLY_DATA           = 1 << 4,
+    REQUIRES_QUEUE           = 1 << 5, 
+    REQUIRES_STENCIL         = 1 << 6,
+    REQUIRES_SWAP            = 1 << 7,
+    REQUIRES_ENTITY_ID       = 1 << 8,
+    REQUIRES_MULTI_COMPONENT = 1 << 9
 };
 
 constexpr MetadataRequirement operator|(MetadataRequirement a, MetadataRequirement b) noexcept {
@@ -29,11 +37,30 @@ constexpr bool has_metadata_requirement(MetadataRequirement p_mask, MetadataRequ
 
 struct MetadataLogicValidator {
     static constexpr bool validate(MetadataRequirement requirements, BufferLayoutType supported_layouts, ViewCapability view_caps, BufferLayoutType buffer_layout) {
+        
+        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_SPATIAL) && 
+            !has_capability(view_caps, ViewCapability::SPATIAL_ACCESS)) return false;
+
         if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_SIMD) && 
             !has_capability(view_caps, ViewCapability::SIMD_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_SPATIAL) && 
-            !has_capability(view_caps, ViewCapability::SPATIAL_ACCESS)) return false;
+        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_ATOMIC) && 
+            !has_capability(view_caps, ViewCapability::ATOMIC_ACCESS)) return false;
+
+        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_QUEUE) && 
+            !has_capability(view_caps, ViewCapability::QUEUE_ACCESS)) return false;
+
+        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_STENCIL) && 
+            !has_capability(view_caps, ViewCapability::STENCIL_ACCESS)) return false;
+
+        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_SWAP) && 
+            !has_capability(view_caps, ViewCapability::SWAP_ACCESS)) return false;
+
+        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_ENTITY_ID) && 
+            !has_capability(view_caps, ViewCapability::ENTITY_ID_ACCESS)) return false;
+
+        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_MULTI_COMPONENT) && 
+            !has_capability(view_caps, ViewCapability::MULTI_COMPONENT_ACCESS)) return false;
 
         return true;
     }

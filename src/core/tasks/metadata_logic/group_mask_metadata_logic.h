@@ -59,6 +59,24 @@ struct GroupMaskMetadataLogic {
     }
 
 private:
+
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+            return static_cast<T>(p_view[idx]);
+        } else {
+            return T{}; 
+        }
+    }
+
     [[nodiscard]] inline bool _matches(const T& p_val, const T& p_target) const noexcept {
         if constexpr (std::is_floating_point_v<T>) {
             return std::abs(p_val - p_target) <= tolerance;
@@ -116,7 +134,7 @@ private:
 
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                const uint32_t flags = _get_flags(*reinterpret_cast<const T*>(p_view[i]));
+                const uint32_t flags = _get_flags(_read_view(p_view, i));
                 if (flags != 0) {
                     if constexpr (O == GroupMaskOp::SET)         masks[i] = flags;
                     else if constexpr (O == GroupMaskOp::ADD)    masks[i] |= flags;
@@ -134,7 +152,7 @@ private:
 
         for (int64_t i = 0; i < count; ++i) {
             const int64_t idx = indices[i];
-            const uint32_t flags = _get_flags(*reinterpret_cast<const T*>(p_view[idx]));
+            const uint32_t flags = _get_flags(_read_view(p_view, idx));
             if (flags != 0) {
                 if constexpr (O == GroupMaskOp::SET)         masks[idx] = flags;
                 else if constexpr (O == GroupMaskOp::ADD)    masks[idx] |= flags;
@@ -149,7 +167,7 @@ private:
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
-            const uint32_t flags = _get_flags(*reinterpret_cast<const T*>(p_view[i]));
+            const uint32_t flags = _get_flags(_read_view(p_view, i));
             if (flags != 0) {
                 if constexpr (O == GroupMaskOp::SET)         masks[i] = flags;
                 else if constexpr (O == GroupMaskOp::ADD)    masks[i] |= flags;

@@ -176,10 +176,29 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
         // --- Transient Allocation Pass ---
         manager->reset_transient();
         std::vector<void*> wave_workspaces(wave.count, nullptr);
+
         for (uint32_t i = 0; i < wave.count; ++i) {
-            size_t req = transient_bytes_meta[current_wave_nodes[i]];
-            if (req > 0) {
-                wave_workspaces[i] = manager->allocate_transient(req, 64);
+            NodeID id = current_wave_nodes[i];
+            size_t base_req = transient_bytes_meta[id];
+            
+            if (base_req > 0) {
+                size_t final_req = base_req;
+                MemoryGrantPOD* grant = get_grant_mutable(id);
+                
+                // If it's a Native CPU task, query it for dynamic, selection-scaled requirements
+                if (task_types[id] == TaskTypeDOD::NATIVE_CPU && cpu_metadata[id].native_interface && grant) {
+                    // Build a lightweight query context (no command buffers needed yet)
+                    TaskContextPOD query_ctx{ p_delta, grant, manager, nullptr, nullptr, nullptr };
+                    size_t dynamic_req = cpu_metadata[id].native_interface->get_transient_requirement(query_ctx);
+                    
+                    // Allow the task to override the static requirement if it answered
+                    if (dynamic_req > 0) {
+                        final_req = dynamic_req;
+                    }
+                }
+
+                // Lock-free bump allocation. Returns nullptr if the arena ceiling is hit.
+                wave_workspaces[i] = manager->allocate_transient(final_req, 64);
             }
         }
 

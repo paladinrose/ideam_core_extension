@@ -53,6 +53,27 @@ struct LODMetadataLogic {
     }
 
 private:
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        // Case 1: View returns a typeless pointer (Your original requirement)
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T*>(p_view[idx]);
+        } 
+        // Case 2: View returns a typed Value or Proxy (My previous fix)
+        else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+            return static_cast<T>(p_view[idx]);
+        } 
+        // Case 3: Matrix Dummy/Fallback (Silently dissolve)
+        else {
+            return T{}; 
+        }
+    }
     [[nodiscard]] inline bool _matches(const T& p_val, const T& p_target) const noexcept {
         if constexpr (std::is_floating_point_v<T>) {
             return std::abs(p_val - p_target) <= tolerance;
@@ -82,7 +103,7 @@ private:
 
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                lods[i] = _get_lod(*reinterpret_cast<const T*>(p_view[i]));
+                lods[i] = _get_lod(_read_view(p_view, i)); // NATIVE VIEW RESOLUTION
             }
         }
     }
@@ -95,7 +116,7 @@ private:
 
         for (int64_t i = 0; i < count; ++i) {
             const int64_t idx = indices[i];
-            lods[idx] = _get_lod(*reinterpret_cast<const T*>(p_view[idx]));
+            lods[idx] = _get_lod(_read_view(p_view, idx));
         }
     }
 
@@ -105,7 +126,7 @@ private:
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
-            lods[i] = _get_lod(*reinterpret_cast<const T*>(p_view[i]));
+            lods[i] = _get_lod(_read_view(p_view, i));
         }
     }
 };

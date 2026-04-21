@@ -55,6 +55,93 @@ namespace {
         }
     };
 
+    // --- Transform Logic Resolver ---
+    // Maps the TransformLogicID enum pseudo-entries into concrete, fully specialized Logic types.
+    template <TransformLogicID L, typename T, typename T_Strategy>
+    struct TransformLogicResolver {
+        // Empty primary template. Unmapped combinations safely fail SFINAE.
+    };
+
+    // --- Single Template Argument (<T>) ---
+    
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::BoundaryConstraint, T, T_Strategy> {
+        using Type = BoundaryConstraintTransformLogic<T>;
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::BoundsExtraction, T, T_Strategy> {
+        using Type = BoundsExtractionTransformLogic<T>;
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::DataScatter, T, T_Strategy> {
+        using Type = DataScatterTransformLogic<T>;
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::DataSort, T, T_Strategy> {
+        using Type = DataSortTransformLogic<T>;
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::NoiseInjection, T, T_Strategy> {
+        using Type = NoiseInjectionTransformLogic<T>;
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::ValueAccumulation, T, T_Strategy> {
+        using Type = ValueAccumulationTransformLogic<T>;
+    };
+
+    // --- Concrete Types (No Template Arguments) ---
+    // The resolver safely absorbs and discards T and T_Strategy.
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::EulerIntegration, T, T_Strategy> {
+        using Type = EulerIntegrationTransformLogic; 
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::FastNoiseLite, T, T_Strategy> {
+        using Type = FastNoiseLiteTransformLogic; 
+    };
+
+    // --- Stencil Pseudo-Variants (<T, T_Strategy, KernelSize>) ---
+    // The Resolver translates the enum ID into the exact KernelSize for loop unrolling.
+
+    // Moore Neighborhoods (Square bounds)
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, T, T_Strategy> {
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 9>; // 3x3 Grid
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, T, T_Strategy> {
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; // 5x5 Grid
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, T, T_Strategy> {
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 49>; // 7x7 Grid
+    };
+
+    // Von Neumann Neighborhoods (Diamond bounds)
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, T, T_Strategy> {
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 5>; // Center + 4 Adjacent
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, T, T_Strategy> {
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 13>; // Center + 4 + 8
+    };
+
+    template <typename T, typename T_Strategy>
+    struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, T, T_Strategy> {
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; // Center + 4 + 8 + 12
+    };
+
     template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
     template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::KernelSize)>> { static constexpr size_t value = T_Resolver::KernelSize; static constexpr bool has_kernel = true; };
     

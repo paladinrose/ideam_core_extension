@@ -47,6 +47,24 @@ struct ArchetypeQueryLogic {
     }
 
 private:
+
+    // --- The DOD View Adapter (Archetype / uint32_t Specialized) ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline uint32_t _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const uint32_t*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<uint32_t>(p_view[idx]); }) {
+            return static_cast<uint32_t>(p_view[idx]);
+        } else {
+            return 0; 
+        }
+    }
+
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
@@ -66,7 +84,7 @@ private:
         uint64_t* bitset = r_selection.data.bitset;
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate(p_view[i], p_ctx)) {
+                if (!_evaluate(_read_view(p_view, i), p_ctx)) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_selection.element_count--;
                 }
@@ -79,7 +97,7 @@ private:
         int64_t write_ptr = 0;
         const int64_t count = r_selection.element_count;
         for (int64_t i = 0; i < count; ++i) {
-            if (_evaluate(p_view[i], p_ctx)) {
+            if (_evaluate(_read_view(p_view, i), p_ctx)) {
                 r_selection.data.indices[write_ptr++] = r_selection.data.indices[i];
             }
         }
@@ -100,7 +118,7 @@ private:
                 
                 if (global_index >= r_selection.capacity) break;
 
-                if (_evaluate(p_view[global_index], p_ctx)) {
+                if (_evaluate(_read_view(p_view, global_index), p_ctx)) {
                     p_ctx.queue_selection_command(target_buffer_id, global_index);
                 }
                 mask &= (mask - 1); 

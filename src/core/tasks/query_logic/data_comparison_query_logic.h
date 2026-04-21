@@ -34,6 +34,24 @@ struct DataComparisonQueryLogic {
 
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+            return static_cast<T>(p_view[idx]);
+        } else {
+            return T{}; 
+        }
+    }
+    
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
@@ -83,7 +101,7 @@ struct DataComparisonQueryLogic {
                         if (global_index >= r_selection.capacity) break;
 
                         // Compare primary (View Lens) to secondary (Raw Pointer)
-                        if (_evaluate(*reinterpret_cast<const T*>(p_view[global_index]), buffer_b[global_index])) {
+                        if (_evaluate(_read_view(p_view, global_index), buffer_b[global_index])) {
                             bitset[w] &= ~(1ULL << bit_index);
                             r_selection.element_count--;
                         }
@@ -99,7 +117,7 @@ struct DataComparisonQueryLogic {
                 
                 for (int64_t i = 0; i < r_selection.element_count; ++i) {
                     int64_t global_index = indices[i];
-                    if (_evaluate(*reinterpret_cast<const T*>(p_view[global_index]), buffer_b[global_index])) {
+                    if (_evaluate(_read_view(p_view, global_index), buffer_b[global_index])) {
                         indices[write_ptr++] = global_index;
                     }
                 }
@@ -122,7 +140,7 @@ struct DataComparisonQueryLogic {
                     
                     if (global_index >= r_selection.capacity) break;
 
-                    if (_evaluate(*reinterpret_cast<const T*>(p_view[global_index]), buffer_b[global_index])) {
+                    if (_evaluate(_read_view(p_view, global_index), buffer_b[global_index])) {
                         if (r_selection.mode == SelectionMode::DENSE) {
                             r_selection.data.bitset[w] |= (1ULL << bit_index);
                             r_selection.element_count++;

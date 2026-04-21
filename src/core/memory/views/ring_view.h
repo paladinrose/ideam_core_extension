@@ -43,7 +43,8 @@ struct RingView {
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::RANDOM_ACCESS | 
+        ViewCapability::RANDOM_ACCESS |
+        ViewCapability::QUEUE_ACCESS | 
         (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
 
     static constexpr bool is_spatial = Strategy::is_spatial;

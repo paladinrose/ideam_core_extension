@@ -40,6 +40,16 @@ public:
     explicit TransformTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~TransformTask() override = default;
 
+    virtual size_t get_transient_requirement(const TaskContextPOD& p_context) const override {
+        // C++20 Compile-Time Route Resolution
+        if constexpr (requires { logic.get_transient_requirement(p_context); }) {
+            return logic.get_transient_requirement(p_context); // Dynamic Path
+        } else if constexpr (requires { T_Logic::transient_workspace_bytes; }) {
+            return T_Logic::transient_workspace_bytes;         // Static Fallback
+        }
+        return 0;
+    }
+    
     // Transforms are pure math/reductions, they do not prune bitmask selections.
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
 

@@ -51,6 +51,24 @@ struct PartitionMetadataLogic {
     }
 
 private:
+
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+            return static_cast<T>(p_view[idx]);
+        } else {
+            return T{}; 
+        }
+    }
+    
     [[nodiscard]] inline int32_t _map_value(const T& p_val) const noexcept {
         if constexpr (N == 1) {
             return (p_val == mappings[0].source_value) ? mappings[0].partition_id : default_partition;
@@ -70,7 +88,7 @@ private:
 
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                partitions[i] = static_cast<int64_t>(_map_value(p_view[i]));
+                partitions[i] = static_cast<int64_t>(_map_value(_read_view(p_view, i)));
             }
         }
     }
@@ -83,7 +101,7 @@ private:
 
         for (int64_t i = 0; i < count; ++i) {
             const int64_t idx = indices[i];
-            partitions[idx] = static_cast<int64_t>(_map_value(p_view[idx]));
+            partitions[idx] = static_cast<int64_t>(_map_value(_read_view(p_view, idx)));
         }
     }
 
@@ -93,7 +111,7 @@ private:
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
-            partitions[i] = static_cast<int64_t>(_map_value(p_view[i]));
+            partitions[i] = static_cast<int64_t>(_map_value(_read_view(p_view, i)));
         }
     }
 };

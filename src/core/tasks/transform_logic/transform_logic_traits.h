@@ -14,11 +14,17 @@ namespace ideam::core {
  * Bitmask defining the hardware or structural dependencies of a T_Logic payload.
  */
 enum class TransformRequirement : uint32_t {
-    NONE                  = 0,
-    REQUIRES_SPATIAL      = 1 << 0, // Needs at(x,y,z) or neighbor stencils
-    REQUIRES_SIMD         = 1 << 1, // Demands AOSOAView or get_lane()
-    REQUIRES_ATOMIC       = 1 << 2, // Needs thread-safe aggregation (AtomicView)
-    REQUIRES_PAGED        = 1 << 3  // Optimized for virtualized 4D memory
+    NONE                     = 0,
+    REQUIRES_SPATIAL         = 1 << 0, // Needs at(x,y,z)
+    REQUIRES_SIMD            = 1 << 1, // Demands AOSOAView or get_lane()
+    REQUIRES_ATOMIC          = 1 << 2, // Needs thread-safe aggregation (AtomicView)
+    REQUIRES_PAGED           = 1 << 3, // Optimized for virtualized 4D memory
+    READ_ONLY_DATA           = 1 << 4,
+    REQUIRES_QUEUE           = 1 << 5, 
+    REQUIRES_STENCIL         = 1 << 6, // Needs neighbor() stencils
+    REQUIRES_SWAP            = 1 << 7, // Needs Temporal Ping-Pong proxies
+    REQUIRES_ENTITY_ID       = 1 << 8,
+    REQUIRES_MULTI_COMPONENT = 1 << 9
 };
 
 constexpr TransformRequirement operator|(TransformRequirement a, TransformRequirement b) noexcept {
@@ -32,15 +38,29 @@ constexpr bool has_transform_requirement(TransformRequirement p_mask, TransformR
 struct TransformLogicValidator {
     static constexpr bool validate(TransformRequirement requirements, BufferLayoutType supported_layouts, ViewCapability view_caps, BufferLayoutType buffer_layout) {
         
-        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_SIMD) && 
-            !has_capability(view_caps, ViewCapability::SIMD_ACCESS)) {
-            return false;
-        }
-
         if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_SPATIAL) && 
-            !has_capability(view_caps, ViewCapability::SPATIAL_ACCESS)) {
-            return false;
-        }
+            !has_capability(view_caps, ViewCapability::SPATIAL_ACCESS)) return false;
+
+        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_SIMD) && 
+            !has_capability(view_caps, ViewCapability::SIMD_ACCESS)) return false;
+
+        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_ATOMIC) && 
+            !has_capability(view_caps, ViewCapability::ATOMIC_ACCESS)) return false;
+
+        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_QUEUE) && 
+            !has_capability(view_caps, ViewCapability::QUEUE_ACCESS)) return false;
+
+        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_STENCIL) && 
+            !has_capability(view_caps, ViewCapability::STENCIL_ACCESS)) return false;
+
+        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_SWAP) && 
+            !has_capability(view_caps, ViewCapability::SWAP_ACCESS)) return false;
+
+        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_ENTITY_ID) && 
+            !has_capability(view_caps, ViewCapability::ENTITY_ID_ACCESS)) return false;
+
+        if (has_transform_requirement(requirements, TransformRequirement::REQUIRES_MULTI_COMPONENT) && 
+            !has_capability(view_caps, ViewCapability::MULTI_COMPONENT_ACCESS)) return false;
 
         return true;
     }

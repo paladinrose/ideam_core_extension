@@ -54,6 +54,23 @@ struct BitmaskQueryLogic {
     }
 
 private:
+
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+            return static_cast<T>(p_view[idx]);
+        } else {
+            return T{}; 
+        }
+    }
     template <BitOp O>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -71,7 +88,7 @@ private:
     void _loop_dense_cull(uint64_t* p_bitset, int64_t p_capacity, const T_View& p_view, int64_t& r_element_count) const {
         for (int64_t i = 0; i < p_capacity; ++i) {
             if (p_bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate<O>(p_view[i])) {
+                if (!_evaluate<O>(_read_view(p_view, i))) {
                     p_bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_element_count--;
                 }
@@ -82,7 +99,7 @@ private:
     template <BitOp O, typename T_View>
     void _loop_sparse_cull(int64_t* indices, int64_t p_count, const T_View& p_view, int64_t& r_write_ptr) const {
         for (int64_t i = 0; i < p_count; ++i) {
-            if (_evaluate<O>(p_view[i])) {
+            if (_evaluate<O>(_read_view(p_view, i))) {
                 indices[r_write_ptr++] = indices[i];
             }
         }
@@ -102,7 +119,7 @@ private:
                 
                 if (global_index >= r_selection.capacity) break;
 
-                if (_evaluate<O>(p_view[global_index])) {
+                if (_evaluate<O>(_read_view(p_view, global_index))) {
                     p_ctx.queue_selection_command(target_buffer_id, global_index);
                 }
                 m &= (m - 1); 

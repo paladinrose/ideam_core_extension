@@ -56,6 +56,16 @@ public:
         }
     }
 
+    virtual size_t get_transient_requirement(const TaskContextPOD& p_context) const override {
+        // C++20 Compile-Time Route Resolution for Metadata Logic
+        if constexpr (requires { logic.get_transient_requirement(p_context); }) {
+            return logic.get_transient_requirement(p_context); 
+        } else if constexpr (requires { T_Logic::transient_workspace_bytes; }) {
+            return T_Logic::transient_workspace_bytes;         
+        }
+        return 0;
+    }
+    
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {
         // Only CULL operations manipulate the active working set bitmask immediately.
         if constexpr (Op != QueryOp::CULL) return;

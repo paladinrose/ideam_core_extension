@@ -11,12 +11,18 @@ namespace ideam::core {
  * Bitmask for high-level T_Logic dispatching.
  */
 enum class ViewCapability : uint32_t {
-    NONE            = 0,
-    LINEAR_ACCESS   = 1 << 0, // Supports operator[] selection-relative
-    SPATIAL_ACCESS  = 1 << 1, // Supports at(x, y, z)
-    SIMD_ACCESS     = 1 << 2, // Supports get_lane / LaneWidth
-    RANDOM_ACCESS   = 1 << 3, // Supports arbitrary ID lookups
-    VIRTUAL_MEMORY  = 1 << 4  // Paged/Indirect (Strategy-dependent)
+    NONE                   = 0,
+    LINEAR_ACCESS          = 1 << 0,  // Supports operator[] selection-relative
+    SPATIAL_ACCESS         = 1 << 1,  // Supports at(x, y, z)
+    SIMD_ACCESS            = 1 << 2,  // Supports get_lane / LaneWidth
+    RANDOM_ACCESS          = 1 << 3,  // Supports arbitrary ID lookups
+    VIRTUAL_MEMORY         = 1 << 4,  // Paged/Indirect (Strategy-dependent)
+    QUEUE_ACCESS           = 1 << 5,  // Supports stateful consumption (pop)
+    STENCIL_ACCESS         = 1 << 6,  // Supports center() and neighbor(k)
+    SWAP_ACCESS            = 1 << 7,  // Supports Temporal Ping-Pong read/write proxies
+    ENTITY_ID_ACCESS       = 1 << 8,  // Supports get_entity_at() for Sparse ECS bridging
+    MULTI_COMPONENT_ACCESS = 1 << 9,  // Supports pluck<T>() for heterogeneous payloads
+    ATOMIC_ACCESS          = 1 << 10  // Supports std::atomic_ref returns
 };
 
 constexpr ViewCapability operator|(ViewCapability a, ViewCapability b) noexcept {
