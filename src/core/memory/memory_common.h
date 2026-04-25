@@ -8,12 +8,7 @@ namespace ideam::core {
 
 static constexpr uint32_t INVALID_ID = 0xFFFFFFFF;
 
-/**
- * DataType
- * Standardized COMMON for the simulation backend.
- * Underlying int64_t for seamless casting to Godot's Variant if needed.
- * Includes CUSTOM hook for plugin-specific or composite structures.
- */
+
 enum class DataType : uint64_t {
     NONE       = 0,
     

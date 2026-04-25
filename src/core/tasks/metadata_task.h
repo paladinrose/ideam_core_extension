@@ -3,7 +3,9 @@
 #include "metadata_logic/metadata_logic_traits.h"
 #include "i_native_task.h"
 #include "../memory/views/view_traits.h"
+
 #include <type_traits>
+#include <new> // Required for hardware_destructive_interference_size
 
 namespace ideam::core {
 
@@ -12,16 +14,27 @@ template<
     typename T_View     = typename T_Logic::DefaultView, 
     typename T_Strategy = typename T_Logic::DefaultStrategy
 >
+// Utilize hardware-aware cache line sizing to strictly prevent false sharing 
+// when the Task Graph dispatches these blocks to parallel thread pools.
+#ifdef __cpp_lib_hardware_interference_size
+class alignas(std::hardware_destructive_interference_size) MetadataTask final : public INativeTask {
+#else
 class alignas(64) MetadataTask final : public INativeTask {
+#endif
     
+    // --- Compile-Time Firewall ---
+    // Evaluates the strict bitwise intersection of what the Logic structural 
+    // payload demands vs what the instantiated View can provide.
     static_assert(
         MetadataLogicValidator::validate(
             T_Logic::requirements, 
             T_Logic::supported_layouts, 
-            ViewTraits<T_View>::capabilities, 
-            BufferLayoutType::NONE 
+            T_Logic::supported_types,
+            ViewTraits<T_View>::capabilities,
+            ViewTraits<T_View>::supported_layouts,
+            ViewTraits<T_View>::supported_types
         ),
-        "MetadataTask instantiation failed: Selected T_View does not fulfill T_Logic requirements!"
+        "MetadataTask instantiation failed: The selected T_View or T_Strategy does not fulfill the hardware, layout, or type requirements of the T_Logic!"
     );
 
 private:
@@ -34,8 +47,10 @@ public:
 
     MetadataTask() = default;
 
-    // --- NEW: Expose the supported types bitmask to the Registry Builder for O(1) pruning ---
-    static constexpr DataType supported_types = T_Logic::supported_types;
+    // --- O(1) Pruning Bitmask ---
+    // Expose the precise intersection of types. Guarantees the Factory Builder 
+    // will only instantiate this pipeline if the runtime data aligns properly.
+    static constexpr DataType supported_types = T_Logic::supported_types & ViewTraits<T_View>::supported_types;
 
     explicit MetadataTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~MetadataTask() override = default;
@@ -78,5 +93,3 @@ public:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_METADATA_TASK_H

@@ -4,7 +4,9 @@
 #include "query_logic/query_logic_traits.h"
 #include "../memory/views/single_element_view.h"
 #include "../memory/views/strategies.h"
+
 #include <cstddef> 
+#include <new> // Required for hardware_destructive_interference_size
 
 namespace ideam::core {
 
@@ -14,7 +16,13 @@ template<
     typename T_View     = typename T_Logic::DefaultView, 
     typename T_Strategy = typename T_Logic::DefaultStrategy
 >
+// Utilize hardware-aware cache line sizing to strictly prevent false sharing 
+// when the Task Graph dispatches these blocks to parallel thread pools.
+#ifdef __cpp_lib_hardware_interference_size
+class alignas(std::hardware_destructive_interference_size) QueryTask final : public INativeTask {
+#else
 class alignas(64) QueryTask final : public INativeTask {
+#endif
     
     static_assert(
         (Op == QueryOp::CULL && T_Logic::supports_cull) ||
@@ -22,14 +30,17 @@ class alignas(64) QueryTask final : public INativeTask {
         "QueryTask instantiated with a QueryOp that the T_Logic does not support!"
     );
 
+    // --- Compile-Time Firewall ---
     static_assert(
         QueryLogicValidator::validate(
             T_Logic::requirements, 
             T_Logic::supported_layouts, 
+            T_Logic::supported_types,
             ViewTraits<T_View>::capabilities, 
-            BufferLayoutType::NONE
+            ViewTraits<T_View>::supported_layouts,
+            ViewTraits<T_View>::supported_types
         ),
-        "QueryTask instantiation failed: Selected T_View does not fulfill T_Logic requirements!"
+        "QueryTask instantiation failed: The selected T_View or T_Strategy does not fulfill the hardware, layout, or type requirements of the T_Logic!"
     );
 
 private:
@@ -42,8 +53,9 @@ public:
 
     QueryTask() = default;
 
-    // --- NEW: Expose the supported types bitmask to the Registry Builder for O(1) pruning ---
-    static constexpr DataType supported_types = T_Logic::supported_types;
+    // --- O(1) Pruning Bitmask ---
+    // Expose the precise intersection of types for the Factory Registry
+    static constexpr DataType supported_types = T_Logic::supported_types & ViewTraits<T_View>::supported_types;
 
     explicit QueryTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~QueryTask() override = default;
@@ -101,9 +113,6 @@ public:
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
 
-
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_QUERY_TASK_H

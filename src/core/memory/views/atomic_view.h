@@ -45,10 +45,20 @@ struct AtomicView {
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
         ViewCapability::RANDOM_ACCESS | 
+        ViewCapability::ATOMIC_ACCESS |
         (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
+    
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA | 
+        BufferLayoutType::SPARSE_SET | BufferLayoutType::TILED_SOA;
 
-    static constexpr bool is_spatial = Strategy::is_spatial;
-    static constexpr bool is_simd = false;
+    
+    static constexpr ViewStrategies supported_strategies = 
+        ViewStrategies::ANY_LINEAR | ViewStrategies::ANY_SPATIAL;
+
+    // Bounded to 8 bytes or fewer to guarantee lock-free atomic hardware instructions.
+    static constexpr DataType supported_types = DataType::ANY_NUMERIC;
+
     static constexpr uint32_t lane_width = 1;
 
     /**

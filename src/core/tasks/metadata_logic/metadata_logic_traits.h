@@ -36,31 +36,46 @@ constexpr bool has_metadata_requirement(MetadataRequirement p_mask, MetadataRequ
 }
 
 struct MetadataLogicValidator {
-    static constexpr bool validate(MetadataRequirement requirements, BufferLayoutType supported_layouts, ViewCapability view_caps, BufferLayoutType buffer_layout) {
-        
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_SPATIAL) && 
+    static constexpr bool validate(
+        MetadataRequirement logic_reqs, 
+        BufferLayoutType logic_layouts, 
+        DataType logic_types,
+        ViewCapability view_caps, 
+        BufferLayoutType view_layouts,
+        DataType view_types) 
+    {
+        // 1. Hardware/Capability Access Validation
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_SPATIAL) && 
             !has_capability(view_caps, ViewCapability::SPATIAL_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_SIMD) && 
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_SIMD) && 
             !has_capability(view_caps, ViewCapability::SIMD_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_ATOMIC) && 
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_ATOMIC) && 
             !has_capability(view_caps, ViewCapability::ATOMIC_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_QUEUE) && 
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_QUEUE) && 
             !has_capability(view_caps, ViewCapability::QUEUE_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_STENCIL) && 
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_STENCIL) && 
             !has_capability(view_caps, ViewCapability::STENCIL_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_SWAP) && 
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_SWAP) && 
             !has_capability(view_caps, ViewCapability::SWAP_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_ENTITY_ID) && 
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_ENTITY_ID) && 
             !has_capability(view_caps, ViewCapability::ENTITY_ID_ACCESS)) return false;
 
-        if (has_metadata_requirement(requirements, MetadataRequirement::REQUIRES_MULTI_COMPONENT) && 
+        if (has_metadata_requirement(logic_reqs, MetadataRequirement::REQUIRES_MULTI_COMPONENT) && 
             !has_capability(view_caps, ViewCapability::MULTI_COMPONENT_ACCESS)) return false;
+
+        // 2. Structural Layout Intersection
+        // Validates that the View supports at least one memory layout required by the Logic payload.
+        if ((logic_layouts & view_layouts) == BufferLayoutType::NONE) return false;
+
+        // 3. Payload DataType Intersection
+        // Validates that the View supports at least one underlying primitive type that the Logic expects.
+        if ((logic_types & view_types) == DataType::NONE) return false;
 
         return true;
     }
@@ -92,5 +107,3 @@ concept IsMetadataLogic = requires {
 } && std::is_trivially_copyable_v<T>;
 
 } // namespace ideam::core
-
- // IDEAM_CORE_METADATA_LOGIC_TRAITS_H

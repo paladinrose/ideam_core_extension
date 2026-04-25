@@ -52,8 +52,17 @@ struct BridgeView {
     
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = ViewCapability::SPATIAL_ACCESS;
-    static constexpr bool is_spatial = true;
-    static constexpr bool is_simd = false;
+
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA | 
+        BufferLayoutType::TILED_SOA;
+
+    // Bridge logic specifically enforces spatial hierarchies for block-based cell subdivision.
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY_SPATIAL;
+
+    // Data agnostic: strictly an indexing offset operation.
+    static constexpr DataType supported_types = DataType::ANY;
+
     static constexpr uint32_t lane_width = 1;
 
     /**

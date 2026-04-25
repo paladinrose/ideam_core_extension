@@ -39,8 +39,6 @@ struct PagedView {
     // Locks the base members to exactly 48 bytes (perfect 16-byte multiple).
     uint8_t reserved_padding[12] = {0};
 
-   
-
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
@@ -48,8 +46,15 @@ struct PagedView {
         ViewCapability::VIRTUAL_MEMORY |
         (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
 
-    static constexpr bool is_spatial = Strategy::is_spatial;
-    static constexpr bool is_simd = false;
+    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::PAGED;
+
+    // Can virtualize any contiguous array or spatial grid.
+    static constexpr ViewStrategies supported_strategies = 
+        ViewStrategies::ANY_LINEAR | ViewStrategies::ANY_SPATIAL;
+
+    // Structural constraint: Hardware paging manages blocks of bytes, agnostic to the underlying type.
+    static constexpr DataType supported_types = DataType::ANY;
+
     static constexpr uint32_t lane_width = 1;
 
     /**

@@ -67,10 +67,19 @@ struct SwapView {
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
         ViewCapability::RANDOM_ACCESS | 
+        ViewCapability::SWAP_ACCESS |
         (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
 
-    static constexpr bool is_spatial = Strategy::is_spatial;
-    static constexpr bool is_simd = false;
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA | 
+        BufferLayoutType::SPARSE_SET | BufferLayoutType::TILED_SOA;
+
+    static constexpr ViewStrategies supported_strategies = 
+        ViewStrategies::ANY_LINEAR | ViewStrategies::ANY_SPATIAL;
+
+    // Valid for all standard layout aggregates and primitives.
+    static constexpr DataType supported_types = DataType::ANY;
+
     static constexpr uint32_t lane_width = 1;
 
     /**

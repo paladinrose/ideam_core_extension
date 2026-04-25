@@ -43,10 +43,16 @@ struct SparseSetView {
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
         ViewCapability::RANDOM_ACCESS | 
+        ViewCapability::ENTITY_ID_ACCESS |
         (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
 
-    static constexpr bool is_spatial = Strategy::is_spatial;
-    static constexpr bool is_simd = false;
+    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::SPARSE_SET;
+
+    static constexpr ViewStrategies supported_strategies = 
+        ViewStrategies::ANY_LINEAR | ViewStrategies::ANY_SPATIAL;
+
+    static constexpr DataType supported_types = DataType::ANY;
+
     static constexpr uint32_t lane_width = 1;
 
     /**

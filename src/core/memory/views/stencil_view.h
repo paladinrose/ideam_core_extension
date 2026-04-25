@@ -47,11 +47,19 @@ struct StencilView {
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::RANDOM_ACCESS | 
-        (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
+        ViewCapability::SPATIAL_ACCESS |
+        ViewCapability::STENCIL_ACCESS;
 
-    static constexpr bool is_spatial = Strategy::is_spatial;
-    static constexpr bool is_simd = false;
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA | 
+        BufferLayoutType::SPARSE_SET | BufferLayoutType::TILED_SOA;
+
+    // Geometric coordinate folding relies exclusively on multi-dimensional strides.
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY_SPATIAL;
+
+    // Pointer-math based; agnostic to the underlying memory payload.
+    static constexpr DataType supported_types = DataType::ANY;
+
     static constexpr uint32_t lane_width = 1;
 
     /**

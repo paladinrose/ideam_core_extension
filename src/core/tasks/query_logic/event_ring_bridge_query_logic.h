@@ -19,7 +19,7 @@ struct EventRingBridgeQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = RingView<T_Event, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::ReQUIRES_QUEUE;
+    static constexpr LogicRequirement requirements = LogicRequirement::REQUIRES_QUEUE;
     static constexpr BufferLayoutType supported_layouts = BufferLayoutType::RING;
     static constexpr DataType supported_types = DataType::CUSTOM;
 

@@ -43,39 +43,53 @@ constexpr LogicRequirement operator|(LogicRequirement a, LogicRequirement b) noe
     return static_cast<LogicRequirement>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
 
+constexpr bool has_logic_requirement(LogicRequirement p_mask, LogicRequirement p_req) noexcept {
+    return (static_cast<uint32_t>(p_mask) & static_cast<uint32_t>(p_req)) != 0;
+}
+
 /**
  * QueryLogicValidator
  * The DOD Compile-Time Gatekeeper. Prevents invalid matrix pairings.
  */
 struct QueryLogicValidator {
-    static constexpr bool validate(LogicRequirement requirements, BufferLayoutType buffer_layout, ViewCapability p_view_caps, BufferLayoutType p_view_layout) {
-        
-        const uint32_t reqs = static_cast<uint32_t>(requirements);
+    static constexpr bool validate(
+        LogicRequirement logic_reqs, 
+        BufferLayoutType logic_layouts, 
+        DataType logic_types,
+        ViewCapability view_caps, 
+        BufferLayoutType view_layouts,
+        DataType view_types) 
+    {
+        // 1. Hardware/Capability Access Validation
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_SPATIAL) && 
+            !has_capability(view_caps, ViewCapability::SPATIAL_ACCESS)) return false;
 
-        // If the Logic requires a capability, the View MUST provide it.
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_SPATIAL)) &&
-            !has_capability(p_view_caps, ViewCapability::SPATIAL_ACCESS)) return false;
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_SIMD) && 
+            !has_capability(view_caps, ViewCapability::SIMD_ACCESS)) return false;
 
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_SIMD)) &&
-            !has_capability(p_view_caps, ViewCapability::SIMD_ACCESS)) return false;
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_ATOMIC) && 
+            !has_capability(view_caps, ViewCapability::ATOMIC_ACCESS)) return false;
 
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_ATOMIC)) &&
-            !has_capability(p_view_caps, ViewCapability::ATOMIC_ACCESS)) return false;
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_QUEUE) && 
+            !has_capability(view_caps, ViewCapability::QUEUE_ACCESS)) return false;
 
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_QUEUE)) &&
-            !has_capability(p_view_caps, ViewCapability::QUEUE_ACCESS)) return false;
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_STENCIL) && 
+            !has_capability(view_caps, ViewCapability::STENCIL_ACCESS)) return false;
 
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_STENCIL)) &&
-            !has_capability(p_view_caps, ViewCapability::STENCIL_ACCESS)) return false;
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_SWAP) && 
+            !has_capability(view_caps, ViewCapability::SWAP_ACCESS)) return false;
 
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_SWAP)) &&
-            !has_capability(p_view_caps, ViewCapability::SWAP_ACCESS)) return false;
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_ENTITY_ID) && 
+            !has_capability(view_caps, ViewCapability::ENTITY_ID_ACCESS)) return false;
 
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_ENTITY_ID)) &&
-            !has_capability(p_view_caps, ViewCapability::ENTITY_ID_ACCESS)) return false;
+        if (has_logic_requirement(logic_reqs, LogicRequirement::REQUIRES_MULTI_COMPONENT) && 
+            !has_capability(view_caps, ViewCapability::MULTI_COMPONENT_ACCESS)) return false;
 
-        if ((reqs & static_cast<uint32_t>(LogicRequirement::REQUIRES_MULTI_COMPONENT)) &&
-            !has_capability(p_view_caps, ViewCapability::MULTI_COMPONENT_ACCESS)) return false;
+        // 2. Structural Layout Intersection
+        if ((logic_layouts & view_layouts) == BufferLayoutType::NONE) return false;
+
+        // 3. Payload DataType Intersection
+        if ((logic_types & view_types) == DataType::NONE) return false;
 
         return true;
     }
@@ -108,5 +122,3 @@ concept IsQueryLogic = requires {
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_QUERY_LOGIC_TRAITS_H

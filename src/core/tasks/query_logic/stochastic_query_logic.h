@@ -48,6 +48,24 @@ struct StochasticQueryLogic {
     }
 
 private:
+
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+            return static_cast<T>(p_view[idx]);
+        } else {
+            return T{}; 
+        }
+    }
+    
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
@@ -67,12 +85,12 @@ private:
     template <typename T_View>
     void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view) const {
         uint64_t* bitset = r_selection.data.bitset;
-        uint32_t rng_state = seed_base ^ (p_view.get_version() * 0x27D4EB2D);
+        uint32_t rng_state = seed_base ^ (r_selection.selection_version * 0x27D4EB2D);
 
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
             float prob = global_probability;
             if constexpr (!std::is_void_v<T> && !std::is_same_v<T, uint8_t>) {
-                prob = static_cast<float>(p_view[i]);
+                prob = static_cast<float>(_read_view(p_view, i));
             }
 
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
@@ -90,7 +108,7 @@ private:
     void _cull_sparse(MemoryBufferSelectionPOD& r_selection, const T_View& p_view) const {
         int64_t* indices = r_selection.data.indices;
         int64_t write_ptr = 0;
-        uint32_t base_rng_state = seed_base ^ (p_view.get_version() * 0x27D4EB2D);
+        uint32_t base_rng_state = seed_base ^ (r_selection.selection_version * 0x27D4EB2D);
 
         for (int64_t i = 0; i < r_selection.element_count; ++i) {
             const int64_t idx = indices[i];
@@ -98,7 +116,7 @@ private:
             
             float prob = global_probability;
             if constexpr (!std::is_void_v<T> && !std::is_same_v<T, uint8_t>) {
-                prob = static_cast<float>(p_view[idx]);
+                prob = static_cast<float>(_read_view(p_view, idx));
             }
 
             if (_evaluate(local_state, prob)) {

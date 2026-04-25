@@ -71,6 +71,7 @@ private:
             return T{}; 
         }
     }
+    
     template <BitOp O>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]

@@ -50,11 +50,19 @@ struct StaticStencilView {
     // --- Capability Traits ---
     static constexpr ViewCapability capabilities = 
         ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::RANDOM_ACCESS | 
+        ViewCapability::STENCIL_ACCESS |
         (Strategy::is_spatial ? ViewCapability::SPATIAL_ACCESS : ViewCapability::NONE);
 
-    static constexpr bool is_spatial = Strategy::is_spatial;
-    static constexpr bool is_simd = false;
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA | 
+        BufferLayoutType::SPARSE_SET | BufferLayoutType::TILED_SOA;
+
+    // Bake logic seamlessly handles both 1D sequence shifts and complex spatial arrays.
+    static constexpr ViewStrategies supported_strategies = 
+        ViewStrategies::ANY_LINEAR | ViewStrategies::ANY_SPATIAL;
+
+    static constexpr DataType supported_types = DataType::ANY;
+
     static constexpr uint32_t lane_width = 1;
 
     /**
