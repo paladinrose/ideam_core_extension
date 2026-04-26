@@ -32,18 +32,15 @@ struct AccumulationResult {
  */
 template <typename T>
 struct alignas(64) ValueAccumulationTransformLogic {
-    static_assert(std::is_arithmetic_v<T>, "ValueAccumulationTransformLogic strictly requires numeric scalar types.");
-
     using ValueType       = T;
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr TransformRequirement requirements = TransformRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
-    static constexpr DataType supported_types = 
-    DataType::BYTE | DataType::INT32 | DataType::INT64 | 
-    DataType::FLOAT32 | DataType::FLOAT64;
-    static constexpr size_t transient_workspace_bytes = 0; 
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR; // Upgraded from FLAT | AOS | SOA
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC;        // Cleaned up to use aggregate mask
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---
     AccumulationMode mode = AccumulationMode::SUM;

@@ -26,9 +26,9 @@ class alignas(64) TransformTask final : public INativeTask {
     // payload demands vs what the instantiated View can structurally provide.
     static_assert(
         TransformLogicValidator::validate(
-            T_Logic::requirements, 
-            T_Logic::supported_layouts, 
-            T_Logic::supported_types,
+            T_Logic::required_capabilities,
+            T_Logic::required_layouts,
+            T_Logic::required_types,  
             ViewTraits<T_View>::capabilities,
             ViewTraits<T_View>::supported_layouts,
             ViewTraits<T_View>::supported_types
@@ -50,7 +50,7 @@ public:
     // Expose the precise intersection of types. This guarantees the Factory Builder 
     // will only instantiate this pipeline if the runtime Godot Variant type maps 
     // cleanly to both the View's storage format and the Logic's mathematical domain.
-    static constexpr DataType supported_types = T_Logic::supported_types & ViewTraits<T_View>::supported_types;
+    static constexpr DataType supported_types = T_Logic::required_types & ViewTraits<T_View>::supported_types;
 
     explicit TransformTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~TransformTask() override = default;

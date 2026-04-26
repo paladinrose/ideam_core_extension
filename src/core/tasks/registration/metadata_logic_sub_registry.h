@@ -1,11 +1,12 @@
 #pragma once
 
-#include "metadata_task_registry.h"
-#include "../metadata_task.h"
-#include "../../memory/views/view_traits.h"
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/string.hpp>
 
+#include "metadata_task_registry.h"
+#include "task_view_bridge.h"
+#include "../metadata_task.h"
+#include "../../memory/views/view_traits.h"
 // --- Logics ---
 #include "../metadata_logic/dsu_cluster_metadata_logic.h"
 #include "../metadata_logic/group_mask_metadata_logic.h"
@@ -135,7 +136,6 @@ private:
         constexpr size_t T_COUNT = MetadataTaskRegistry::T_COUNT;
         constexpr size_t S_COUNT = MetadataTaskRegistry::S_COUNT;
 
-        // Decode the flat index back into 3D coordinates
         constexpr size_t T = FlatIdx % T_COUNT;
         constexpr size_t S = (FlatIdx / T_COUNT) % S_COUNT;
         constexpr size_t V = FlatIdx / (T_COUNT * S_COUNT);
@@ -146,38 +146,53 @@ private:
 
         using Traits = NativeMemoryTraits<MemTypeEnum>;
         using ConcreteType = typename Traits::ConcreteType;
+
+        // --- FAST-FAIL TIER 1: Base Resolution ---
         using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+        if constexpr (!ResolvedStrategy::is_valid) return;
         using T_Strategy = typename ResolvedStrategy::Type;
+
         using ResolvedLogic = MetadataLogicResolver<L, ConcreteType, T_Strategy>;
+        if constexpr (!ResolvedLogic::is_valid) return;
+        using L_Type = typename ResolvedLogic::Type;
+
         using ResolvedView = MetadataViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+        if constexpr (!ResolvedView::is_valid) return;
+        using V_Type = typename ResolvedView::Type;
+        using V_Traits = ViewTraits<V_Type>;
 
-        constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
-
+        // --- FAST-FAIL TIER 2: Deep DOD Intersection ---
         constexpr bool is_fully_valid = []() consteval {
-            if constexpr (!combo_valid) return false;
-            else {
-                constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
-                if constexpr (!is_type_supported) return false;
-                else {
-                    return MetadataLogicValidator::validate(
-                        ResolvedLogic::Type::requirements, 
-                        ResolvedLogic::Type::supported_layouts, 
-                        ViewTraits<typename ResolvedView::Type>::capabilities, 
-                        BufferLayoutType::NONE
-                    );
-                }
-            }
+            // 1. Does the View support this Strategy at all?
+            constexpr ViewStrategies iter_strategy_mask = to_view_strategy_mask(StrategyEnum);
+            if ((V_Traits::supported_strategies & iter_strategy_mask) == ViewStrategies::NONE) return false;
+
+            // 2. Does the primitive type satisfy both the View and the Logic?
+            constexpr DataType iter_type_mask = Traits::DataFlag;
+            if ((L_Type::required_types & iter_type_mask) == DataType::NONE) return false;
+            if ((V_Traits::supported_types & iter_type_mask) == DataType::NONE) return false;
+
+            // 3. The 6-Argument Core Contract Validation
+            return MetadataLogicValidator::validate(
+                L_Type::required_capabilities, 
+                L_Type::required_layouts, 
+                L_Type::required_types,
+                V_Traits::capabilities, 
+                V_Traits::supported_layouts, 
+                V_Traits::supported_types
+            );
         }();
 
+        // --- FACTORY GENERATION ---
         if constexpr (is_fully_valid) {
             factories[FlatIdx] = []() -> INativeTask* {
-                return new MetadataTask<typename ResolvedLogic::Type, typename ResolvedView::Type, T_Strategy>();
+                return new MetadataTask<L_Type, V_Type, T_Strategy>();
             };
 
             /*
             // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
             if (MetadataTaskRegistry::ui_metadata_matrix) {
-                godot::String logic_name(ResolvedLogic::Type::type_name);
+                godot::String logic_name(L_Type::type_name);
                 if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_name)) {
                     godot::Dictionary dict;
                     dict["views"] = godot::Array(); 
@@ -185,7 +200,7 @@ private:
                     (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name] = dict;
                 }
                 godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name];
-                _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                _append_unique<godot::Array>(dict["views"], V_Type::type_name);
                 _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
             }
             */

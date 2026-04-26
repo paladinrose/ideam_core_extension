@@ -1,6 +1,7 @@
 #pragma once
 
 #include "query_task_registry.h"
+#include "task_view_bridge.h" // Ensures strict one-way dependency graph
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/string.hpp>
 
@@ -47,7 +48,7 @@
 namespace ideam::core {
 
 namespace {
-    // --- Resolvers (Moved from Registry) ---
+    // --- Resolvers ---
     consteval size_t floor_power_of_2(size_t n) {
         if (n == 0) return 1;
         size_t res = 1;
@@ -172,53 +173,70 @@ private:
 
         using Traits = NativeMemoryTraits<MemTypeEnum>;
         using ConcreteType = typename Traits::ConcreteType;
+
+        // --- FAST-FAIL TIER 1: Base Resolution ---
         using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+        if constexpr (!ResolvedStrategy::is_valid) return;
         using T_Strategy = typename ResolvedStrategy::Type;
+
         using ResolvedLogic = QueryLogicResolver<L, ConcreteType, T_Strategy>;
+        if constexpr (!ResolvedLogic::is_valid) return;
+        using L_Type = typename ResolvedLogic::Type;
+
         using ResolvedView = QueryViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+        if constexpr (!ResolvedView::is_valid) return;
+        using V_Type = typename ResolvedView::Type;
+        using V_Traits = ViewTraits<V_Type>;
 
-        constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
-
+        // --- FAST-FAIL TIER 2: Deep DOD Intersection ---
         constexpr bool is_fully_valid = []() consteval {
-            if constexpr (!combo_valid) return false;
-            else {
-                constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
-                constexpr bool is_op_supported = (OpEnum == QueryOp::CULL) ? ResolvedLogic::Type::supports_cull : ResolvedLogic::Type::supports_addition;
-                
-                if constexpr (!is_type_supported || !is_op_supported) return false;
-                else {
-                    return QueryLogicValidator::validate(
-                        ResolvedLogic::Type::requirements, 
-                        ResolvedLogic::Type::supported_layouts, 
-                        ViewTraits<typename ResolvedView::Type>::capabilities, 
-                        BufferLayoutType::NONE
-                    );
-                }
-            }
+            // 1. Is the requested Operation (CULL or ADD) supported by this Logic struct?
+            if constexpr (OpEnum == QueryOp::CULL && !L_Type::supports_cull) return false;
+            if constexpr (OpEnum == QueryOp::ADD && !L_Type::supports_addition) return false;
+
+            // 2. Does the View support the Strategy?
+            constexpr ViewStrategies iter_strategy_mask = to_view_strategy_mask(StrategyEnum);
+            if ((V_Traits::supported_strategies & iter_strategy_mask) == ViewStrategies::NONE) return false;
+
+            // 3. Does the Primitive DataType align across Logic and View requirements?
+            constexpr DataType iter_type_mask = Traits::DataFlag;
+            if ((L_Type::required_types & iter_type_mask) == DataType::NONE) return false;
+            if ((V_Traits::supported_types & iter_type_mask) == DataType::NONE) return false;
+            
+            // 4. The Core 6-Argument DOD Validator
+            return QueryLogicValidator::validate(
+                L_Type::required_capabilities, 
+                L_Type::required_layouts, 
+                L_Type::required_types,
+                V_Traits::capabilities, 
+                V_Traits::supported_layouts, 
+                V_Traits::supported_types
+            );
         }();
 
+        // --- FACTORY GENERATION ---
         if constexpr (is_fully_valid) {
             factories[FlatIdx] = []() -> INativeTask* {
-                return new QueryTask<typename ResolvedLogic::Type, OpEnum, typename ResolvedView::Type, T_Strategy>();
+                return new QueryTask<L_Type, OpEnum, V_Type, T_Strategy>();
             };
 
             /*
             // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
             if constexpr (O == 0) {
                 if (QueryTaskRegistry::ui_query_matrix) {
-                    godot::String logic_name(ResolvedLogic::Type::type_name);
+                    godot::String logic_name(L_Type::type_name);
                     if (!QueryTaskRegistry::ui_query_matrix->has(logic_name)) {
                         godot::Dictionary dict;
                         dict["ops"] = godot::Array(); dict["views"] = godot::Array(); dict["strategies"] = godot::Array();
                         (*QueryTaskRegistry::ui_query_matrix)[logic_name] = dict;
                     }
                     godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[logic_name];
-                    _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                    _append_unique<godot::Array>(dict["views"], V_Type::type_name);
                     _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
                 }
             }
             if (QueryTaskRegistry::ui_query_matrix) {
-                godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[ResolvedLogic::Type::type_name];
+                godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[L_Type::type_name];
                 _append_unique<godot::Array>(dict["ops"], (O == 0) ? "CULL" : "ADD");
             }
             */

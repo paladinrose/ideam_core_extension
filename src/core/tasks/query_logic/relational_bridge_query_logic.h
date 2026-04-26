@@ -21,9 +21,11 @@ struct RelationalBridgeQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T_Index, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::INT32 | DataType::INT64;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::INT32 | DataType::INT64;
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
@@ -50,6 +52,23 @@ struct RelationalBridgeQueryLogic {
     }
 
 private:
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T_Index _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T_Index*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T_Index>(p_view[idx]); }) {
+            return static_cast<T_Index>(p_view[idx]);
+        } else {
+            return T_Index{}; 
+        }
+    }
+
     template <typename T_View>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -57,7 +76,9 @@ private:
         [[gnu::always_inline]]
     #endif
     inline bool _evaluate(int64_t index, const T_View& p_view) const {
-        T_Index source_idx = p_view[index];
+        // CORRECTED: Safely extract the relational index
+        T_Index source_idx = _read_view(p_view, index); 
+        
         if (source_idx < 0 || source_idx >= source_selection->capacity) return false;
         
         return (source_selection->data.bitset[source_idx >> 6] & (1ULL << (source_idx & 63))) != 0;

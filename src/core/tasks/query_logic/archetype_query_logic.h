@@ -18,10 +18,13 @@ struct ArchetypeQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SparseSetView<ValueType, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::SPARSE_SET;
-    static constexpr DataType supported_types = DataType::INT32;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::SPARSE_SET; // Strictly ECS
+    static constexpr DataType required_types              = DataType::INT32;              // Entity IDs
+    static constexpr size_t transient_workspace_bytes     = 0;
     
+    // UI/Compiler Routing
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
@@ -97,7 +100,7 @@ private:
         int64_t write_ptr = 0;
         const int64_t count = r_selection.element_count;
         for (int64_t i = 0; i < count; ++i) {
-            if (_evaluate(_read_view(p_view, i), p_ctx)) {
+            if (_evaluate(_read_view(p_view, r_selection.data.indices[i]), p_ctx)) {
                 r_selection.data.indices[write_ptr++] = r_selection.data.indices[i];
             }
         }

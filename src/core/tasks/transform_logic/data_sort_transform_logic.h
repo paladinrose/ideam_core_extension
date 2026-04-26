@@ -30,11 +30,12 @@ struct DataSortTransformLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr TransformRequirement requirements = TransformRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
-    static constexpr size_t transient_workspace_bytes = 0; // Output vector is externally provided via Graph Port
-
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
+    static constexpr size_t transient_workspace_bytes     = 0; // Output vector is externally provided via Graph Port
+    
     // --- Configuration ---
     SortDirection direction = SortDirection::ASCENDING;
     uint32_t primary_buffer_id = INVALID_ID;

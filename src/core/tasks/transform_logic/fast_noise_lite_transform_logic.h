@@ -21,20 +21,17 @@ struct FastNoiseLiteTargetPOD {
 };
 
 struct alignas(64) FastNoiseLiteTransformLogic {
-    // 1. Interface Constraints
     using ValueType = FastNoiseLiteTargetPOD;
     using DefaultStrategy = FlatStrategy;
     using DefaultView = SingleElementView<ValueType, DefaultStrategy>;
 
-    // 2. Trait Declarations
-    static constexpr uint32_t requirements = static_cast<uint32_t>(TransformRequirement::NONE);
-    static constexpr uint32_t supported_layouts = 
-        static_cast<uint32_t>(BufferLayoutType::FLAT) | 
-        static_cast<uint32_t>(BufferLayoutType::SOA);
-    static constexpr DataType supported_types = DataType::CUSTOM;
-    static constexpr size_t transient_workspace_bytes = 0; // Pure mathematical mapping, no heap workspace required
+    //DOD Contract Requirements
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR; // Upgraded from FLAT | SOA
+    static constexpr DataType required_types              = DataType::CUSTOM;
+    static constexpr size_t transient_workspace_bytes     = 0; // Pure mathematical mapping, no heap workspace required
 
-    // 3. Internal State (Trivially Copyable)
+    //Internal State (Trivially Copyable)
     FastNoiseLite noise_generator;
 
     // Build Phase Initialization

@@ -1,6 +1,9 @@
 #pragma once
 
 #include "../i_native_task.h"
+#include "../../memory/memory_common.h"     // For DataType
+#include "../../memory/memory_buffer_pod.h" // For BufferLayoutType
+#include "../../memory/views/view_traits.h"       // For ViewStrategies and ViewCapability
 
 // --- Centralized Enums & Traits (Required by Sub-Registries) ---
 #include <godot_cpp/templates/hash_map.hpp>
@@ -91,6 +94,8 @@ template <> struct NativeMemoryTraits<MemoryTypes::VECTOR3D> { using ConcreteTyp
 template <> struct NativeMemoryTraits<MemoryTypes::VECTOR4D> { using ConcreteType = godot::Vector4; static constexpr DataType DataFlag = DataType::VECTOR4D; };
 template <> struct NativeMemoryTraits<MemoryTypes::COLOR> { using ConcreteType = godot::Color; static constexpr DataType DataFlag = DataType::COLOR; };
 template <> struct NativeMemoryTraits<MemoryTypes::CUSTOM> { using ConcreteType = void*; static constexpr DataType DataFlag = DataType::CUSTOM; };
+
+
 
 using NativeTaskFactory = std::function<std::unique_ptr<INativeTask>()>;
 

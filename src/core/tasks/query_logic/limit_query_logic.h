@@ -25,10 +25,12 @@ struct LimitQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<uint8_t, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY;
-    static constexpr DataType supported_types = DataType::ANY;
-
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY;
+    static constexpr DataType required_types              = DataType::ANY;
+    static constexpr size_t transient_workspace_bytes     = 0;
+    
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 

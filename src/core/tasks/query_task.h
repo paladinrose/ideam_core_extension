@@ -33,9 +33,9 @@ class alignas(64) QueryTask final : public INativeTask {
     // --- Compile-Time Firewall ---
     static_assert(
         QueryLogicValidator::validate(
-            T_Logic::requirements, 
-            T_Logic::supported_layouts, 
-            T_Logic::supported_types,
+            T_Logic::required_capabilities, 
+            T_Logic::required_layouts,      
+            T_Logic::required_types,        
             ViewTraits<T_View>::capabilities, 
             ViewTraits<T_View>::supported_layouts,
             ViewTraits<T_View>::supported_types
@@ -55,21 +55,18 @@ public:
 
     // --- O(1) Pruning Bitmask ---
     // Expose the precise intersection of types for the Factory Registry
-    static constexpr DataType supported_types = T_Logic::supported_types & ViewTraits<T_View>::supported_types;
+    static constexpr DataType supported_types = T_Logic::required_types & ViewTraits<T_View>::supported_types;
 
     explicit QueryTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~QueryTask() override = default;
 
     virtual void prepare(const TaskContextPOD& p_context) override {
-        // Compile-time check: Only call prepare if the Logic struct defines it.
-        // This keeps simple logic structs lightweight without forcing empty virtuals.
         if constexpr (requires { logic.prepare(p_context); }) {
             logic.prepare(p_context);
         }
     }
 
     virtual size_t get_transient_requirement(const TaskContextPOD& p_context) const override {
-        // C++20 Compile-Time Route Resolution for Metadata Logic
         if constexpr (requires { logic.get_transient_requirement(p_context); }) {
             return logic.get_transient_requirement(p_context); 
         } else if constexpr (requires { T_Logic::transient_workspace_bytes; }) {
@@ -79,25 +76,22 @@ public:
     }
     
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {
-        // Only CULL operations manipulate the active working set bitmask immediately.
         if constexpr (Op != QueryOp::CULL) return;
 
         const uint32_t target_id = logic.get_target_buffer_id();
         
         const GrantPartPOD* part = p_context.get_grant_part(target_id);
-        if (!part) return; // Silent abort if DAG failed to secure lease
+        if (!part) return; 
 
         MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
         if (!selection) return;
 
         T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
-        // Zero-overhead dispatch into the optimized logic payload
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
 
     virtual void execute(const TaskContextPOD& p_context) override {
-        // Only fire during the hot execution wave if we are defer-appending.
         if constexpr (Op != QueryOp::ADD) return;
 
         const uint32_t target_id = logic.get_target_buffer_id();
@@ -112,7 +106,6 @@ public:
         
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
-
 };
 
 } // namespace ideam::core

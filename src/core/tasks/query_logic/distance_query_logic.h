@@ -17,9 +17,11 @@ struct DistanceQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4 | DataType::VECTOR4I | DataType::VECTOR4D;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4 | DataType::VECTOR4I | DataType::VECTOR4D;
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
@@ -50,6 +52,23 @@ struct DistanceQueryLogic {
     }
 
 private:
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+            return static_cast<T>(p_view[idx]);
+        } else {
+            return T{}; 
+        }
+    }
+
     template <Comparison O>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -74,7 +93,7 @@ private:
     void _loop_dense(uint64_t* bitset, int64_t capacity, const T_View& p_view, int64_t& r_count) const {
         for (int64_t i = 0; i < capacity; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate<O>(p_view[i])) {
+                if (!_evaluate<O>(_read_view(p_view, i))) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_count--;
                 }
@@ -85,7 +104,7 @@ private:
     template <Comparison O, typename T_View>
     void _loop_sparse(int64_t* indices, int64_t count, const T_View& p_view, int64_t& r_write_ptr) const {
         for (int64_t i = 0; i < count; ++i) {
-            if (_evaluate<O>(p_view[indices[i]])) {
+            if (_evaluate<O>(_read_view(p_view, indices[i]))) {
                 indices[r_write_ptr++] = indices[i];
             }
         }
@@ -105,7 +124,7 @@ private:
                 
                 if (global_index >= r_selection.capacity) break;
 
-                if (_evaluate<O>(p_view[global_index])) {
+                if (_evaluate<O>(_read_view(p_view, global_index))) {
                     p_ctx.queue_selection_command(target_buffer_id, global_index);
                 }
                 mask &= (mask - 1); 

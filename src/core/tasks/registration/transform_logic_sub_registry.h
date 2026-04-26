@@ -1,6 +1,7 @@
 #pragma once
 
 #include "transform_task_registry.h"
+#include "task_view_bridge.h" // Ensures strict one-way dependency graph
 #include "../transform_task.h"
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -59,91 +60,87 @@ namespace {
     // Maps the TransformLogicID enum pseudo-entries into concrete, fully specialized Logic types.
     template <TransformLogicID L, typename T, typename T_Strategy>
     struct TransformLogicResolver {
-        // Empty primary template. Unmapped combinations safely fail SFINAE.
+        static constexpr bool is_valid = false;
     };
 
     // --- Single Template Argument (<T>) ---
     
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::BoundaryConstraint, T, T_Strategy> {
-        using Type = BoundaryConstraintTransformLogic<T>;
+        using Type = BoundaryConstraintTransformLogic<T>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::BoundsExtraction, T, T_Strategy> {
-        using Type = BoundsExtractionTransformLogic<T>;
+        using Type = BoundsExtractionTransformLogic<T>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::DataScatter, T, T_Strategy> {
-        using Type = DataScatterTransformLogic<T>;
+        using Type = DataScatterTransformLogic<T>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::DataSort, T, T_Strategy> {
-        using Type = DataSortTransformLogic<T>;
+        using Type = DataSortTransformLogic<T>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::NoiseInjection, T, T_Strategy> {
-        using Type = NoiseInjectionTransformLogic<T>;
+        using Type = NoiseInjectionTransformLogic<T>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::ValueAccumulation, T, T_Strategy> {
-        using Type = ValueAccumulationTransformLogic<T>;
+        using Type = ValueAccumulationTransformLogic<T>; static constexpr bool is_valid = true;
     };
 
     // --- Concrete Types (No Template Arguments) ---
-    // The resolver safely absorbs and discards T and T_Strategy.
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::EulerIntegration, T, T_Strategy> {
-        using Type = EulerIntegrationTransformLogic; 
+        using Type = EulerIntegrationTransformLogic; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::FastNoiseLite, T, T_Strategy> {
-        using Type = FastNoiseLiteTransformLogic; 
+        using Type = FastNoiseLiteTransformLogic; static constexpr bool is_valid = true;
     };
 
     // --- Stencil Pseudo-Variants (<T, T_Strategy, KernelSize>) ---
-    // The Resolver translates the enum ID into the exact KernelSize for loop unrolling.
 
-    // Moore Neighborhoods (Square bounds)
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 9>; // 3x3 Grid
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 9>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; // 5x5 Grid
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 49>; // 7x7 Grid
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 49>; static constexpr bool is_valid = true;
     };
 
-    // Von Neumann Neighborhoods (Diamond bounds)
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 5>; // Center + 4 Adjacent
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 5>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 13>; // Center + 4 + 8
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 13>; static constexpr bool is_valid = true;
     };
 
     template <typename T, typename T_Strategy>
     struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; // Center + 4 + 8 + 12
+        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; static constexpr bool is_valid = true;
     };
 
     template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
-    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::KernelSize)>> { static constexpr size_t value = T_Resolver::KernelSize; static constexpr bool has_kernel = true; };
+    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::Type::KernelSize)>> { static constexpr size_t value = T_Resolver::Type::KernelSize; static constexpr bool has_kernel = true; };
     
     template <TransformLogicID LogicID, typename T_Concrete, typename T_Strategy> struct LogicKernelExtractor : KernelExtractorImpl<TransformLogicResolver<LogicID, T_Concrete, T_Strategy>> {};
 
@@ -218,38 +215,53 @@ private:
 
         using Traits = NativeMemoryTraits<MemTypeEnum>;
         using ConcreteType = typename Traits::ConcreteType;
+
+        // --- FAST-FAIL TIER 1: Base Resolution ---
         using ResolvedStrategy = StrategyResolver<StrategyEnum>;
+        if constexpr (!ResolvedStrategy::is_valid) return;
         using T_Strategy = typename ResolvedStrategy::Type;
+
         using ResolvedLogic = TransformLogicResolver<L, ConcreteType, T_Strategy>;
+        if constexpr (!ResolvedLogic::is_valid) return;
+        using L_Type = typename ResolvedLogic::Type;
+
         using ResolvedView = ViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+        if constexpr (!ResolvedView::is_valid) return;
+        using V_Type = typename ResolvedView::Type;
+        using V_Traits = ViewTraits<V_Type>;
 
-        constexpr bool combo_valid = ResolvedStrategy::is_valid && ResolvedLogic::is_valid && ResolvedView::is_valid;
-
+        // --- FAST-FAIL TIER 2: Deep DOD Intersection ---
         constexpr bool is_fully_valid = []() consteval {
-            if constexpr (!combo_valid) return false;
-            else {
-                constexpr bool is_type_supported = (static_cast<uint64_t>(ResolvedLogic::Type::supported_types) & static_cast<uint64_t>(Traits::DataFlag)) != 0;
-                if constexpr (!is_type_supported) return false;
-                else {
-                    return TransformLogicValidator::validate(
-                        ResolvedLogic::Type::requirements, 
-                        ResolvedLogic::Type::supported_layouts, 
-                        ViewTraits<typename ResolvedView::Type>::capabilities, 
-                        BufferLayoutType::NONE
-                    );
-                }
-            }
+            // 1. Does the View support the Strategy?
+            constexpr ViewStrategies iter_strategy_mask = to_view_strategy_mask(StrategyEnum);
+            if ((V_Traits::supported_strategies & iter_strategy_mask) == ViewStrategies::NONE) return false;
+
+            // 2. Does the Primitive DataType align across Logic and View requirements?
+            constexpr DataType iter_type_mask = Traits::DataFlag;
+            if ((L_Type::required_types & iter_type_mask) == DataType::NONE) return false;
+            if ((V_Traits::supported_types & iter_type_mask) == DataType::NONE) return false;
+
+            // 3. The Core 6-Argument DOD Validator
+            return TransformLogicValidator::validate(
+                L_Type::required_capabilities, 
+                L_Type::required_layouts, 
+                L_Type::required_types,
+                V_Traits::capabilities, 
+                V_Traits::supported_layouts, 
+                V_Traits::supported_types
+            );
         }();
 
+        // --- FACTORY GENERATION ---
         if constexpr (is_fully_valid) {
             factories[FlatIdx] = []() -> INativeTask* {
-                return new TransformTask<typename ResolvedLogic::Type, typename ResolvedView::Type, T_Strategy>();
+                return new TransformTask<L_Type, V_Type, T_Strategy>();
             };
 
             /*
             // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
             if (TransformTaskRegistry::ui_transform_matrix) {
-                godot::String logic_name(ResolvedLogic::Type::type_name);
+                godot::String logic_name(L_Type::type_name);
                 if (!TransformTaskRegistry::ui_transform_matrix->has(logic_name)) {
                     godot::Dictionary dict;
                     dict["views"] = godot::Array(); 
@@ -257,7 +269,7 @@ private:
                     (*TransformTaskRegistry::ui_transform_matrix)[logic_name] = dict;
                 }
                 godot::Dictionary dict = (*TransformTaskRegistry::ui_transform_matrix)[logic_name];
-                _append_unique<godot::Array>(dict["views"], ResolvedView::Type::type_name);
+                _append_unique<godot::Array>(dict["views"], V_Type::type_name);
                 _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
             }
             */

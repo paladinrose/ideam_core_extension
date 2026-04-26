@@ -20,9 +20,11 @@ struct SpatialInclusionBridgeQueryLogic {
     using DefaultStrategy = T_Strategy;
     using DefaultView     = SingleElementView<T_Coord, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::REQUIRES_SPATIAL;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4D;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS | ViewCapability::SPATIAL_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4D;
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
@@ -49,6 +51,23 @@ struct SpatialInclusionBridgeQueryLogic {
     }
 
 private:
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T_Coord _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T_Coord*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T_Coord>(p_view[idx]); }) {
+            return static_cast<T_Coord>(p_view[idx]);
+        } else {
+            return T_Coord{}; 
+        }
+    }
+
     template <typename T_View>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -56,7 +75,8 @@ private:
         [[gnu::always_inline]]
     #endif
     inline bool _evaluate(int64_t index, const T_View& p_view) const {
-        T_Coord pos = p_view[index];
+        // CORRECTED: Safe extraction
+        T_Coord pos = _read_view(p_view, index);
         const T_Strategy& strategy = p_view.get_strategy();
         
         int64_t grid_idx = strategy.world_to_flat_index(pos);

@@ -22,10 +22,11 @@ struct LODMetadataLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr MetadataRequirement requirements = MetadataRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::ANY_VECTOR3;
-    static constexpr size_t transient_workspace_bytes = 0;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::ANY_VECTOR3;
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     struct Mapping {
         T target_value;

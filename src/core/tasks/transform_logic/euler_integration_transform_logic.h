@@ -18,10 +18,11 @@ struct alignas(64) EulerIntegrationTransformLogic {
     // We use SwapView so we can safely read T and write T+1
     using DefaultView     = SwapView<ValueType, DefaultStrategy>;
 
-    static constexpr TransformRequirement requirements = TransformRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC;
-    static constexpr size_t transient_workspace_bytes = 0;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::SWAP_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::ANY_VECTOR3; // Tightened from ANY_NUMERIC for safety
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---
     uint32_t position_buffer_id = INVALID_ID; // The Primary View

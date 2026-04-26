@@ -23,9 +23,11 @@ struct SpatialProjectionBridgeQueryLogic {
     using DefaultStrategy = T_Strategy;
     using DefaultView     = SingleElementView<T_Coord, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::REQUIRES_SPATIAL;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY;
-    static constexpr DataType supported_types = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4D;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS | ViewCapability::SPATIAL_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY;
+    static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4D;
+    static constexpr size_t transient_workspace_bytes     = 0; // Dynamically allocated by Job Graph
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
@@ -53,7 +55,8 @@ struct SpatialProjectionBridgeQueryLogic {
             const uint64_t* src_bitset = source_selection->data.bitset;
             for (int64_t i = 0; i < source_selection->capacity; ++i) {
                 if (src_bitset[i >> 6] & (1ULL << (i & 63))) {
-                    int64_t cell_id = p_view.get_strategy().get_cell_index(p_view[i]);
+                    // CORRECTED: Safe extraction
+                    int64_t cell_id = p_view.get_strategy().get_cell_index(_read_view(p_view, i));
                     if (cell_id >= 0 && cell_id < r_selection.capacity) {
                         projection_mask[cell_id >> 6] |= (1ULL << (cell_id & 63));
                     }
@@ -62,7 +65,8 @@ struct SpatialProjectionBridgeQueryLogic {
         } else if (source_selection->mode == SelectionMode::SPARSE) {
             for (int64_t i = 0; i < source_selection->element_count; ++i) {
                 int64_t src_idx = source_selection->data.indices[i];
-                int64_t cell_id = p_view.get_strategy().get_cell_index(p_view[src_idx]);
+                // CORRECTED: Safe extraction
+                int64_t cell_id = p_view.get_strategy().get_cell_index(_read_view(p_view, src_idx));
                 if (cell_id >= 0 && cell_id < r_selection.capacity) {
                     projection_mask[cell_id >> 6] |= (1ULL << (cell_id & 63));
                 }
@@ -92,6 +96,24 @@ struct SpatialProjectionBridgeQueryLogic {
                     mask &= (mask - 1); 
                 }
             }
+        }
+    }
+
+private:
+    // --- The DOD View Adapter ---
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T_Coord _read_view(const T_View& p_view, int64_t idx) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const T_Coord*>(p_view[idx]);
+        } else if constexpr (requires { static_cast<T_Coord>(p_view[idx]); }) {
+            return static_cast<T_Coord>(p_view[idx]);
+        } else {
+            return T_Coord{}; 
         }
     }
 };

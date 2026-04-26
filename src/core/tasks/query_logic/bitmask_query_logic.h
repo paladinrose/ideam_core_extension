@@ -20,10 +20,15 @@ struct BitmaskQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::BYTE | DataType::INT32 | DataType::INT64;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    // Keeping explicitly integer-based to prevent compilation failure on Vector bitwise ops
+    static constexpr DataType required_types              = DataType::BYTE | DataType::INT32 | DataType::INT64; 
+    static constexpr size_t transient_workspace_bytes     = 0;
 
+    // UI/Compiler Routing
+    
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
@@ -100,7 +105,7 @@ private:
     template <BitOp O, typename T_View>
     void _loop_sparse_cull(int64_t* indices, int64_t p_count, const T_View& p_view, int64_t& r_write_ptr) const {
         for (int64_t i = 0; i < p_count; ++i) {
-            if (_evaluate<O>(_read_view(p_view, i))) {
+            if (_evaluate<O>(_read_view(p_view, indices[i]))) {
                 indices[r_write_ptr++] = indices[i];
             }
         }

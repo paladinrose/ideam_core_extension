@@ -19,10 +19,13 @@ struct BooleanQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::BOOL | DataType::BYTE | DataType::INT32 | DataType::INT64;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::BOOL | DataType::BYTE | DataType::INT32 | DataType::INT64;
+    static constexpr size_t transient_workspace_bytes     = 0;
     
+    // UI/Compiler Routing
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
@@ -92,7 +95,7 @@ private:
         int64_t write_ptr = 0;
         if (r_selection.mode == SelectionMode::SPARSE) {
             for (int64_t i = 0; i < r_selection.element_count; ++i) {
-                if (_evaluate(_read_view(p_view, i))) {
+                if (_evaluate(_read_view(p_view, indices[i]))) {
                     indices[write_ptr++] = indices[i];
                 }
             }

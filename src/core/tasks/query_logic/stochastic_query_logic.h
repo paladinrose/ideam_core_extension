@@ -20,9 +20,11 @@ struct StochasticQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY;
-    static constexpr DataType supported_types = DataType::BOOL | DataType::ANY_NUMERIC;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::BOOL | DataType::ANY_NUMERIC;
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
@@ -147,7 +149,7 @@ private:
 
                 float prob = global_probability;
                 if constexpr (!std::is_void_v<T> && !std::is_same_v<T, uint8_t>) {
-                    prob = static_cast<float>(p_view[global_index]);
+                    prob = static_cast<float>(_read_view(p_view, global_index));
                 }
 
                 if (_evaluate(local_state, prob)) {

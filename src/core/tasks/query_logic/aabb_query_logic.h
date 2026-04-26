@@ -21,9 +21,12 @@ struct AABBQueryLogic {
     using DefaultStrategy = Spatial3DStrategy;
     using DefaultView     = SingleElementView<ValueType, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
-    static constexpr DataType supported_types = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    // Upgraded to allow standard 1D contiguous vectors to be queried spatially
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR | BufferLayoutType::ANY_SPATIAL; 
+    static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
+    static constexpr size_t transient_workspace_bytes     = 0;
     
     // UI/Compiler Routing
     static constexpr bool supports_cull = true;
@@ -51,12 +54,29 @@ struct AABBQueryLogic {
     }
 
 private:
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+        using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
+        using DecayedType = std::decay_t<RawType>;
+        
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+        } else {
+            return static_cast<DecayedType>(p_view[idx]);
+        }
+    }
+
     template<typename T_View>
     void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, int64_t p_count) const {
         uint64_t* bitset = r_selection.data.bitset;
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate(p_view[i])) {
+                if (!_evaluate(_read_view(p_view, i))) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_selection.element_count--;
                 }
@@ -69,7 +89,7 @@ private:
         if (r_selection.mode == SelectionMode::SPARSE) {
             int64_t write_ptr = 0;
             for (int64_t i = 0; i < p_count; ++i) {
-                if (_evaluate(p_view[i])) {
+                if (_evaluate(_read_view(p_view, r_selection.data.indices[i]))) {
                     r_selection.data.indices[write_ptr++] = r_selection.data.indices[i];
                 }
             }
@@ -91,7 +111,7 @@ private:
                 
                 if (global_index >= r_selection.capacity) break;
 
-                if (_evaluate(p_view[global_index])) {
+                if (_evaluate(_read_view(p_view, global_index))) {
                     p_ctx.queue_selection_command(target_buffer_id, global_index);
                 }
                 

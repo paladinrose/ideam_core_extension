@@ -24,10 +24,13 @@ struct BorderQueryLogic {
     using DefaultStrategy = T_Strategy;
     using DefaultView     = StencilView<T, T_Strategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::REQUIRES_SPATIAL;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
-    static constexpr DataType supported_types = DataType::ANY;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::STENCIL_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_SPATIAL;
+    static constexpr DataType required_types              = DataType::ANY;
+    static constexpr size_t transient_workspace_bytes     = 0;
     
+    // UI/Compiler Routing
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 

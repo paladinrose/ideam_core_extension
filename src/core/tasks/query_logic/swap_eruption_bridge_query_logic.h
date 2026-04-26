@@ -20,9 +20,11 @@ struct SwapEruptionBridgeQueryLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SwapView<T, DefaultStrategy>;
 
-    static constexpr LogicRequirement requirements = LogicRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::ANY_VECTOR4;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::SWAP_ACCESS | ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::ANY_VECTOR4;
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = false; // Eruptions are strictly additive
     static constexpr bool supports_addition = true;
@@ -64,6 +66,23 @@ struct SwapEruptionBridgeQueryLogic {
     }
 
 private:
+// --- The DOD Value Adapter ---
+    template <typename T_Val>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _safe_cast(const T_Val& p_val) const {
+        if constexpr (std::is_pointer_v<T_Val>) {
+            return *reinterpret_cast<const T*>(p_val);
+        } else if constexpr (requires { static_cast<T>(p_val); }) {
+            return static_cast<T>(p_val);
+        } else {
+            return T{}; 
+        }
+    }
+    
     template <typename T_View>
     void _add_eruptions(const MemoryBufferSelectionPOD& r_selection, const T_View& p_view, const TaskContextPOD& p_ctx) const {
         const uint64_t* unclaimed = r_selection.unclaimed_mask;
@@ -79,13 +98,16 @@ private:
                 
                 if (global_index >= r_selection.capacity) break;
 
-                // Evaluate the simulation delta
-                T delta = p_view.get_current(global_index) - p_view.get_previous(global_index);
+                // CORRECTED: Cast state payloads before evaluating threshold delta
+                T current_val = _safe_cast(p_view.get_current(global_index));
+                T previous_val = _safe_cast(p_view.get_previous(global_index));
+                T delta = current_val - previous_val;
+                
                 if (delta >= eruption_threshold) {
                     p_ctx.queue_selection_command(target_buffer_id, global_index);
                 }
                 
-                mask &= (mask - 1); 
+                mask &= (mask - 1);
             }
         }
     }

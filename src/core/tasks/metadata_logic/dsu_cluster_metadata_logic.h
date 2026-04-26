@@ -29,10 +29,11 @@ struct DSUClusterMetadataLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = StaticStencilView<T, DefaultStrategy, PointCount>;
 
-    static constexpr MetadataRequirement requirements = MetadataRequirement::REQUIRES_SPATIAL;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
-    static constexpr size_t transient_workspace_bytes = 0; // User must set via Graph to `capacity * 20`
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::STENCIL_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
+    static constexpr size_t transient_workspace_bytes     = 0; // User must set via Graph to `capacity * 20`
 
     // --- Configuration ---
     ClusterCompareMode mode = ClusterCompareMode::ABSOLUTE_VALUE;

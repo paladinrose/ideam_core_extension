@@ -32,6 +32,10 @@ constexpr ViewCapability operator|(ViewCapability a, ViewCapability b) noexcept 
     return static_cast<ViewCapability>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
 
+constexpr ViewCapability operator&(ViewCapability a, ViewCapability b) noexcept {
+    return static_cast<ViewCapability>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
+}
+
 constexpr bool has_capability(ViewCapability p_mask, ViewCapability p_cap) noexcept {
     return (static_cast<uint32_t>(p_mask) & static_cast<uint32_t>(p_cap)) != 0;
 }

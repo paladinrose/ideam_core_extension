@@ -30,10 +30,11 @@ struct alignas(64) BoundsExtractionTransformLogic {
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
 
-    static constexpr TransformRequirement requirements = TransformRequirement::NONE;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
-    static constexpr size_t transient_workspace_bytes = 0;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR; // Upgraded from restricted subset
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
+    static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---
     uint32_t primary_buffer_id = INVALID_ID;

@@ -17,13 +17,12 @@ template <typename T, typename T_Strategy, size_t KernelSize>
 struct alignas(64) StencilConvolutionTransformLogic {
     using ValueType       = T;
     using DefaultStrategy = T_Strategy;
-    
-    // We use StaticStencilView for high-speed reads on the primary state
     using DefaultView     = StaticStencilView<T, DefaultStrategy, KernelSize>;
 
-    static constexpr TransformRequirement requirements = TransformRequirement::REQUIRES_SPATIAL;
-    static constexpr BufferLayoutType supported_layouts = BufferLayoutType::ANY_SPATIAL;
-    static constexpr DataType supported_types = DataType::ANY_NUMERIC;
+    // --- DOD Contract Requirements ---
+    static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::STENCIL_ACCESS;
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_SPATIAL;
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC;
     
     // Demand enough transient memory to build our SoA weights array for the hot loop
     static constexpr size_t transient_workspace_bytes = KernelSize * sizeof(T);
