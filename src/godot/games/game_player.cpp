@@ -1,18 +1,21 @@
 #include "game_player.h"
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/engine.hpp>
 
-// Forward decl headers to be supplied by project
+#include "game_player_manager.h"
 #include "game_player_profile.h"
 #include "game.h"
 #include "game_entities/game_board.h"
 #include "game_entities/game_agent.h"
-// #include "game_menu.h"
+
+#include "ui/game_menu.h"
+
 #include "scene_transition.h"
-#include "game_player_manager.h"
-// #include "node_retargeter.h"
-// #include "signal_connector.h"
+
+#include "../utilities/node_retargeter.h"
+#include "../utilities/signal_connector.h"
 
 namespace ideam::godot_ext {
 

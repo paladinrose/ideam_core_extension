@@ -13,8 +13,8 @@ namespace ideam::godot_ext {
 class GamePlayer;
 class GameAgentAction;
 class GamePiece;
-class Node_Retargeter;
-class Signal_Connector;
+class NodeRetargeter;
+class SignalConnector;
 class GameInteraction;
 
 // DOD NOTE: Extracting these states from the object header allows for dense packing 
@@ -62,8 +62,8 @@ private:
     godot::TypedArray<GameAgentAction> actions;
     godot::TypedArray<GamePiece> game_pieces;
 
-    Node_Retargeter* player_node_assignments = nullptr;
-    Signal_Connector* player_signal_assignments = nullptr;
+    NodeRetargeter* player_node_assignments = nullptr;
+    SignalConnector* player_signal_assignments = nullptr;
 
     godot::TypedArray<GameInteraction> interactions;
     godot::TypedArray<GameEntity> current_action_targets;
@@ -113,11 +113,11 @@ public:
     void set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces);
     godot::TypedArray<GamePiece> get_game_pieces() const;
 
-    void set_player_node_assignments(Node_Retargeter* p_assignments);
-    Node_Retargeter* get_player_node_assignments() const;
+    void set_player_node_assignments(NodeRetargeter* p_assignments);
+    NodeRetargeter* get_player_node_assignments() const;
 
-    void set_player_signal_assignments(Signal_Connector* p_assignments);
-    Signal_Connector* get_player_signal_assignments() const;
+    void set_player_signal_assignments(SignalConnector* p_assignments);
+    SignalConnector* get_player_signal_assignments() const;
 
     // Player Functions
     void find_and_possess_agent(godot::Variant on);

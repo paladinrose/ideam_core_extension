@@ -5,13 +5,12 @@
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "query_logic_traits.h"
-#include <godot_cpp/variant/color.hpp>
 #include <bit>
 
 namespace ideam::core {
 
 template <typename T>
-struct ColorQueryLogic {
+struct ColorHSVAQueryLogic {
     using ValueType       = T; 
     using DefaultStrategy = FlatStrategy;
     using DefaultView     = SingleElementView<T, DefaultStrategy>;
@@ -19,19 +18,12 @@ struct ColorQueryLogic {
     // --- DOD Contract Requirements ---
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType required_types              = DataType::COLOR;
+    static constexpr DataType required_types              = DataType::COLOR; // Or custom HSVA type identifier
     static constexpr size_t transient_workspace_bytes     = 0;
 
-    // UI/Compiler Routing
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
     
-    enum class ColorMode : uint8_t {
-        CHANNELS_RGBA,
-        SEMANTIC_HSV,
-        DISTANCE_RGB
-    };
-
     enum class Comparison : uint8_t { 
         EQUAL, NOT_EQUAL, LESS, LESS_EQUAL, GREATER, GREATER_EQUAL 
     };
@@ -39,11 +31,9 @@ struct ColorQueryLogic {
     uint32_t target_buffer_id = 0;
     uint32_t column_id = 0;
     
-    ColorMode mode = ColorMode::CHANNELS_RGBA;
     Comparison op = Comparison::EQUAL;
-    
-    godot::Color target_color;
-    float tolerance = 0.001f; // Used for float equality or distance threshold
+    uint32_t mask = 15; // Bitmask: H=1, S=2, V=4, A=8
+    float threshold = 0.5f;
 
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
@@ -51,17 +41,30 @@ struct ColorQueryLogic {
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 
                  const T_View& p_view) const {
-        
-        if constexpr (Op == QueryOp::CULL) {
-            if (r_selection.mode == SelectionMode::DENSE) _cull_dense(r_selection, p_view);
-            else _cull_sparse(r_selection, p_view);
-        } else if constexpr (Op == QueryOp::ADD) {
-            _add_available(r_selection, p_view, p_context);
+        // Template dispatching ensures branchless execution in the internal loops
+        switch (op) {
+            case Comparison::EQUAL:         _execute_impl<Op, Comparison::EQUAL>(r_selection, p_context, p_view); break;
+            case Comparison::NOT_EQUAL:     _execute_impl<Op, Comparison::NOT_EQUAL>(r_selection, p_context, p_view); break;
+            case Comparison::LESS:          _execute_impl<Op, Comparison::LESS>(r_selection, p_context, p_view); break;
+            case Comparison::LESS_EQUAL:    _execute_impl<Op, Comparison::LESS_EQUAL>(r_selection, p_context, p_view); break;
+            case Comparison::GREATER:       _execute_impl<Op, Comparison::GREATER>(r_selection, p_context, p_view); break;
+            case Comparison::GREATER_EQUAL: _execute_impl<Op, Comparison::GREATER_EQUAL>(r_selection, p_context, p_view); break;
         }
     }
 
 private:
-// --- Injected DOD View Adapter ---
+    template <QueryOp Op, Comparison Cmp, typename T_View>
+    void _execute_impl(MemoryBufferSelectionPOD& r_selection, 
+                       const TaskContextPOD& p_context, 
+                       const T_View& p_view) const {
+        if constexpr (Op == QueryOp::CULL) {
+            if (r_selection.mode == SelectionMode::DENSE) _cull_dense<Cmp>(r_selection, p_view);
+            else _cull_sparse<Cmp>(r_selection, p_view);
+        } else if constexpr (Op == QueryOp::ADD) {
+            _add_available<Cmp>(r_selection, p_view, p_context);
+        }
+    }
+
     template <typename T_View>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -78,22 +81,44 @@ private:
         }
     }
 
+    template <Comparison Cmp>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline bool _compare(float p_val, float p_thresh) const {
+        if constexpr (Cmp == Comparison::EQUAL)         return p_val == p_thresh;
+        if constexpr (Cmp == Comparison::NOT_EQUAL)     return p_val != p_thresh;
+        if constexpr (Cmp == Comparison::LESS)          return p_val < p_thresh;
+        if constexpr (Cmp == Comparison::LESS_EQUAL)    return p_val <= p_thresh;
+        if constexpr (Cmp == Comparison::GREATER)       return p_val > p_thresh;
+        if constexpr (Cmp == Comparison::GREATER_EQUAL) return p_val >= p_thresh;
+        return false;
+    }
+
+    template <Comparison Cmp>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
     inline bool _evaluate(const T& p_val) const {
-        // Implementation details omitted for brevity, but assumes standard Color checks
-        return false; // Placeholder for actual math
+        // T is assumed to map (r, g, b, a) to (H, S, V, A) directly from memory
+        if ((mask & 1) && !_compare<Cmp>(p_val.r, threshold)) return false; // Hue
+        if ((mask & 2) && !_compare<Cmp>(p_val.g, threshold)) return false; // Saturation
+        if ((mask & 4) && !_compare<Cmp>(p_val.b, threshold)) return false; // Value
+        if ((mask & 8) && !_compare<Cmp>(p_val.a, threshold)) return false; // Alpha
+        
+        return true;
     }
 
-    template <typename T_View>
+    template <Comparison Cmp, typename T_View>
     void _cull_dense(MemoryBufferSelectionPOD& r_selection, const T_View& p_view) const {
         uint64_t* bitset = r_selection.data.bitset;
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                if (!_evaluate(_read_view(p_view,i))) {
+                if (!_evaluate<Cmp>(_read_view(p_view, i))) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
                     r_selection.element_count--;
                 }
@@ -101,41 +126,39 @@ private:
         }
     }
 
-    template <typename T_View>
+    template <Comparison Cmp, typename T_View>
     void _cull_sparse(MemoryBufferSelectionPOD& r_selection, const T_View& p_view) const {
         int64_t* indices = r_selection.data.indices;
         int64_t write_ptr = 0;
         for (int64_t i = 0; i < r_selection.element_count; ++i) {
-            if (_evaluate(_read_view(p_view, indices[i]))) {
+            if (_evaluate<Cmp>(_read_view(p_view, indices[i]))) {
                 indices[write_ptr++] = indices[i];
             }
         }
         r_selection.element_count = write_ptr;
     }
 
-    template <typename T_View>
+    template <Comparison Cmp, typename T_View>
     void _add_available(const MemoryBufferSelectionPOD& r_selection, const T_View& p_view, const TaskContextPOD& p_ctx) const {
         const uint64_t* unclaimed = r_selection.unclaimed_mask;
         if (!unclaimed) return;
 
         const int64_t words = (r_selection.capacity + 63) >> 6;
         for (int64_t w = 0; w < words; ++w) {
-            uint64_t mask = unclaimed[w];
-            while (mask != 0) {
-                int bit_index = std::countr_zero(mask);
+            uint64_t mask_chunk = unclaimed[w];
+            while (mask_chunk != 0) {
+                int bit_index = std::countr_zero(mask_chunk);
                 int64_t global_index = (w << 6) + bit_index;
                 
                 if (global_index >= r_selection.capacity) break;
 
-                if (_evaluate(_read_view(p_view, global_index))) {
+                if (_evaluate<Cmp>(_read_view(p_view, global_index))) {
                     p_ctx.queue_selection_command(target_buffer_id, global_index);
                 }
-                mask &= (mask - 1); 
+                mask_chunk &= (mask_chunk - 1); 
             }
         }
     }
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_COLOR_QUERY_LOGIC_H

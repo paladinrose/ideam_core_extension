@@ -9,7 +9,13 @@ private:
     uint32_t target_buffer_id = 0;
 
 public:
-    explicit EntryFillTask(uint32_t p_buffer_id) : target_buffer_id(p_buffer_id) {}
+    // FIX 2: Default parameter added to satisfy parameterless construction in the NativeTaskRegistry
+    explicit EntryFillTask(uint32_t p_buffer_id = 0) : target_buffer_id(p_buffer_id) {}
+
+    // FIX 1: Implement the pure virtual prepare method. 
+    // Since this task is 'final', the compiler can successfully devirtualize this 
+    // and completely inline/strip the empty call during execution, avoiding a vtable jump.
+    inline void prepare(const TaskContextPOD& p_context) override {}
 
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -31,10 +37,8 @@ public:
             p_context.manager->populate_inverse_selection(target_buffer_id, *selection);
         }
     }
-    virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
+    
+    inline void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
 };
 
-
 } // namespace ideam::core
-
- // IDEAM_CORE_ENTRY_FILL_TASK_H

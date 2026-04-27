@@ -1,9 +1,10 @@
-#include "game_entity.h"
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 
-// Assumption: Project headers will be available for forward declared classes
+#include "game_entity.h"
+
 #include "game.h"
 #include "gameplay/gameplay_style.h"
 

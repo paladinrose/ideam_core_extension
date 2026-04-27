@@ -11,8 +11,8 @@ namespace ideam::godot_ext {
 class GamePlayerProfile;
 class SceneTransition;
 class GameAgent;
-class Node_Retargeter;
-class Signal_Connector;
+class NodeRetargeter;
+class SignalConnector;
 class Game;
 class GameMenu;
 class GameBoard;
@@ -36,8 +36,8 @@ private:
     SceneTransition* board_transition = nullptr;
     GameAgent* default_agent = nullptr;
     
-    Node_Retargeter* agent_node_assignments = nullptr;
-    Signal_Connector* agent_signal_assignments = nullptr;
+    NodeRetargeter* agent_node_assignments = nullptr;
+    SignalConnector* agent_signal_assignments = nullptr;
 
     // DOD NOTE: Storing Node pointers in TypedArray causes severe cache thrashing when iterating 
     // over these collections to evaluate exclusivity rules. In a DOD paradigm, `controlled_agents` 
@@ -83,11 +83,11 @@ public:
     void set_default_agent(GameAgent* p_agent);
     GameAgent* get_default_agent() const;
 
-    void set_agent_node_assignments(Node_Retargeter* p_assignments);
-    Node_Retargeter* get_agent_node_assignments() const;
+    void set_agent_node_assignments(NodeRetargeter* p_assignments);
+    NodeRetargeter* get_agent_node_assignments() const;
 
-    void set_agent_signal_assignments(Signal_Connector* p_assignments);
-    Signal_Connector* get_agent_signal_assignments() const;
+    void set_agent_signal_assignments(SignalConnector* p_assignments);
+    SignalConnector* get_agent_signal_assignments() const;
 
     // Class Functions
     void find_game_player_manager(godot::Node* on = nullptr);
