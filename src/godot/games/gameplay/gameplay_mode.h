@@ -1,26 +1,25 @@
 #pragma once
 
-#include <godot_cpp/classes/resource.hpp>
+#include "gameplay_resource.h"
 #include <godot_cpp/variant/typed_array.hpp>
 
 namespace ideam::godot_ext {
 
 // Forward Declarations
-class GameplayResource;
 class GameplayPerspective;
 class GameplayDifficulty;
 class GameplayControlMap;
 class GameplayAccessibilityOption;
 
 /**
- * DOD NOTE: Gameplay_Mode acts as a collection of gameplay-altering components. 
+ * DOD NOTE: GameplayMode acts as a collection of gameplay-altering components. 
  * Storing these in separate TypedArrays of Objects (AoS) creates a fragmented memory 
  * profile. In a high-performance C++26 environment, these should be refactored 
  * into a single contiguous Block of Memory (SoA) where components are stored as 
  * raw POD data, minimizing cache misses during mode initialization and updates.
  */
-class Gameplay_Mode : public godot::Resource {
-    GDCLASS(Gameplay_Mode, godot::Resource)
+class GameplayMode : public GameplayResource {
+    GDCLASS(GameplayMode, GameplayResource)
 
 protected:
     static void _bind_methods();
@@ -32,8 +31,8 @@ private:
     godot::TypedArray<GameplayAccessibilityOption> accessibility_options;
 
 public:
-    Gameplay_Mode();
-    ~Gameplay_Mode();
+    GameplayMode();
+    ~GameplayMode();
 
     // Setters / Getters
     void set_perspectives(const godot::TypedArray<GameplayPerspective> &p_perspectives);
@@ -56,7 +55,7 @@ public:
      * Using integer-based Component IDs or StringNames stored in contiguous memory 
      * would allow for much faster, cache-friendly lookups.
      */
-    void apply_mode(const godot::Ref<Gameplay_Mode> &p_other);
+    void apply_mode(const godot::Ref<GameplayMode> &p_other);
 };
 
 } // namespace ideam::godot_ext

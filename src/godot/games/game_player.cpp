@@ -34,7 +34,7 @@ void GamePlayer::_bind_methods() {
     ADD_SIGNAL(godot::MethodInfo("loading_game_started"));
     ADD_SIGNAL(godot::MethodInfo("game_loaded", godot::PropertyInfo(godot::Variant::OBJECT, "game", godot::PROPERTY_HINT_NODE_TYPE, "Game")));
 
-    // Properties (Abridged binding logic for standard exports)
+    // Properties
     godot::ClassDB::bind_method(godot::D_METHOD("set_player_root", "new_root"), &GamePlayer::set_player_root);
     godot::ClassDB::bind_method(godot::D_METHOD("get_player_root"), &GamePlayer::get_player_root);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "player_root", godot::PROPERTY_HINT_NODE_TYPE, "Node"), "set_player_root", "get_player_root");
@@ -42,8 +42,6 @@ void GamePlayer::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_player_agent_name", "name"), &GamePlayer::set_player_agent_name);
     godot::ClassDB::bind_method(godot::D_METHOD("get_player_agent_name"), &GamePlayer::get_player_agent_name);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING, "player_agent_name"), "set_player_agent_name", "get_player_agent_name");
-
-    // Additional typical properties... (allow_agent_reparenting, join_game_on_load, default_agent, etc.)
 
     // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("find_game_player_manager", "on"), &GamePlayer::find_game_player_manager, DEFVAL(nullptr));
@@ -57,6 +55,13 @@ void GamePlayer::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("release_game_agent", "toRelease"), &GamePlayer::release_game_agent);
     
     godot::ClassDB::bind_method(godot::D_METHOD("_on_process_frame_find_game"), &GamePlayer::_on_process_frame_find_game);
+    
+    godot::ClassDB::bind_method(godot::D_METHOD("open_game_menu"), &GamePlayer::open_game_menu);
+    godot::ClassDB::bind_method(godot::D_METHOD("close_game_menu"), &GamePlayer::close_game_menu);
+    godot::ClassDB::bind_method(godot::D_METHOD("load_game_board_started", "game", "game_board_id"), &GamePlayer::load_game_board_started);
+    godot::ClassDB::bind_method(godot::D_METHOD("load_game_board_completed", "game", "game_board"), &GamePlayer::load_game_board_completed);
+    godot::ClassDB::bind_method(godot::D_METHOD("load_game_started", "game_id"), &GamePlayer::load_game_started);
+    godot::ClassDB::bind_method(godot::D_METHOD("load_game_completed", "game"), &GamePlayer::load_game_completed);
 }
 
 GamePlayer::GamePlayer() {}
@@ -77,37 +82,56 @@ void GamePlayer::_on_process_frame_find_game() {
     find_current_game();
 }
 
-// Implement Setters/Getters
 void GamePlayer::set_player_root(godot::Node* p_root) {
     if (p_root == _root) return;
     _root = p_root;
 }
+
 godot::Node* GamePlayer::get_player_root() const { return _root; }
 
 void GamePlayer::set_player_agent_name(const godot::String& p_name) { player_agent_name = p_name; }
 godot::String GamePlayer::get_player_agent_name() const { return player_agent_name; }
 
-// ... other straightforward getters/setters omitted for concise DOD focus ...
-
 void GamePlayer::find_game_player_manager(godot::Node* on) {
-    // Assumption: GamePlayerManager::get_manager() exists as a static singleton accessor
-    // GamePlayerManager* gpm = GamePlayerManager::get_manager();
-    // if (gpm) set_game_player_manager(gpm);
+    // Requires GamePlayerManager to expose static singleton accessor
+    GamePlayerManager* gpm = godot::Object::cast_to<GamePlayerManager>(get_tree()->get_first_node_in_group("GamePlayerManager"));
+    if (gpm) {
+        set_game_player_manager(gpm);
+    }
 }
 
 void GamePlayer::set_game_player_manager(GamePlayerManager* gpm) {
-    // Implementing translation from GDScript logic...
-    // gpm->login_player(this);
+    if (!gpm) return;
+    
+    if (!player_profile.is_valid()) {
+        if (!profile_path.is_empty()) {
+            gpm->load_player_profile(profile_path, this);
+        }
+        
+        if (!player_profile.is_valid()) {
+            player_profile = gpm->get_default_player_profile();
+            profile_path = "";
+        }
+    }
+    
+    gpm->login_player(this);
 }
 
 void GamePlayer::find_current_game() {
     godot::Node* p = get_parent();
-    while (p != nullptr && p->get_class() != "Game") {
+    Game* game_node = nullptr;
+    
+    // Tight loop traversing hierarchy; avoid dynamic string comparisons
+    while (p != nullptr) {
+        game_node = godot::Object::cast_to<Game>(p);
+        if (game_node) {
+            break;
+        }
         p = p->get_parent();
     }
     
-    if (p && p->get_class() == "Game") {
-        // join_game(godot::Object::cast_to<Game>(p));
+    if (game_node) {
+        join_game(game_node);
     }
 }
 
@@ -119,13 +143,21 @@ void GamePlayer::join_game(Game* game) {
     
     games.append(game);
     
-    // game->connect("loading_game_board_started", godot::Callable(this, "load_game_board_started"));
-    // game->connect("game_board_loaded", godot::Callable(this, "load_game_board_completed"));
+    game->connect("loading_game_board_started", godot::Callable(this, "load_game_board_started"));
+    game->connect("game_board_loaded", godot::Callable(this, "load_game_board_completed"));
     
-    godot::Node* gameMenuNode = game->find_child("GameMenu", true, false);
+    godot::Node* gameMenuNode = game->find_child("Game_Menu", true, false);
     if (gameMenuNode) {
-        // GameMenu* gameMenu = godot::Object::cast_to<GameMenu>(gameMenuNode);
-        // gameMenus.append(gameMenu);
+        GameMenu* gameMenu = godot::Object::cast_to<GameMenu>(gameMenuNode);
+        if (gameMenu) {
+            gameMenus.append(gameMenu);
+            connect("game_menu_opened", godot::Callable(gameMenu, "open_menu"));
+            connect("game_menu_closed", godot::Callable(gameMenu, "close_menu"));
+        }
+    }
+    
+    if (board_transition) {
+        game->set_game_board_loader(board_transition);
     }
     
     emit_signal("joined_game", game);
@@ -139,19 +171,76 @@ void GamePlayer::leave_game(int gameID) {
     if (gameID < 0 || gameID >= games.size()) return;
     
     Game* gameLeft = godot::Object::cast_to<Game>(games[gameID]);
+    if (gameLeft) {
+        gameLeft->disconnect("loading_game_board_started", godot::Callable(this, "load_game_board_started"));
+        gameLeft->disconnect("game_board_loaded", godot::Callable(this, "load_game_board_completed"));
+            
+        if (board_transition && gameLeft->get_game_board_loader() == board_transition) {
+            gameLeft->set_game_board_loader(nullptr);
+        }
+    }
+
+    if (gameID < gameMenus.size()) {
+        GameMenu* menuLeft = godot::Object::cast_to<GameMenu>(gameMenus[gameID]);
+        if (menuLeft) {
+            disconnect("game_menu_opened", godot::Callable(menuLeft, "open_menu"));
+            disconnect("game_menu_closed", godot::Callable(menuLeft, "close_menu"));
+        }
+    }
     
-    // Disconnections...
-    
-    // DOD NOTE: `TypedArray::remove_at` requires shifting all subsequent elements in memory. 
-    // For large collections or frequent modifications, utilize `std::vector` and the 
-    // swap-and-pop idiom: `std::swap(vec[id], vec.back()); vec.pop_back();` to guarantee O(1) removal.
     games.remove_at(gameID);
     gameMenus.remove_at(gameID);
     
     emit_signal("left_game", gameLeft);
 }
 
-// ... other menu/loading wrappers ...
+void GamePlayer::open_game_menu() { emit_signal("game_menu_opened"); }
+void GamePlayer::close_game_menu() { emit_signal("game_menu_closed"); }
+
+void GamePlayer::load_game_board_started(Game* game, int game_board_id) { emit_signal("loading_game_board_started"); }
+void GamePlayer::load_game_board_completed(Game* game, GameBoard* game_board) { emit_signal("game_board_loaded", game_board); }
+
+void GamePlayer::load_game_started(int game_id) { emit_signal("loading_game_started"); }
+
+void GamePlayer::load_game_completed(Game* game) {
+    if (join_game_on_load) {
+        join_game(game);
+    }
+    emit_signal("game_loaded", game);
+}
+
+void GamePlayer::find_and_control_player_agent(godot::Node* on) {
+    if (!on) return;
+    godot::TypedArray<godot::Node> ga = on->find_children(player_agent_name);
+    for (int i = 0; i < ga.size(); ++i) {
+        GameAgent* game_agent = godot::Object::cast_to<GameAgent>(ga[i]);
+        if (game_agent) {
+            control_game_agent(game_agent);
+        }
+    }
+}
+
+void GamePlayer::find_and_control_game_agents(godot::Node* on) {
+    if (!on) return;
+    godot::TypedArray<godot::Node> ga = on->find_children("*", "GameAgent");
+    for (int i = 0; i < ga.size(); ++i) {
+        GameAgent* game_agent = godot::Object::cast_to<GameAgent>(ga[i]);
+        if (game_agent) {
+            control_game_agent(game_agent);
+        }
+    }
+}
+
+void GamePlayer::find_and_release_game_agents(godot::Node* on) {
+    if (!on) return;
+    godot::TypedArray<godot::Node> ga = on->find_children("*", "GameAgent");
+    for (int i = 0; i < ga.size(); ++i) {
+        GameAgent* game_agent = godot::Object::cast_to<GameAgent>(ga[i]);
+        if (game_agent) {
+            release_game_agent(game_agent);
+        }
+    }
+}
 
 void GamePlayer::control_game_agent(GameAgent* new_agent) {
     if (!new_agent || controlled_agents.has(new_agent)) return;
@@ -162,13 +251,7 @@ void GamePlayer::control_game_agent(GameAgent* new_agent) {
         return;
     }
 
-    // DOD NOTE: String-based Godot Groups (`is_in_group`) allocate memory and perform hash map lookups.
-    // By replacing groups with a 64-bit integer `collision_mask` or `group_mask` on the agent, 
-    // the exclusivity checks below can be vectorized or evaluated branchlessly using pure SIMD bitwise AND ops.
-    // e.g., `bool overlap = (av->group_mask & new_agent->group_mask) != 0;`
-
-    int exclusivity = 0; // Assumption: new_agent->get_exclusivity(); 
-                         // 0: EXCLUSIVE, 1: GROUP_INCLUSIVE, 2: GROUP_EXCLUSIVE
+    AgentExclusivity exclusivity = new_agent->get_exclusivity();
 
     for (int i = controlled_agents.size() - 1; i >= 0; --i) {
         GameAgent* av = godot::Object::cast_to<GameAgent>(controlled_agents[i]);
@@ -176,20 +259,26 @@ void GamePlayer::control_game_agent(GameAgent* new_agent) {
 
         bool do_disconnect = false;
 
-        switch (exclusivity) {
-            case 0: // EXCLUSIVE
-                do_disconnect = true;
-                break;
-            case 1: // GROUP_INCLUSIVE
-                do_disconnect = true;
-                // godot::TypedArray<godot::StringName> groups = new_agent->get_groups();
-                // Check if av shares ANY group... if so, do_disconnect = false;
-                break;
-            case 2: // GROUP_EXCLUSIVE
-                do_disconnect = false;
-                // godot::TypedArray<godot::StringName> groups = new_agent->get_groups();
-                // Check if av shares ANY group... if so, do_disconnect = true;
-                break;
+        if (exclusivity == AgentExclusivity::EXCLUSIVE) {
+            do_disconnect = true;
+        } else if (exclusivity == AgentExclusivity::GROUP_INCLUSIVE) {
+            do_disconnect = true;
+            godot::TypedArray<godot::StringName> groups = new_agent->get_groups();
+            for (int g = 0; g < groups.size(); ++g) {
+                if (av->is_in_group(groups[g])) {
+                    do_disconnect = false;
+                    break;
+                }
+            }
+        } else if (exclusivity == AgentExclusivity::GROUP_EXCLUSIVE) {
+            do_disconnect = false;
+            godot::TypedArray<godot::StringName> groups = new_agent->get_groups();
+            for (int g = 0; g < groups.size(); ++g) {
+                if (av->is_in_group(groups[g])) {
+                    do_disconnect = true;
+                    break;
+                }
+            }
         }
 
         if (do_disconnect) {
@@ -213,13 +302,16 @@ void GamePlayer::release_game_agent_at(int id) {
     GameAgent* agent = godot::Object::cast_to<GameAgent>(controlled_agents[id]);
     
     if (agent == default_agent && controlled_agents.size() == 1) {
-        GameAgent* onlyAgent = godot::Object::cast_to<GameAgent>(controlled_agents[0]);
-        if (onlyAgent == default_agent) {
-            return;
-        }
+        return;
     }
     
-    // if (agent->player_parent_target && _original_parent) reparent(_original_parent);
+    if (agent && agent->get_player_parent_target() && _original_parent) {
+        if (_root) {
+            _root->reparent(_original_parent);
+        } else {
+            reparent(_original_parent);
+        }
+    }
     
     controlled_agents.remove_at(id);
     _disconnect_from_agent(agent);
@@ -229,17 +321,63 @@ void GamePlayer::release_game_agent_at(int id) {
     }
 }
 
+void GamePlayer::reparent_to_agent(GameAgent* agent) {
+    if (!allow_agent_reparenting || !agent || !agent->get_player_parent_target() || !_root) return;
+        
+    godot::Node* current_parent = _root->get_parent();
+        
+    if (current_parent) {
+        _root->reparent(agent->get_player_parent_target());
+    } else {
+        agent->get_player_parent_target()->add_child(_root);
+    }
+}
+
+void GamePlayer::validate_agents() {
+    if (default_agent && controlled_agents.size() == 0) {
+        controlled_agents.append(default_agent);
+    }
+    
+    for (int i = 0; i < controlled_agents.size(); ++i) {
+        GameAgent* agent = godot::Object::cast_to<GameAgent>(controlled_agents[i]);
+        if (agent && agent->get_player() != this) {
+            _connect_to_agent(agent);
+        }
+    }
+}
+
 void GamePlayer::_connect_to_agent(GameAgent* agent) {
-    // Assumption implementations mapping logic
-    // if (agent->player_parent_target) reparent_to_agent(agent);
-    // if (agent_node_assignments) agent_node_assignments->retarget(this, agent);
-    // if (agent_signal_assignments) agent_signal_assignments->connect_signals(this, agent);
-    // agent->set_player(this);
+    if (!agent) return;
+
+    if (agent->get_player_parent_target()) {
+        reparent_to_agent(agent);
+    }
+    
+    if (agent_node_assignments) {
+        agent_node_assignments->retarget(this, agent);
+    }
+    
+    if (agent_signal_assignments) {
+        agent_signal_assignments->connect_signals(this, agent);
+    }
+    
+    agent->set_player(this);
 }
 
 void GamePlayer::_disconnect_from_agent(GameAgent* agent) {
-    // if (agent_node_assignments) agent_node_assignments->clear_set_targets(this, agent);
-    // if (agent_signal_assignments) agent_signal_assignments->disconnect_signals(this, agent);
+    if (!agent) return;
+
+    if (agent_node_assignments) {
+        agent_node_assignments->clear_set_targets(this, agent);
+    }
+    
+    if (agent_signal_assignments) {
+        agent_signal_assignments->disconnect_signals(this, agent);
+    }
+
+    if (agent->get_player() == this) {
+        agent->set_player(nullptr);
+    }
 }
 
 godot::Dictionary GamePlayer::save_data() const {

@@ -11,6 +11,7 @@ namespace ideam::godot_ext {
 class GameAgent;
 class GamePiece;
 class GameAgentAction;
+class GamePieceAction;
 
 // DOD NOTE: GameInteraction heavily relies on loosely-typed Godot Arrays 
 // containing mixed types (e.g., `[GameEntity*, int action_id]`). This forces 
@@ -44,6 +45,8 @@ public:
     ~GameInteraction();
 
     // Setters / Getters
+    bool is_interaction_active() const;
+    
     void set_instigator(const godot::Array& p_instigator);
     godot::Array get_instigator() const;
 
@@ -68,7 +71,9 @@ public:
 
     void prep_participant(const godot::Array& participant);
     
-    void evaluate_interaction(GameAgent* stepped_agent, int sequence_id);
+    // Signature inverted to correctly receive Callable::bind() execution in Godot 4
+    void evaluate_interaction(int sequence_id, GameAgent* stepped_agent);
+    
     int score_participant(const godot::Array& participant) const;
     void resolve_participant(const godot::Array& participant, int score_diff);
     

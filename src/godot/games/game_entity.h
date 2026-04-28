@@ -21,7 +21,6 @@ class GameEntity : public godot::Node {
 protected:
     static void _bind_methods();
 
-private:
     bool enabled = true;
     godot::String title;
     godot::Node* root_node = nullptr;
@@ -48,7 +47,7 @@ public:
     void set_title(const godot::String& p_title);
     godot::String get_title() const;
 
-    void set_root_node(godot::Node* p_node);
+    void set_root_node(godot::Node* p_root);
     godot::Node* get_root_node() const;
 
     void set_game(Game* p_game);
@@ -59,6 +58,10 @@ public:
 
     void set_gameplay_style(const godot::Ref<GameplayStyle>& p_style);
     godot::Ref<GameplayStyle> get_gameplay_style() const;
+
+    // DOD Accessors for strict internal state
+    bool get_entity_is_paused() const;
+    void set_entity_is_paused(bool p_paused);
 
     // Class Functions
     void validate_game();

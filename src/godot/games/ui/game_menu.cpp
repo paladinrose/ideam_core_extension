@@ -1,22 +1,16 @@
+// game_menu.cpp
 #include "game_menu.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/viewport.hpp>
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
-// Project Header Includes
-#include "../game.h"
-#include "chapter_select.h"
-#include "game_options_menu.h"
-
 namespace ideam::godot_ext {
 
 void GameMenu::_bind_methods() {
-    // Signals
     ADD_SIGNAL(godot::MethodInfo("opened"));
     ADD_SIGNAL(godot::MethodInfo("closed"));
 
-    // Function Bindings
     godot::ClassDB::bind_method(godot::D_METHOD("validate_game"), &GameMenu::validate_game);
     godot::ClassDB::bind_method(godot::D_METHOD("build_game_menu"), &GameMenu::build_game_menu);
     godot::ClassDB::bind_method(godot::D_METHOD("close_chapter_select"), &GameMenu::close_chapter_select);
@@ -29,7 +23,6 @@ void GameMenu::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("open_menu"), &GameMenu::open_menu);
     godot::ClassDB::bind_method(godot::D_METHOD("close_menu"), &GameMenu::close_menu);
 
-    // Property Accessors
     godot::ClassDB::bind_method(godot::D_METHOD("set_game", "game"), &GameMenu::set_game);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game"), &GameMenu::get_game);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game", godot::PROPERTY_HINT_RESOURCE_TYPE, "Game"), "set_game", "get_game");
@@ -83,12 +76,10 @@ void GameMenu::_ready() {
     build_game_menu();
 }
 
-// Setters and Getters
 void GameMenu::set_game(Game* p_game) {
     if (p_game != game) {
         game = p_game;
         if (game != nullptr && game_title != nullptr) {
-            // Replicating GDScript setter: game_title.text = game.title
             game_title->set_text(game->get_title());
         }
     }
@@ -125,7 +116,6 @@ ChapterSelect* GameMenu::get_chapter_select() const { return chapter_select; }
 void GameMenu::set_options_menu(GameOptionsMenu* p_menu) { options_menu = p_menu; }
 GameOptionsMenu* GameMenu::get_options_menu() const { return options_menu; }
 
-// Class Functions
 void GameMenu::validate_game() {
     if (game == nullptr) {
         godot::Node* gameNode = get_parent();
@@ -169,10 +159,8 @@ void GameMenu::validate_new_game_button() {
 void GameMenu::validate_continue_game_button() {
     if (game == nullptr) return;
     
-    game->call("validate_continue_play_state");
-    godot::String continue_state = game->call("get_continue_play_state").operator godot::String();
-    
-    if (continue_state == "") {
+    game->validate_continue_play_state();
+    if (game->get_continue_play_state() == "") {
         if (continue_game_button != nullptr) {
             continue_game_button->set_visible(false);
         }
@@ -198,18 +186,22 @@ void GameMenu::validate_continue_game_button() {
 void GameMenu::validate_load_game_button() {
     if (game == nullptr) return;
     
-    int load_opts = game->call("get_load_options");
-    // Check against Game::LoadOptions enum values (NO_LOAD = 0, RESUME_PLAYSTATE = 1) [cite: 22]
-    if (load_opts == 0 || load_opts == 1) {
+    LoadOptions load_opts = game->get_load_options();
+    if (load_opts == LoadOptions::NO_LOAD || load_opts == LoadOptions::RESUME_PLAYSTATE) {
         if (load_game_button != nullptr) {
             load_game_button->set_visible(false);
-        } else if (has_node("LoadGame")) {
-            get_node<godot::CanvasItem>("LoadGame")->set_visible(false);
+        } else {
+            godot::Node* node = get_node_or_null("LoadGame");
+            if (node != nullptr) {
+                godot::CanvasItem* ci = godot::Object::cast_to<godot::CanvasItem>(node);
+                if (ci != nullptr) ci->set_visible(false);
+            }
         }
     } else {
         if (load_game_button == nullptr) {
-            if (has_node("LoadGame")) {
-                load_game_button = get_node<godot::Button>("LoadGame");
+            godot::Node* node = get_node_or_null("LoadGame");
+            if (node != nullptr && node->is_class("Button")) {
+                load_game_button = godot::Object::cast_to<godot::Button>(node);
             } else {
                 load_game_button = memnew(godot::Button);
                 load_game_button->set_name("LoadGame");
@@ -225,18 +217,22 @@ void GameMenu::validate_load_game_button() {
 void GameMenu::validate_save_game_button() {
     if (game == nullptr) return;
     
-    int save_opts = game->call("get_save_options");
-    // Check against Game::SaveOptions enum values (NO_SAVE = 0, PLAYSTATE_SAVE = 1) [cite: 22]
-    if (save_opts == 0 || save_opts == 1) {
+    SaveOptions save_opts = game->get_save_options();
+    if (save_opts == SaveOptions::NO_SAVE || save_opts == SaveOptions::PLAYSTATE_SAVE) {
         if (save_game_button != nullptr) {
             save_game_button->set_visible(false);
-        } else if (has_node("SaveGame")) {
-            get_node<godot::CanvasItem>("SaveGame")->set_visible(false);
+        } else {
+            godot::Node* node = get_node_or_null("SaveGame");
+            if (node != nullptr) {
+                godot::CanvasItem* ci = godot::Object::cast_to<godot::CanvasItem>(node);
+                if (ci != nullptr) ci->set_visible(false);
+            }
         }
     } else {
         if (save_game_button == nullptr) {
-            if (has_node("SaveGame")) {
-                save_game_button = get_node<godot::Button>("SaveGame");
+            godot::Node* node = get_node_or_null("SaveGame");
+            if (node != nullptr && node->is_class("Button")) {
+                save_game_button = godot::Object::cast_to<godot::Button>(node);
             } else {
                 save_game_button = memnew(godot::Button);
                 save_game_button->set_name("SaveGame");
@@ -251,8 +247,11 @@ void GameMenu::validate_save_game_button() {
 
 void GameMenu::validate_options_button() {
     if (options_menu != nullptr) {
-        if (options_button == nullptr && has_node("Options")) {
-            options_button = get_node<godot::Button>("Options");
+        if (options_button == nullptr) {
+            godot::Node* node = get_node_or_null("Options");
+            if (node != nullptr && node->is_class("Button")) {
+                options_button = godot::Object::cast_to<godot::Button>(node);
+            }
         }
     } else {
         if (options_button != nullptr) {
@@ -262,8 +261,11 @@ void GameMenu::validate_options_button() {
 }
 
 void GameMenu::validate_quit_button() {
-    if (quit_button == nullptr && has_node("Quit")) {
-        quit_button = get_node<godot::Button>("Quit");
+    if (quit_button == nullptr) {
+        godot::Node* node = get_node_or_null("Quit");
+        if (node != nullptr && node->is_class("Button")) {
+            quit_button = godot::Object::cast_to<godot::Button>(node);
+        }
     }
     
     if (quit_button != nullptr && !quit_button->is_connected("pressed", godot::Callable(this, "quit_pressed"))) {
@@ -293,7 +295,7 @@ void GameMenu::validate_chapter_select() {
     if (popup == nullptr) return;
 
     if (chapter_select == nullptr) {
-        godot::Node* chs = popup->get_node_or_null("ChapterSelect");
+        godot::Node* chs = popup->get_node_or_null("Chapter_Select");
         if (chs != nullptr) {
             chapter_select = godot::Object::cast_to<ChapterSelect>(chs);
             if (!chapter_select->is_connected("canceled", godot::Callable(this, "close_chapter_select"))) {
@@ -303,7 +305,7 @@ void GameMenu::validate_chapter_select() {
     }
     
     if (chapter_select != nullptr) {
-        chapter_select->call("validate_game");
+        chapter_select->validate_game();
     }
 }
 
@@ -316,8 +318,7 @@ void GameMenu::close_chapter_select() {
 void GameMenu::new_game_pressed() {
     if (game == nullptr) return;
 
-    int new_board = game->call("get_new_game_board");
-    if (chapter_select != nullptr && new_board < 0) {
+    if (chapter_select != nullptr && game->get_new_game_board() < 0) {
         godot::Vector2 viewportSize = get_viewport()->get_visible_rect().size;
         godot::Vector2 sizer = viewportSize * 0.75f;
         if (popup != nullptr) {
@@ -325,14 +326,14 @@ void GameMenu::new_game_pressed() {
         }
     } else {
         godot::UtilityFunctions::print("New Game Button Pressed. Starting New Game.");
-        game->call("new_game");
+        game->new_game();
         close_menu();
     }
 }
 
 void GameMenu::continue_game_pressed() {
     if (game != nullptr) {
-        game->call("continue_in_progress");
+        game->continue_in_progress();
         close_menu();
     }
 }
@@ -340,20 +341,25 @@ void GameMenu::continue_game_pressed() {
 void GameMenu::load_game_pressed() {
     if (game == nullptr) return;
     
-    int load_opts = game->call("get_load_options");
+    LoadOptions load_opts = game->get_load_options();
     switch (load_opts) {
-        case 0: // NO_LOAD
+        case LoadOptions::NO_LOAD:
             return;
-        case 1: // RESUME_PLAYSTATE
-            game->call("load_game", 0);
+            
+        case LoadOptions::RESUME_PLAYSTATE:
+            game->load_game(0);
             break;
-        case 2: // LOAD_FILES
-            // Recajigger the chapter_select for this job.
-            // When its Load button is pressed we call
-            // game.load_game(chapter_select.selected_chapter)
+            
+        case LoadOptions::LOAD_FILES:
+            //Recajigger the chapter_select
+            //for this job.  
+            //When its Load button is pressed
+            //We call
+            //game.load_game(chapter_select.selected_chapter)
             return;
-        case 3: // FULL_LOAD
-            // uhhh, yeah?
+            
+        case LoadOptions::FULL_LOAD:
+            //uhhh, yeah?
             return;
     }
 }
@@ -361,24 +367,24 @@ void GameMenu::load_game_pressed() {
 void GameMenu::save_game_pressed() {
     if (game == nullptr) return;
         
-    int save_opts = game->call("get_save_options");
+    SaveOptions save_opts = game->get_save_options();
     switch (save_opts) {
-        case 0: // NO_SAVE
+        case SaveOptions::NO_SAVE:
             return;
-        case 1: // PLAYSTATE_SAVE
-            game->call("save_game");
+        case SaveOptions::PLAYSTATE_SAVE:
+            game->save_game();
             break;
     }
 }
 
 void GameMenu::options_pressed() {
     if (game == nullptr || options_menu == nullptr) return;
-    options_menu->call("open_options");
+    options_menu->open_options();
 }
 
 void GameMenu::quit_pressed() {
     if (game != nullptr) {
-        game->call("quit_game");
+        game->quit_game();
     }
 }
 

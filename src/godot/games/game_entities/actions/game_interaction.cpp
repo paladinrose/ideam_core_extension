@@ -2,7 +2,7 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/callable.hpp>
 
-// Forward decl headers to be supplied by project
+// Explicit includes for static resolution
 #include "../game_agent.h"
 #include "../game_piece.h"
 #include "game_agent_action.h"
@@ -29,6 +29,7 @@ void GameInteraction::_bind_methods() {
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::ARRAY, "competition"), "set_competition", "get_competition");
 
     // Methods
+    godot::ClassDB::bind_method(godot::D_METHOD("is_interaction_active"), &GameInteraction::is_interaction_active);
     godot::ClassDB::bind_method(godot::D_METHOD("begin_interacting", "inst"), &GameInteraction::begin_interacting);
     godot::ClassDB::bind_method(godot::D_METHOD("join_cooperation", "c"), &GameInteraction::join_cooperation);
     godot::ClassDB::bind_method(godot::D_METHOD("cooperation_id", "entity"), &GameInteraction::cooperation_id);
@@ -38,7 +39,7 @@ void GameInteraction::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("leave_competition", "cid"), &GameInteraction::leave_competition);
     godot::ClassDB::bind_method(godot::D_METHOD("leave", "entity"), &GameInteraction::leave);
     godot::ClassDB::bind_method(godot::D_METHOD("prep_participant", "participant"), &GameInteraction::prep_participant);
-    godot::ClassDB::bind_method(godot::D_METHOD("evaluate_interaction", "stepped_agent", "sequence_id"), &GameInteraction::evaluate_interaction);
+    godot::ClassDB::bind_method(godot::D_METHOD("evaluate_interaction", "sequence_id", "stepped_agent"), &GameInteraction::evaluate_interaction);
     godot::ClassDB::bind_method(godot::D_METHOD("score_participant", "participant"), &GameInteraction::score_participant);
     godot::ClassDB::bind_method(godot::D_METHOD("resolve_participant", "participant", "score_diff"), &GameInteraction::resolve_participant);
     godot::ClassDB::bind_method(godot::D_METHOD("apply_consequences", "participant", "score", "consequences"), &GameInteraction::apply_consequences);
@@ -51,6 +52,10 @@ GameInteraction::GameInteraction() {}
 GameInteraction::~GameInteraction() {}
 
 // Setters / Getters
+bool GameInteraction::is_interaction_active() const { 
+    return interaction_active; 
+}
+
 void GameInteraction::set_instigator(const godot::Array& p_instigator) { instigator = p_instigator; }
 godot::Array GameInteraction::get_instigator() const { return instigator; }
 
@@ -141,21 +146,24 @@ void GameInteraction::prep_participant(const godot::Array& participant) {
     if (participant.size() < 2) return;
 
     if (GameAgent* agent = godot::Object::cast_to<GameAgent>(participant[0])) {
-        // Implement Action connection bindings
-        // Assuming GameAgent::get_actions() -> Array
-        // int action_id = participant[1];
-        // GameAgentAction* agent_action = cast(agent.actions[action_id]);
+        int action_id = participant[1];
+        godot::Array actions = agent->get_actions();
+        GameAgentAction* agent_action = godot::Object::cast_to<GameAgentAction>(actions[action_id]);
         
-        // C++ equivalent to GDScript lambda bindings:
-        // godot::Callable agent_sequence = godot::Callable(this, "evaluate_interaction").bind(agent);
-        // agent_action->connect("sequence_stepped", agent_sequence);
-        // sequence_connections[agent_action] = agent_sequence;
-    } else if (godot::Object::cast_to<GamePiece>(participant[0])) {
-        // Implement GamePiece prep
+        if (agent_action) {
+            // Bind appends arguments. If signal is `(int step)`, bound execution is `(int step, GameAgent* agent)`
+            godot::Callable agent_sequence = godot::Callable(this, "evaluate_interaction").bind(agent);
+            if (!agent_action->is_connected("sequence_stepped", agent_sequence)) {
+                agent_action->connect("sequence_stepped", agent_sequence);
+            }
+            sequence_connections[agent_action] = agent_sequence;
+        }
+    } else if (GamePiece* piece = godot::Object::cast_to<GamePiece>(participant[0])) {
+        // Mirrored GDScript: Empty branch
     }
 }
 
-void GameInteraction::evaluate_interaction(GameAgent* stepped_agent, int sequence_id) {
+void GameInteraction::evaluate_interaction(int sequence_id, GameAgent* stepped_agent) {
     instigator_value = 0;
     competition_value = 0;
     
@@ -208,13 +216,10 @@ int GameInteraction::score_participant(const godot::Array& participant) const {
 
     if (GameAgent* agent = godot::Object::cast_to<GameAgent>(participant[0])) {
         int action_id = participant[1];
-        // return agent->get_action_value(action_id);
-        return 0; // Placeholder
-    } else if (godot::Object::cast_to<GamePiece>(participant[0])) {
-        // GamePiece* piece = ...
-        // int action_id = participant[1];
-        // return piece->get_action_value(action_id);
-        return 0; // Placeholder
+        return agent->get_action_value(action_id);
+    } else if (GamePiece* piece = godot::Object::cast_to<GamePiece>(participant[0])) {
+        int action_id = participant[1];
+        return piece->get_action_value(action_id);
     }
     
     return 0;
@@ -224,14 +229,61 @@ void GameInteraction::resolve_participant(const godot::Array& participant, int s
     if (participant.size() < 2) return;
 
     if (GameAgent* agent = godot::Object::cast_to<GameAgent>(participant[0])) {
-        // Implement action sequence resolution mapping
-        // int action_id = participant[1];
-        // agent_action = agent.actions[action_id];
-        // iterate step sequences -> apply_consequences
-    } else if (godot::Object::cast_to<GamePiece>(participant[0])) {
-        // int action_id = participant[1];
-        // piece_action = piece.actions[action_id];
-        // piece_action.action_success() or failure()
+        int action_id = participant[1];
+        godot::Array actions = agent->get_actions();
+        GameAgentAction* agent_action = godot::Object::cast_to<GameAgentAction>(actions[action_id]);
+        
+        if (!agent_action) return;
+
+        godot::Array sequence = agent_action->get_sequence();
+        int current_sequence_id = agent_action->get_current_sequence_id();
+        
+        if (current_sequence_id < 0 || current_sequence_id >= sequence.size()) return;
+        godot::Array step = sequence[current_sequence_id];
+        godot::Array game_pieces = agent->get_game_pieces();
+
+        for (int i = 0; i < step.size(); ++i) {
+            godot::Dictionary piece_step = step[i];
+            int piece_idx = piece_step[0];
+            GamePiece* piece = godot::Object::cast_to<GamePiece>(game_pieces[piece_idx]);
+            
+            if (!piece) continue;
+
+            godot::Array ps_actions = piece_step["actions"];
+            godot::Array piece_actions = piece->get_actions();
+            
+            int iter_size = piece_step.size();
+            for (int aid = 1; aid < iter_size; ++aid) {
+                if (aid >= ps_actions.size()) break;
+                
+                int piece_action_id = ps_actions[aid];
+                GamePieceAction* piece_action = godot::Object::cast_to<GamePieceAction>(piece_actions[piece_action_id]);
+                
+                if (!piece_action) continue;
+
+                if (score_diff > 0) {
+                    apply_consequences(agent, score_diff, piece_action->get_success_consequences());
+                    piece_action->action_success();
+                } else {
+                    apply_consequences(agent, score_diff, piece_action->get_failure_consequences());
+                    piece_action->action_failure();
+                }
+            }
+        }
+    } else if (GamePiece* piece = godot::Object::cast_to<GamePiece>(participant[0])) {
+        int action_id = participant[1];
+        godot::Array piece_actions = piece->get_actions();
+        GamePieceAction* piece_action = godot::Object::cast_to<GamePieceAction>(piece_actions[action_id]);
+        
+        if (!piece_action) return;
+
+        if (score_diff > 0) {
+            apply_consequences(piece, score_diff, piece_action->get_success_consequences());
+            piece_action->action_success();
+        } else {
+            apply_consequences(piece, score_diff, piece_action->get_failure_consequences());
+            piece_action->action_failure();
+        }
     }
 }
 
@@ -267,7 +319,9 @@ void GameInteraction::apply_consequences(GameEntity* participant, int score, con
                 }
             } else if (target == "instigator") {
                 if (instigator.size() > 0) {
-                    if (GameEntity* inst = godot::Object::cast_to<GameEntity>(instigator[0])) inst->action_consequences(score, vals[i]);
+                    if (GameEntity* inst = godot::Object::cast_to<GameEntity>(instigator[0])) {
+                        inst->action_consequences(score, vals[i]);
+                    }
                 }
             } else if (target == "cooperation") {
                 for (int p = 0; p < cooperation.size(); ++p) {
@@ -286,12 +340,11 @@ void GameInteraction::apply_consequences(GameEntity* participant, int score, con
             } else {
                 if (instigator.size() > 0) {
                     GameEntity* inst = godot::Object::cast_to<GameEntity>(instigator[0]);
-                    if (inst && target == inst->get_name()) { // Assuming name access
+                    if (inst && target == inst->get_name()) {
                         inst->action_consequences(score, vals[i]);
                     }
                 }
                 
-                // Fallback loops for specific named entities in arrays
                 for (int p = 0; p < cooperation.size(); ++p) {
                     godot::Array cp = cooperation[p];
                     if (cp.size() > 0) {
@@ -299,6 +352,7 @@ void GameInteraction::apply_consequences(GameEntity* participant, int score, con
                         if (cp_ent && cp_ent->get_name() == target) cp_ent->action_consequences(score, vals[i]);
                     }
                 }
+                
                 for (int p = 0; p < competition.size(); ++p) {
                     godot::Array cp = competition[p];
                     if (cp.size() > 0) {
@@ -312,21 +366,38 @@ void GameInteraction::apply_consequences(GameEntity* participant, int score, con
 }
 
 void GameInteraction::stop_interacting() {
-    if (instigator.size() > 1) stop_participant(instigator);
-    for (int i = 0; i < cooperation.size(); ++i) stop_participant(cooperation[i]);
-    for (int i = 0; i < competition.size(); ++i) stop_participant(competition[i]);
+    if (instigator.size() > 1) {
+        stop_participant(instigator);
+    }
+    for (int i = 0; i < cooperation.size(); ++i) {
+        stop_participant(cooperation[i]);
+    }
+    for (int i = 0; i < competition.size(); ++i) {
+        stop_participant(competition[i]);
+    }
     
     interaction_active = false;
 }
 
 void GameInteraction::stop_participant(const godot::Array& participant) {
-    if (participant.size() < 3) return; // Note: prep mapped index 2 based on your logic vs 1 previously.
+    if (participant.size() < 3) return; // participant[2] required by GDScript logic
     
     if (GameAgent* agent = godot::Object::cast_to<GameAgent>(participant[0])) {
-        // Implement disconnection cleanup
-        // agent_action->disconnect("sequence_stepped", agent_sequence);
-    } else if (godot::Object::cast_to<GamePiece>(participant[0])) {
-        // Implement GamePiece stop logic
+        int action_id = participant[2];
+        godot::Array actions = agent->get_actions();
+        if (action_id < 0 || action_id >= actions.size()) return;
+
+        GameAgentAction* agent_action = godot::Object::cast_to<GameAgentAction>(actions[action_id]);
+        
+        if (agent_action && sequence_connections.has(agent_action)) {
+            godot::Callable agent_sequence = sequence_connections[agent_action];
+            if (agent_action->is_connected("sequence_stepped", agent_sequence)) {
+                agent_action->disconnect("sequence_stepped", agent_sequence);
+            }
+            sequence_connections.erase(agent_action);
+        }
+    } else if (GamePiece* piece = godot::Object::cast_to<GamePiece>(participant[0])) {
+        // Mirrored GDScript: Empty branch
     }
 }
 

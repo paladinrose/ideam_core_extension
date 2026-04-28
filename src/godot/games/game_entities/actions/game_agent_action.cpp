@@ -2,7 +2,7 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
-// Assuming project includes
+// Explicit includes for static resolution
 #include "../game_piece.h"
 #include "game_interaction.h"
 
@@ -99,21 +99,12 @@ int GameAgentAction::get_current_value() {
     current_value = 0;
     
     for (int i = 0; i < step.size(); ++i) {
-        // Based on GDScript format: piece_step is an Array or Dictionary where index 0 is piece ID
-        // and subsequent items or `actions` property contains action IDs.
         godot::Variant piece_step_var = step[i];
         
-        if (piece_step_var.get_type() != godot::Variant::ARRAY && piece_step_var.get_type() != godot::Variant::DICTIONARY) continue;
+        if (piece_step_var.get_type() != godot::Variant::DICTIONARY) continue;
         
-        godot::Array piece_step;
-        if (piece_step_var.get_type() == godot::Variant::DICTIONARY) {
-            // Adjust if logic differs slightly in actual structure vs GDScript loose typing
-            continue; 
-        } else {
-            piece_step = piece_step_var;
-        }
-
-        if (piece_step.is_empty()) continue;
+        godot::Dictionary piece_step = piece_step_var;
+        if (!piece_step.has(0) || !piece_step.has("actions")) continue;
         
         int piece_index = piece_step[0];
         if (piece_index < 0 || piece_index >= game_pieces.size()) continue;
@@ -125,19 +116,13 @@ int GameAgentAction::get_current_value() {
             continue;
         }
         
-        // GDScript reads `piece_step.actions[aid]`. We assume `piece_step` contains the action IDs directly starting at index 1.
-        // Alternatively, if it is an object/dictionary, use `.get("actions")`.
-        godot::Array actions_array;
-        if (piece_step_var.get_type() == godot::Variant::DICTIONARY) {
-            godot::Dictionary dict = piece_step_var;
-            actions_array = dict["actions"];
-        } else {
-            actions_array = piece_step; 
-        }
-
-        for (int aid = 1; aid < actions_array.size(); ++aid) {
+        godot::Array actions_array = piece_step["actions"];
+        int iter_size = piece_step.size();
+        
+        for (int aid = 1; aid < iter_size; ++aid) {
+            if (aid >= actions_array.size()) break;
             int action_id = actions_array[aid];
-            // current_value += piece->get_action_value(action_id);
+            current_value += piece->get_action_value(action_id);
         }
     }
     
@@ -183,7 +168,7 @@ void GameAgentAction::add_sequence_step(const godot::Array& new_sequence_step) {
 
 void GameAgentAction::remove_sequence_step_at(int id) {
     if (id < 0 || id >= sequence.size()) return;
-    sequence.remove_at(id); // O(N) cost in standard Arrays.
+    sequence.remove_at(id);
     emit_signal("sequence_step_removed", id);
 }
 
@@ -197,7 +182,7 @@ void GameAgentAction::add_piece_step(int sequence_step, const godot::Array& new_
     godot::Array step_array = sequence[sequence_step];
     if (!step_array.has(new_step)) {
         step_array.append(new_step);
-        sequence[sequence_step] = step_array; // Ensure by-value updates reflect.
+        sequence[sequence_step] = step_array;
     }
 }
 
@@ -231,8 +216,11 @@ void GameAgentAction::sequence_step(int id) {
     godot::Array step = sequence[id];
     
     for (int i = 0; i < step.size(); ++i) {
-        godot::Array piece_step = step[i];
-        if (piece_step.is_empty()) continue;
+        godot::Variant piece_step_var = step[i];
+        if (piece_step_var.get_type() != godot::Variant::DICTIONARY) continue;
+        
+        godot::Dictionary piece_step = piece_step_var;
+        if (!piece_step.has(0) || !piece_step.has("actions")) continue;
         
         int piece_index = piece_step[0];
         if (piece_index < 0 || piece_index >= game_pieces.size()) continue;
@@ -240,10 +228,13 @@ void GameAgentAction::sequence_step(int id) {
         GamePiece* piece = godot::Object::cast_to<GamePiece>(game_pieces[piece_index]);
         if (!piece || (sequence_targets.size() > 0 && !sequence_targets.has(piece))) continue;
 
-        godot::Array actions_array = piece_step; // Simplification mapping line 77 logic
-        for (int aid = 1; aid < actions_array.size(); ++aid) {
+        godot::Array actions_array = piece_step["actions"];
+        int iter_size = piece_step.size();
+        
+        for (int aid = 1; aid < iter_size; ++aid) {
+            if (aid >= actions_array.size()) break;
             int action_id = actions_array[aid];
-            // piece->take_action(action_id);
+            piece->take_action(action_id);
         }
     }
     
@@ -275,10 +266,6 @@ void GameAgentAction::complete_action(int margin_of_victory) {
 }
 
 void GameAgentAction::action_consequences(int score, const godot::Dictionary& consequences) {
-    // DOD NOTE: Dynamically parsing arbitrary strings to govern branching flow control is 
-    // extremely expensive. This entire function should be refactored to evaluate a 
-    // fixed-size Enum/Bitmask command buffer.
-    
     if (consequences.has("step_sequence")) {
         godot::Variant step_val = consequences["step_sequence"];
         if (step_val.get_type() == godot::Variant::STRING) {
@@ -313,16 +300,72 @@ void GameAgentAction::action_consequences(int score, const godot::Dictionary& co
         }
     }
     
-    // Remaining string-key validations mapping to arrays/values...
-    // (Abridged translation matching exact GDScript conditionals for brevity in response generation)
+    if (consequences.has("add_game_piece")) {
+        godot::Array pieces_to_add = consequences["add_game_piece"];
+        for (int i = 0; i < pieces_to_add.size(); ++i) {
+            GamePiece* piece = godot::Object::cast_to<GamePiece>(pieces_to_add[i]);
+            if (piece) add_game_piece(piece);
+        }
+    }
+    
+    if (consequences.has("remove_game_piece")) {
+        godot::Array pieces_to_remove = consequences["remove_game_piece"];
+        for (int i = 0; i < pieces_to_remove.size(); ++i) {
+            GamePiece* piece = godot::Object::cast_to<GamePiece>(pieces_to_remove[i]);
+            if (piece) remove_game_piece(piece);
+        }
+    }
+    
+    if (consequences.has("target_game_piece")) {
+        if (sequence_targets.size() > 0) {
+            godot::Dictionary tg_dict = consequences["target_game_piece"];
+            for (int i = 0; i < sequence_targets.size(); ++i) {
+                GamePiece* st = godot::Object::cast_to<GamePiece>(sequence_targets[i]);
+                if (st) st->action_consequences(score, tg_dict);
+            }
+        }
+    }
+    
+    if (consequences.has("game_pieces")) {
+        godot::Dictionary gp_dict = consequences["game_pieces"];
+        for (int i = 0; i < game_pieces.size(); ++i) {
+            GamePiece* piece = godot::Object::cast_to<GamePiece>(game_pieces[i]);
+            if (piece) piece->action_consequences(score, gp_dict);
+        }
+    }
+    
+    for (int i = 0; i < game_pieces.size(); ++i) {
+        GamePiece* piece = godot::Object::cast_to<GamePiece>(game_pieces[i]);
+        if (!piece) continue;
+        
+        godot::String piece_setting = "game_piece_" + piece->get_name();
+        if (consequences.has(piece_setting)) {
+            godot::Dictionary piece_consequences = consequences[piece_setting];
+            piece->action_consequences(score, piece_consequences);
+        }
+    }
+    
+    if (consequences.has("append_sequence")) {
+        godot::Array app_seq = consequences["append_sequence"];
+        for (int i = 0; i < app_seq.size(); ++i) {
+            sequence.append(app_seq[i]);
+        }
+    }
+    
+    if (consequences.has("replace_sequence")) {
+        sequence = consequences["replace_sequence"];
+    }
+    
     if (consequences.has("force_fail")) {
         fail_action(consequences["force_fail"]);
         return;
     }
+    
     if (consequences.has("force_complete")) {
         complete_action(consequences["force_complete"]);
         return;
     }
+    
     if (consequences.has("force_interrupt")) {
         interrupt_action();
         return;
@@ -338,8 +381,11 @@ void GameAgentAction::_finalize_current_step() {
     
     godot::Array step = sequence[current_sequence_id];
     for (int i = 0; i < step.size(); ++i) {
-        godot::Array piece_step = step[i];
-        if (piece_step.is_empty()) continue;
+        godot::Variant piece_step_var = step[i];
+        if (piece_step_var.get_type() != godot::Variant::DICTIONARY) continue;
+        
+        godot::Dictionary piece_step = piece_step_var;
+        if (!piece_step.has(0) || !piece_step.has("actions")) continue;
         
         int piece_index = piece_step[0];
         if (piece_index < 0 || piece_index >= game_pieces.size()) continue;
@@ -347,10 +393,13 @@ void GameAgentAction::_finalize_current_step() {
         GamePiece* piece = godot::Object::cast_to<GamePiece>(game_pieces[piece_index]);
         if (!piece || (sequence_targets.size() > 0 && !sequence_targets.has(piece))) continue;
 
-        godot::Array actions_array = piece_step;
-        for (int aid = 1; aid < actions_array.size(); ++aid) {
+        godot::Array actions_array = piece_step["actions"];
+        int iter_size = piece_step.size();
+        
+        for (int aid = 1; aid < iter_size; ++aid) {
+            if (aid >= actions_array.size()) break;
             int action_id = actions_array[aid];
-            // piece->stop_acting(action_id);
+            piece->stop_acting(action_id);
         }
     }
 }
@@ -360,7 +409,7 @@ godot::TypedArray<godot::String> GameAgentAction::gather_game_piece_titles() con
     godot::TypedArray<godot::String> names;
     for (int i = 0; i < game_pieces.size(); ++i) {
         if (GamePiece* piece = godot::Object::cast_to<GamePiece>(game_pieces[i])) {
-            names.append(piece->get_title()); // Assuming inheritance
+            names.append(piece->get_title());
         }
     }
     return names;

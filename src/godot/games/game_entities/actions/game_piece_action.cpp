@@ -1,6 +1,7 @@
 #include "game_piece_action.h"
 #include <godot_cpp/core/class_db.hpp>
 
+// Assuming existence in project structure per instructions
 #include "../../game_property.h"
 
 namespace ideam::godot_ext {
@@ -11,7 +12,7 @@ void GamePieceAction::_bind_methods() {
     ADD_SIGNAL(godot::MethodInfo("action_already_started"));
     ADD_SIGNAL(godot::MethodInfo("action_updated"));
     ADD_SIGNAL(godot::MethodInfo("action_refreshed"));
-    ADD_SIGNAL(godot::MethodInfo("action_interrupted"));
+    ADD_SIGNAL(godot::MethodInfo("action_interrupted", godot::PropertyInfo(godot::Variant::OBJECT, "interrupter", godot::PROPERTY_HINT_NODE_TYPE, "GamePieceAction")));
     ADD_SIGNAL(godot::MethodInfo("action_ended"));
     ADD_SIGNAL(godot::MethodInfo("action_succeeded"));
     ADD_SIGNAL(godot::MethodInfo("action_failed"));
@@ -132,8 +133,8 @@ godot::Dictionary GamePieceAction::get_interruption_consequences() const { retur
 godot::TypedArray<godot::String> GamePieceAction::gather_game_property_titles() const {
     godot::TypedArray<godot::String> names;
     for (int i = 0; i < game_properties.size(); ++i) {
-        if (godot::Object* prop = game_properties[i]) {
-            names.append(prop->get("title")); // Assumes title is exposed
+        if (GameProperty* prop = godot::Object::cast_to<GameProperty>(game_properties[i])) {
+            names.append(prop->get_title()); 
         }
     }
     return names;
@@ -159,7 +160,7 @@ void GamePieceAction::exhaust_property(int local_property_id) {
 
 int GamePieceAction::restore_property(GameProperty* property) {
     int id = game_properties.find(property);
-    if (id < 0) {
+    if (id < 0 && property) {
         godot::String prop_name = property->get_name();
         if (missing_property_ids.has(prop_name)) {
             id = missing_property_ids[prop_name];
@@ -181,15 +182,15 @@ GameProperty* GamePieceAction::get_property(const godot::String& property_name) 
 
 int GamePieceAction::get_property_id(const godot::String& property_name) const {
     for (int i = 0; i < game_properties.size(); ++i) {
-        godot::Object* prop = game_properties[i];
-        if (prop && prop->get("name") == property_name) return i;
+        GameProperty* prop = godot::Object::cast_to<GameProperty>(game_properties[i]);
+        if (prop && prop->get_name() == property_name) return i;
     }
     return -1;
 }
 
 bool GamePieceAction::missing_properties() const {
     for (int i = 0; i < game_properties.size(); ++i) {
-        if (game_properties[i].get_type() == godot::Variant::NIL) {
+        if (!godot::Object::cast_to<GameProperty>(game_properties[i])) {
             return true;
         }
     }
@@ -197,18 +198,19 @@ bool GamePieceAction::missing_properties() const {
 }
 
 bool GamePieceAction::remove_property(GameProperty* game_property) {
+    if (!game_property) return false;
     return remove_property_at(get_property_id(game_property->get_name()));
 }
 
 bool GamePieceAction::remove_property_at(int id) {
     if (id < 0 || id >= game_properties.size()) return false;
     
-    godot::Object* newly_missing = game_properties[id];
+    GameProperty* newly_missing = godot::Object::cast_to<GameProperty>(game_properties[id]);
     if (newly_missing) {
-        missing_property_ids[newly_missing->get("name")] = id;
+        missing_property_ids[newly_missing->get_name()] = id;
     }
     
-    game_properties[id] = godot::Variant(); // Nullify instead of shifting to preserve indices
+    game_properties[id] = godot::Variant();
     return true;
 }
 
@@ -228,14 +230,14 @@ void GamePieceAction::start_action() {
     if (missing_properties()) return;
     
     for (int p = 0; p < game_properties.size(); ++p) {
-        godot::Object* prop = game_properties[p];
-        if (prop && prop->get("locked")) return;
+        GameProperty* prop = godot::Object::cast_to<GameProperty>(game_properties[p]);
+        if (prop && prop->get_locked()) return;
     }
     
     for (int p = 0; p < game_properties.size(); ++p) {
-        godot::Object* prop = game_properties[p];
+        GameProperty* prop = godot::Object::cast_to<GameProperty>(game_properties[p]);
         if (prop && static_cast<bool>(property_locks[p])) {
-            prop->set("locked", true);
+            prop->set_locked(true);
         }
     }
     
@@ -253,10 +255,10 @@ void GamePieceAction::refresh_action() {
     current_value = value;
     
     for (int p = 0; p < game_properties.size(); ++p) {
-        godot::Object* prop = game_properties[p];
-        if (prop && prop->has_method("use_as_resource")) {
+        GameProperty* prop = godot::Object::cast_to<GameProperty>(game_properties[p]);
+        if (prop) {
             int use_val = property_use_values[p];
-            current_value += static_cast<int>(prop->call("use_as_resource", use_val));
+            current_value += static_cast<int>(prop->use_as_resource(use_val));
         }
     }
     
@@ -283,9 +285,9 @@ void GamePieceAction::stop_action() {
     if (status != ActionStatus::IN_PROGRESS) return;
     
     for (int p = 0; p < game_properties.size(); ++p) {
-        godot::Object* prop = game_properties[p];
+        GameProperty* prop = godot::Object::cast_to<GameProperty>(game_properties[p]);
         if (prop && static_cast<bool>(property_locks[p])) {
-            prop->set("locked", false);
+            prop->set_locked(false);
         }
     }
     
@@ -295,7 +297,7 @@ void GamePieceAction::stop_action() {
 void GamePieceAction::interrupt_action(GamePieceAction* interrupter) {
     stop_action();
     status = ActionStatus::INTERRUPTED;
-    emit_signal("action_interrupted", interrupter); // Note: Assuming signature match in bindings
+    emit_signal("action_interrupted", interrupter);
 }
 
 void GamePieceAction::end_action() {

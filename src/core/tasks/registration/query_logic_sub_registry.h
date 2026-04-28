@@ -83,7 +83,8 @@ namespace {
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Bitmask, C, S> { using Type = BitmaskQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Boolean, C, S> { using Type = BooleanQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Border, C, S> { using Type = BorderQueryLogic<C, S>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Color, C, S> { using Type = ColorQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::ColorRGBA, C, S> { using Type = ColorRGBAQueryLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::ColorHSVA, C, S> { using Type = ColorHSVAQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Component, C, S> { using Type = ComponentQueryLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::DataComparison, C, S> { using Type = DataComparisonQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::DataRange, C, S> { using Type = DataRangeQueryLogic<C>; static constexpr bool is_valid = true; };

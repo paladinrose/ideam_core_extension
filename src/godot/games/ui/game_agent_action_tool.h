@@ -1,3 +1,4 @@
+// game_agent_action_tool.h
 #pragma once
 
 #include <godot_cpp/classes/v_box_container.hpp>
@@ -17,10 +18,9 @@ namespace ideam::godot_ext {
 class GameAgent;
 class GameAgentAction;
 class GameAgentActionSequencer;
-class GameAgent_EditorInspectorPlugin;
+class GameAgentEditorInspectorPlugin;
 class GamePiece;
 class GamePieceAction;
-class FoldableContainer;
 
 class GameAgentActionTool : public godot::VBoxContainer {
     GDCLASS(GameAgentActionTool, godot::VBoxContainer)
@@ -43,7 +43,7 @@ private:
     GameAgentAction* _new_action = nullptr;
     godot::Array _new_pieces;
     GameAgent* _agent = nullptr;
-    GameAgent_EditorInspectorPlugin* _editor = nullptr;
+    GameAgentEditorInspectorPlugin* _editor = nullptr;
 
 public:
     GameAgentActionTool();
@@ -72,13 +72,13 @@ public:
     godot::Button* get_cancel_button() const;
 
     // Class Functions
-    void open_tool(godot::Object* agent, godot::Object* editor = nullptr);
+    void open_tool(GameAgent* agent, GameAgentEditorInspectorPlugin* editor = nullptr);
     void new_game_piece();
     void confirm_and_create();
     void cancel_and_close();
     void close_tool();
     
-    godot::Array _add_piece_entry(godot::Object* game_piece = nullptr);
+    godot::Array _add_piece_entry(GamePiece* game_piece = nullptr);
     bool _check_name();
     bool _check_new_pieces();
     void _get_min_y_size();

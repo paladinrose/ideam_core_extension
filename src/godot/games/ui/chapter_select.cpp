@@ -1,21 +1,19 @@
+// chapter_select.cpp
 #include "chapter_select.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/window.hpp>
 
-// Assuming these headers exist based on your project structure
 #include "../game.h"
 #include "../game_entities/game_board.h" 
 
 namespace ideam::godot_ext {
 
 void ChapterSelect::_bind_methods() {
-    // Signals
     ADD_SIGNAL(godot::MethodInfo("chapter_loaded"));
     ADD_SIGNAL(godot::MethodInfo("chapter_selected"));
     ADD_SIGNAL(godot::MethodInfo("canceled"));
 
-    // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("validate_game"), &ChapterSelect::validate_game);
     godot::ClassDB::bind_method(godot::D_METHOD("build_chapter_selector"), &ChapterSelect::build_chapter_selector);
     godot::ClassDB::bind_method(godot::D_METHOD("select_chapter", "chapterID"), &ChapterSelect::select_chapter);
@@ -28,7 +26,6 @@ void ChapterSelect::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("game_board_load_start", "game", "game_board_id"), &ChapterSelect::game_board_load_start);
     godot::ClassDB::bind_method(godot::D_METHOD("game_board_load_complete", "game", "game_board"), &ChapterSelect::game_board_load_complete);
 
-    // Properties
     godot::ClassDB::bind_method(godot::D_METHOD("set_chapters_list", "chapters_list"), &ChapterSelect::set_chapters_list);
     godot::ClassDB::bind_method(godot::D_METHOD("get_chapters_list"), &ChapterSelect::get_chapters_list);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "chapters_list", godot::PROPERTY_HINT_NODE_TYPE, "ItemList"), "set_chapters_list", "get_chapters_list");
@@ -54,7 +51,6 @@ void ChapterSelect::_ready() {
     validate_game();
 }
 
-// Setters and Getters
 void ChapterSelect::set_chapters_list(godot::ItemList* p_list) { chapters_list = p_list; }
 godot::ItemList* ChapterSelect::get_chapters_list() const { return chapters_list; }
 
@@ -67,17 +63,12 @@ godot::Button* ChapterSelect::get_cancel_button() const { return cancel_button; 
 void ChapterSelect::set_message_label(godot::Label* p_label) { message_label = p_label; }
 godot::Label* ChapterSelect::get_message_label() const { return message_label; }
 
-// Class Functions
 void ChapterSelect::validate_game() {
     if (game == nullptr) {
         godot::Node* gameNode = get_parent();
-        while (gameNode != nullptr && !gameNode->is_class("Game")) {
-            gameNode = gameNode->get_parent();
-        }
-        
-        if (gameNode != nullptr && gameNode->is_class("Game")) {
+        while (gameNode != nullptr) {
             Game* newGame = godot::Object::cast_to<Game>(gameNode);
-            if (newGame) {
+            if (newGame != nullptr) {
                 game = newGame;
                 
                 game->connect("game_board_already_loaded", godot::Callable(this, "game_board_already_loaded"));
@@ -86,15 +77,18 @@ void ChapterSelect::validate_game() {
                 game->connect("game_board_loaded", godot::Callable(this, "game_board_load_complete"));
                 
                 build_chapter_selector();
+                break;
             }
+            gameNode = gameNode->get_parent();
         }
     }
 }
 
 void ChapterSelect::build_chapter_selector() {
     if (chapters_list == nullptr) {
-        if (has_node("Chapters_List")) {
-            chapters_list = get_node<godot::ItemList>("Chapters_List");
+        godot::Node* node = get_node_or_null("Chapters_List");
+        if (node != nullptr && node->get_class() == "ItemList") {
+            chapters_list = godot::Object::cast_to<godot::ItemList>(node);
         } else {
             chapters_list = memnew(godot::ItemList);
             chapters_list->set_name("Chapters_List");
@@ -127,33 +121,35 @@ void ChapterSelect::build_chapter_selector() {
     }
     
     if (load_chapter_button == nullptr) {
-        if (has_node("Load_Chapter_Button")) {
-            load_chapter_button = get_node<godot::Button>("Load_Chapter_Button");
-            if (!load_chapter_button->is_connected("pressed", godot::Callable(this, "load_chapter"))) {
-                load_chapter_button->connect("pressed", godot::Callable(this, "load_chapter"));
-            }
+        godot::Node* node = get_node_or_null("Load_Chapter_Button");
+        if (node != nullptr && node->get_class() == "Button") {
+            load_chapter_button = godot::Object::cast_to<godot::Button>(node);
         } else {
             load_chapter_button = memnew(godot::Button);
             load_chapter_button->set_name("Load_Chapter_Button");
             load_chapter_button->set_text("Load Chapter");
             add_child(load_chapter_button);
             load_chapter_button->set_owner(get_tree()->get_edited_scene_root());
+        }
+
+        if (!load_chapter_button->is_connected("pressed", godot::Callable(this, "load_chapter"))) {
             load_chapter_button->connect("pressed", godot::Callable(this, "load_chapter"));
         }
     }
     
     if (cancel_button == nullptr) {
-        if (has_node("Cancel_Button")) {
-            cancel_button = get_node<godot::Button>("Cancel_Button");
-            if (!cancel_button->is_connected("pressed", godot::Callable(this, "cancel_chapter_select"))) {
-                cancel_button->connect("pressed", godot::Callable(this, "cancel_chapter_select"));
-            }
+        godot::Node* node = get_node_or_null("Cancel_Button");
+        if (node != nullptr && node->get_class() == "Button") {
+            cancel_button = godot::Object::cast_to<godot::Button>(node);
         } else {
             cancel_button = memnew(godot::Button);
             cancel_button->set_name("Cancel_Button");
-            cancel_button->set_text("Cancel_Button"); // Explicitly matching GDScript typo/intent
+            cancel_button->set_text("Cancel_Button"); 
             add_child(cancel_button);
             cancel_button->set_owner(get_tree()->get_edited_scene_root());
+        }
+
+        if (!cancel_button->is_connected("pressed", godot::Callable(this, "cancel_chapter_select"))) {
             cancel_button->connect("pressed", godot::Callable(this, "cancel_chapter_select"));
         }
     }
@@ -162,15 +158,15 @@ void ChapterSelect::build_chapter_selector() {
 void ChapterSelect::select_chapter(int chapterID) {
     selected_chapter = chapterID;
     
-    if (load_chapter_button) {
+    if (load_chapter_button != nullptr) {
         if (selected_chapter < 0 || selected_chapter >= game->get_game_board_paths().size()) {
             load_chapter_button->set_disabled(true);
-            if (message_label) {
+            if (message_label != nullptr) {
                 message_label->set_text("Select a valid chapter to load.");
             }
         } else {
             load_chapter_button->set_disabled(false);
-            if (message_label) {
+            if (message_label != nullptr) {
                 message_label->set_text("");
             }
         }
@@ -181,15 +177,19 @@ void ChapterSelect::select_chapter(int chapterID) {
 
 void ChapterSelect::load_chapter() {
     if (selected_chapter < 0) {
-        if (load_chapter_button) load_chapter_button->set_disabled(true);
-        if (message_label) {
+        if (load_chapter_button != nullptr) {
+            load_chapter_button->set_disabled(true);
+        }
+        if (message_label != nullptr) {
             message_label->set_text("Select a valid chapter to load.");
         }
         return;
     }
         
     emit_signal("chapter_loaded");
-    if (game) game->load_game_board(selected_chapter);
+    if (game != nullptr) {
+        game->load_game_board(selected_chapter);
+    }
 }
 
 void ChapterSelect::cancel_chapter_select() {
@@ -207,31 +207,27 @@ godot::String ChapterSelect::get_game_board_label(int game_id) {
     return "";
 }
 
-void ChapterSelect::game_board_already_loaded(godot::Object* p_game, godot::Object* p_game_board) {
-    GameBoard* board = godot::Object::cast_to<GameBoard>(p_game_board);
-    if (message_label && board) {
-        // Assuming GameBoard has a "get_title()" method based on GDScript context
-        message_label->set_text(board->call("get_title").operator godot::String() + " is already loaded.");
+void ChapterSelect::game_board_already_loaded(Game* p_game, GameBoard* p_game_board) {
+    if (message_label != nullptr && p_game_board != nullptr) {
+        message_label->set_text(p_game_board->get_title() + " is already loaded.");
     }
 }
 
-void ChapterSelect::game_board_not_found(godot::Object* p_game, int game_board_id) {
-    if (message_label) {
+void ChapterSelect::game_board_not_found(Game* p_game, int game_board_id) {
+    if (message_label != nullptr) {
         message_label->set_text("Cannot find: " + get_game_board_label(game_board_id) + ".");
     }
 }
 
-void ChapterSelect::game_board_load_start(godot::Object* p_game, int game_board_id) {
-    if (message_label) {
+void ChapterSelect::game_board_load_start(Game* p_game, int game_board_id) {
+    if (message_label != nullptr) {
         message_label->set_text(get_game_board_label(game_board_id) + " is loading.");
     }
 }
 
-void ChapterSelect::game_board_load_complete(godot::Object* p_game, godot::Object* p_game_board) {
-    GameBoard* board = godot::Object::cast_to<GameBoard>(p_game_board);
-    if (message_label && board) {
-        // Assuming GameBoard has a "get_title()" method based on GDScript context
-        message_label->set_text(board->call("get_title").operator godot::String() + " is loaded!");
+void ChapterSelect::game_board_load_complete(Game* p_game, GameBoard* p_game_board) {
+    if (message_label != nullptr && p_game_board != nullptr) {
+        message_label->set_text(p_game_board->get_title() + " is loaded!");
     }
 }
 

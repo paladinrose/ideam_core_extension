@@ -1,3 +1,4 @@
+// game_menu.h
 #pragma once
 
 #include <godot_cpp/classes/control.hpp>
@@ -6,12 +7,12 @@
 #include <godot_cpp/classes/popup_panel.hpp>
 #include <godot_cpp/variant/vector2.hpp>
 
-namespace ideam::godot_ext {
+// Assuming these project headers exist
+#include "../game.h"
+#include "chapter_select.h"
+#include "game_options_menu.h"
 
-// Forward Declarations
-class Game;
-class ChapterSelect;
-class GameOptionsMenu;
+namespace ideam::godot_ext {
 
 class GameMenu : public godot::Control {
     GDCLASS(GameMenu, godot::Control)
@@ -20,7 +21,6 @@ protected:
     static void _bind_methods();
 
 private:
-    // Exports
     Game* game = nullptr;
     godot::Label* game_title = nullptr;
 
@@ -39,10 +39,8 @@ public:
     GameMenu();
     ~GameMenu();
 
-    // Godot Functions
     virtual void _ready() override;
 
-    // Setters / Getters
     void set_game(Game* p_game);
     Game* get_game() const;
 
@@ -76,7 +74,6 @@ public:
     void set_options_menu(GameOptionsMenu* p_menu);
     GameOptionsMenu* get_options_menu() const;
 
-    // Class Functions
     void validate_game();
     void build_game_menu();
 

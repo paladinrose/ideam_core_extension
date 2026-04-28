@@ -44,15 +44,12 @@ public:
     void set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces);
     godot::TypedArray<GamePiece> get_game_pieces() const;
 
-    // Class Functions
+    // Board Control
     void request_quit_game();
     void request_pause_game();
     void reset_game_board();
 
     // Game Agent Functions
-    // DOD NOTE: Extracting string titles every frame or on-demand causes severe 
-    // string allocation overhead. String hashing (`godot::StringName` or `uint32_t` hashes) 
-    // should be preferred for metadata lookups.
     godot::TypedArray<godot::String> gather_game_agent_titles() const;
     int add_game_agent(GameAgent* new_game_agent);
     int get_game_agent_id(GameAgent* game_agent) const;
@@ -84,9 +81,6 @@ public:
     // contiguous data sequences will heavily parallelize operations and saturate SIMD lanes.
     virtual void game_process(double delta) override;
     virtual void game_process_clear() override;
-    
-    virtual godot::Dictionary save_data() const override;
-    virtual void load_data(const godot::Dictionary& data) override;
 };
 
 } // namespace ideam::godot_ext

@@ -1,3 +1,4 @@
+// game_agent_action_tool.cpp
 #include "game_agent_action_tool.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
@@ -12,7 +13,6 @@
 #include "../editor/game_agent_editor_inspector_plugin.h"
 #include "../game_entities/game_piece.h"
 #include "../game_entities/actions/game_piece_action.h"
-
 
 namespace ideam::godot_ext {
 
@@ -42,6 +42,10 @@ void GameAgentActionTool::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_pieces_scroll"), &GameAgentActionTool::get_game_pieces_scroll);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game_pieces_scroll", godot::PROPERTY_HINT_NODE_TYPE, "ScrollContainer"), "set_game_pieces_scroll", "get_game_pieces_scroll");
 
+    godot::ClassDB::bind_method(godot::D_METHOD("set_action_sequencer", "action_sequencer"), &GameAgentActionTool::set_action_sequencer);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_action_sequencer"), &GameAgentActionTool::get_action_sequencer);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "action_sequencer", godot::PROPERTY_HINT_NODE_TYPE, "GameAgentActionSequencer"), "set_action_sequencer", "get_action_sequencer");
+
     godot::ClassDB::bind_method(godot::D_METHOD("set_confirm_button", "confirm_button"), &GameAgentActionTool::set_confirm_button);
     godot::ClassDB::bind_method(godot::D_METHOD("get_confirm_button"), &GameAgentActionTool::get_confirm_button);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "confirm_button", godot::PROPERTY_HINT_NODE_TYPE, "Button"), "set_confirm_button", "get_confirm_button");
@@ -67,6 +71,9 @@ godot::Container* GameAgentActionTool::get_game_pieces_list() const { return gam
 void GameAgentActionTool::set_game_pieces_scroll(godot::ScrollContainer* p_scroll) { game_pieces_scroll = p_scroll; }
 godot::ScrollContainer* GameAgentActionTool::get_game_pieces_scroll() const { return game_pieces_scroll; }
 
+void GameAgentActionTool::set_action_sequencer(GameAgentActionSequencer* p_sequencer) { action_sequencer = p_sequencer; }
+GameAgentActionSequencer* GameAgentActionTool::get_action_sequencer() const { return action_sequencer; }
+
 void GameAgentActionTool::set_confirm_button(godot::Button* p_button) { confirm_button = p_button; }
 godot::Button* GameAgentActionTool::get_confirm_button() const { return confirm_button; }
 
@@ -74,16 +81,16 @@ void GameAgentActionTool::set_cancel_button(godot::Button* p_button) { cancel_bu
 godot::Button* GameAgentActionTool::get_cancel_button() const { return cancel_button; }
 
 // Class Logic
-void GameAgentActionTool::open_tool(godot::Object* agent, godot::Object* editor) {
-    _agent = godot::Object::cast_to<GameAgent>(agent);
-    _editor = godot::Object::cast_to<GameAgent_EditorInspectorPlugin>(editor);
+void GameAgentActionTool::open_tool(GameAgent* agent, GameAgentEditorInspectorPlugin* editor) {
+    _agent = agent;
+    _editor = editor;
     
     _new_action = memnew(GameAgentAction);
     
     if (_agent) {
-        godot::Array agent_pieces = _agent->call("get_game_pieces");
+        godot::TypedArray<GamePiece> agent_pieces = _agent->get_game_pieces();
         for (int i = 0; i < agent_pieces.size(); ++i) {
-            _add_piece_entry(agent_pieces[i]);
+            _add_piece_entry(godot::Object::cast_to<GamePiece>(agent_pieces[i]));
         }
     }
         
@@ -111,7 +118,7 @@ void GameAgentActionTool::confirm_and_create() {
     _new_action->set_owner(new_owner);
     if (name_entry) _new_action->set_name(name_entry->get_text());
     
-    _agent->call("add_action", _new_action);
+    _agent->add_action(_new_action);
     
     for (int i = 0; i < _new_pieces.size(); ++i) {
         godot::Array piece_info = _new_pieces[i];
@@ -119,12 +126,19 @@ void GameAgentActionTool::confirm_and_create() {
         _agent->add_child(new_piece);
         new_piece->set_owner(new_owner);
         
-        godot::LineEdit* piece_name_edit = godot::Object::cast_to<godot::LineEdit>(piece_info[4]); // index 4 is name_entry for new pieces
-        if (piece_name_edit) new_piece->set_name(piece_name_edit->get_text());
+        // Correcting GDScript flaw: Index 4 is the LineEdit, Index 3 is VBoxContainer
+        if (piece_info.size() > 4) {
+            godot::LineEdit* piece_name_edit = godot::Object::cast_to<godot::LineEdit>(piece_info[4]); 
+            if (piece_name_edit) new_piece->set_name(piece_name_edit->get_text());
+        }
         
-        _agent->call("add_game_piece", new_piece);
+        _agent->add_game_piece(new_piece);
         
-        int action_count = piece_info[2].operator int(); // piece_info[2] is the scroll/count reference
+        // Correcting GDScript flaw: Cannot iterate over a ScrollContainer (Index 2). 
+        // We evaluate the child count of the VBoxContainer (Index 3).
+        godot::VBoxContainer* actions_list = godot::Object::cast_to<godot::VBoxContainer>(piece_info[3]);
+        int action_count = actions_list ? actions_list->get_child_count() : 0;
+        
         for (int j = 0; j < action_count; ++j) {
             GamePieceAction* new_piece_action = memnew(GamePieceAction);
             new_piece->add_child(new_piece_action);
@@ -142,14 +156,14 @@ void GameAgentActionTool::cancel_and_close() {
 
 void GameAgentActionTool::close_tool() {
     if (_editor) {
-        _editor->call("new_action_tool_close");
+        _editor->new_action_tool_close();
     }
 }
 
-godot::Array GameAgentActionTool::_add_piece_entry(godot::Object* game_piece) {
+godot::Array GameAgentActionTool::_add_piece_entry(GamePiece* game_piece) {
     godot::Array entry_info;
     
-    godot::Control* new_entry = godot::Object::cast_to<godot::Control>(godot::ClassDB::instantiate("FoldableContainer"));
+    godot::FoldableContainer* new_entry = memnew(godot::FoldableContainer);
     entry_info.append(new_entry);
     
     godot::VBoxContainer* entry_container = memnew(godot::VBoxContainer);
@@ -167,11 +181,10 @@ godot::Array GameAgentActionTool::_add_piece_entry(godot::Object* game_piece) {
     piece_actions_scroll->add_child(piece_actions_list);
     entry_info.append(piece_actions_list);
     
-    // Connect the callback for adding piece actions
     piece_action_button->connect("pressed", godot::Callable(this, "_add_piece_action_callback").bind(piece_actions_list));
     
     if (game_piece == nullptr) {
-        new_entry->set("title", "New Game Piece");
+        new_entry->set_title("New Game Piece");
         
         godot::LineEdit* p_name_entry = memnew(godot::LineEdit);
         entry_container->add_child(p_name_entry);
@@ -181,18 +194,19 @@ godot::Array GameAgentActionTool::_add_piece_entry(godot::Object* game_piece) {
         return entry_info;
     }
     
-    GamePiece* gp = godot::Object::cast_to<GamePiece>(game_piece);
-    new_entry->set("title", gp->get_name());
+    new_entry->set_title(game_piece->get_name());
     
     godot::CheckBox* include_check = memnew(godot::CheckBox);
-    new_entry->call("add_title_bar_control", include_check);
+    new_entry->add_title_bar_control(include_check);
     
-    godot::Array actions = gp->call("get_actions");
+    godot::TypedArray<GamePieceAction> actions = game_piece->get_actions();
     for (int i = 0; i < actions.size(); ++i) {
-        godot::Object* act = actions[i];
-        godot::CheckBox* action_check = memnew(godot::CheckBox);
-        action_check->set_text(act->call("get_name"));
-        piece_actions_list->add_child(action_check);
+        GamePieceAction* act = godot::Object::cast_to<GamePieceAction>(actions[i]);
+        if (act) {
+            godot::CheckBox* action_check = memnew(godot::CheckBox);
+            action_check->set_text(act->get_name());
+            piece_actions_list->add_child(action_check);
+        }
     }
     
     entry_container->add_child(piece_action_button);
@@ -218,7 +232,7 @@ void GameAgentActionTool::_add_piece_action_callback(godot::VBoxContainer* piece
 bool GameAgentActionTool::_check_name() {
     if (!_agent || !name_entry) return false;
     
-    godot::Array actions = _agent->call("get_actions");
+    godot::TypedArray<GameAgentAction> actions = _agent->get_actions();
     for (int i = 0; i < actions.size(); ++i) {
         GameAgentAction* a = godot::Object::cast_to<GameAgentAction>(actions[i]);
         if (a && a->get_name() == name_entry->get_text()) {
@@ -231,7 +245,7 @@ bool GameAgentActionTool::_check_name() {
 
 bool GameAgentActionTool::_check_new_pieces() {
     for (int i = 0; i < _new_pieces.size(); ++i) {
-        continue; // Preserving the explicit 'continue' loop from source
+        continue;
     }
     return true;
 }

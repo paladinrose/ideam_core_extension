@@ -1,3 +1,4 @@
+// game_agent_action_sequencer.h
 #pragma once
 
 #include <godot_cpp/classes/v_box_container.hpp>
@@ -6,6 +7,8 @@
 #include <godot_cpp/classes/button.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/typed_array.hpp>
+#include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/vector2i.hpp>
 
 namespace ideam::godot_ext {
@@ -13,8 +16,7 @@ namespace ideam::godot_ext {
 // Forward Declarations
 class GameAgentAction;
 class GamePiece;
-class FoldableContainer;
-class Selection_List;
+class SelectionList;
 
 class GameAgentActionSequencer : public godot::VBoxContainer {
     GDCLASS(GameAgentActionSequencer, godot::VBoxContainer)
@@ -47,11 +49,11 @@ public:
     void set_action_to_sequence(godot::Variant to_sequence);
     
     void _rebuild_sequencer();
-    void _deferred_rebuild(); // Helper for the 'await' logic
+    void _deferred_rebuild(); 
     
     void _generate_step(int step_id);
     void _generate_piece_step(int step_id, int piece_step_id, godot::Control* step_container);
-    void _generate_piece_action(int step_id, int piece_step_id, int id, godot::Control* piece_container, godot::Array piece_actions);
+    void _generate_piece_action(int step_id, int piece_step_id, int id, godot::Control* piece_container, godot::TypedArray<godot::String> piece_actions);
 
     void _connect_to_action();
     void _release_action();
@@ -64,7 +66,7 @@ public:
     void _select_piece_action(int step_id, int piece_step_id, int action_id, int new_selection);
     void _new_action(int step_id, int piece_step_id);
 
-    // Getters/Setters for un-typed variables
+    // Getters/Setters
     void set_undo_redo(godot::Variant p_undo_redo);
     godot::Variant get_undo_redo() const;
 

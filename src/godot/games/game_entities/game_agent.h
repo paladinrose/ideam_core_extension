@@ -1,6 +1,5 @@
 #pragma once
 
-// Assuming relative path based on the directory structure provided
 #include "../game_entity.h" 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -16,6 +15,7 @@ class GamePiece;
 class NodeRetargeter;
 class SignalConnector;
 class GameInteraction;
+class Game;
 
 // DOD NOTE: Extracting these states from the object header allows for dense packing 
 // in an ECS-like system. Instead of traversing a hierarchy of Nodes to check exclusivity, 
@@ -28,7 +28,7 @@ enum AgentExclusivity : int32_t {
 };
 
 enum AgentMatching : int32_t {
-    MATCH_NONE = 0, // Prefixed to avoid collision with potential macro definitions
+    MATCH_NONE = 0, 
     PLAYER_TO_AGENT = 1,
     AGENT_TO_PLAYER = 2,
     AVERAGE = 3
@@ -156,9 +156,6 @@ public:
     bool remove_action(GameAgentAction* action);
     bool remove_action_at(int action_ID);
     
-    // DOD NOTE: Instead of allocating and returning a Variant Array (`[action_id, competing]`), 
-    // defining a lightweight C++ struct for `BestActionResult` avoids heap allocation 
-    // and keeps the return payload fully within CPU registers.
     godot::Array find_best_action(GameAgentAction* instigating_action) const; 
     
     void start_action(int action_id, int target_id = -1);
@@ -176,7 +173,7 @@ public:
     void leave_interaction(GameInteraction* interaction);
     void stop_interacting(int action_id);
 
-    // Consequences override (note shadowing of base class if signatures differ slightly, but matches base here)
+    // Consequences
     void action_consequences(int score, const godot::Dictionary& consequences);
 
     // Game Piece Functions
@@ -197,8 +194,8 @@ public:
     virtual void exit_game() override;
     virtual void game_process(double delta) override;
     virtual void game_process_clear() override;
-    virtual godot::Dictionary save_data() const;
-    virtual void load_data(const godot::Dictionary& data);
+    virtual godot::Dictionary save_data() const override;
+    virtual void load_data(const godot::Dictionary& data) override;
 };
 
 } // namespace ideam::godot_ext

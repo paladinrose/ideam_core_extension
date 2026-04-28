@@ -1,5 +1,5 @@
 #include "task_graph_resource.h"
-#include "../../core/tasks/native_task_registry.h"
+#include "../../core/tasks/registration/native_task_registry.h"
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <algorithm>
 

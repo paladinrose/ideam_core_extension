@@ -1,3 +1,4 @@
+// game_hub_ui.h
 #pragma once
 
 #include <godot_cpp/classes/control.hpp>
@@ -7,11 +8,10 @@
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/variant/string.hpp>
 
-namespace ideam::godot_ext {
+#include "../game_hub.h"
+#include "../game.h"
 
-// Forward Declarations
-class GameHub;
-class Game;
+namespace ideam::godot_ext {
 
 class GameHubUI : public godot::Control {
     GDCLASS(GameHubUI, godot::Control)
@@ -20,7 +20,7 @@ protected:
     static void _bind_methods();
 
 private:
-    // Exports
+    
     GameHub* game_hub = nullptr;
     godot::ItemList* games_list = nullptr;
     godot::Control* selected_game_field = nullptr;
@@ -29,16 +29,15 @@ private:
     godot::Label* game_state_label = nullptr;
     godot::Button* game_action_button = nullptr;
 
-    // Variables
     bool initialized = false;
     int selected_game_id = -1;
     int action_id = -1;
+
 
 public:
     GameHubUI();
     ~GameHubUI();
 
-    // Godot Functions
     virtual void _ready() override;
 
     // Getters / Setters
@@ -63,7 +62,6 @@ public:
     void set_game_action_button(godot::Button* p_button);
     godot::Button* get_game_action_button() const;
 
-    // Class Functions
     void find_game_hub();
     void validate_games_list();
     void validate_selected_game_field();
@@ -76,6 +74,7 @@ public:
     void game_selected(int game_id);
     void game_action();
     void get_game_state();
+
 };
 
 } // namespace ideam::godot_ext

@@ -63,11 +63,11 @@ float GameplayControlMap::get_timeout() const {
 
 // Class Functions
 void GameplayControlMap::process_input(double p_delta) {
-    // Implementation placeholder [cite: 112]
+    // Implementation placeholder
 }
 
 void GameplayControlMap::apply_control_map(const godot::Ref<GameplayControlMap> &p_other) {
-    // Implementation placeholder [cite: 112]
+    // Implementation placeholder
 }
 
 } // namespace ideam::godot_ext

@@ -1,17 +1,13 @@
+// game_hub_ui.cpp
 #include "game_hub_ui.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/window.hpp>
 
-// Assuming these project headers exist
-#include "../game_hub.h"
-#include "../game.h"
-
 namespace ideam::godot_ext {
 
 void GameHubUI::_bind_methods() {
-    // Methods for signals/internal calls
     godot::ClassDB::bind_method(godot::D_METHOD("find_game_hub"), &GameHubUI::find_game_hub);
     godot::ClassDB::bind_method(godot::D_METHOD("validate_games_list"), &GameHubUI::validate_games_list);
     godot::ClassDB::bind_method(godot::D_METHOD("validate_selected_game_field"), &GameHubUI::validate_selected_game_field);
@@ -25,7 +21,6 @@ void GameHubUI::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("game_action"), &GameHubUI::game_action);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_state"), &GameHubUI::get_game_state);
 
-    // Property Bindings
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_hub", "game_hub"), &GameHubUI::set_game_hub);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_hub"), &GameHubUI::get_game_hub);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game_hub", godot::PROPERTY_HINT_RESOURCE_TYPE, "GameHub"), "set_game_hub", "get_game_hub");
@@ -58,6 +53,7 @@ void GameHubUI::_bind_methods() {
 GameHubUI::GameHubUI() {}
 GameHubUI::~GameHubUI() {}
 
+// GODOT FUNCTIONS #########################################
 void GameHubUI::_ready() {
     if (game_hub == nullptr) {
         find_game_hub();
@@ -78,7 +74,6 @@ void GameHubUI::_ready() {
     build_games_list();
 }
 
-// Setters / Getters
 void GameHubUI::set_game_hub(GameHub* p_hub) { game_hub = p_hub; }
 GameHub* GameHubUI::get_game_hub() const { return game_hub; }
 
@@ -100,7 +95,7 @@ godot::Label* GameHubUI::get_game_state_label() const { return game_state_label;
 void GameHubUI::set_game_action_button(godot::Button* p_button) { game_action_button = p_button; }
 godot::Button* GameHubUI::get_game_action_button() const { return game_action_button; }
 
-// Implementation Functions
+// CLASS FUNCTIONS #########################################
 void GameHubUI::find_game_hub() {
     godot::Node* gh = get_parent();
     while (gh != nullptr) {
@@ -196,7 +191,7 @@ void GameHubUI::validate_game_action_button() {
         game_action_button = godot::Object::cast_to<godot::Button>(gab);
     } else {
         game_action_button = memnew(godot::Button);
-        game_action_button->set_name("Game_Action_Debate"); // Preserve GDScript naming 
+        game_action_button->set_name("Game_Action_Debate"); 
         validate_selected_game_field();
         selected_game_field->add_child(game_action_button);
         game_action_button->set_owner(get_tree()->get_edited_scene_root());
@@ -217,8 +212,8 @@ void GameHubUI::game_selected(int game_id) {
     if (selected_game_field) selected_game_field->show();
     
     if (game_hub) {
-        godot::TypedArray<godot::String> titles = game_hub->call("get_game_titles");
-        godot::TypedArray<godot::String> paths = game_hub->call("get_game_paths");
+        godot::TypedArray<godot::String> titles = game_hub->get_game_titles();
+        godot::TypedArray<godot::String> paths = game_hub->get_game_paths();
         
         if (title_label && game_id < titles.size()) title_label->set_text(titles[game_id]);
         if (path_label && game_id < paths.size()) path_label->set_text(paths[game_id]);
@@ -232,10 +227,10 @@ void GameHubUI::game_action() {
     switch (action_id) {
         case -1: return;
         case 0:
-            game_hub->call("load_game", selected_game_id);
+            game_hub->load_game(selected_game_id);
             break;
         case 1:
-            game_hub->call("unload_game", selected_game_id);
+            game_hub->unload_game(selected_game_id);
             break;
     }
 }
@@ -246,7 +241,7 @@ void GameHubUI::build_games_list() {
     games_list->clear();
     if (game_hub == nullptr) return;
         
-    godot::TypedArray<godot::String> paths = game_hub->call("get_game_paths");
+    godot::TypedArray<godot::String> paths = game_hub->get_game_paths();
     float list_height = godot::Math::clamp(35.0f * (float)paths.size(), 30.0f, 150.0f);
     games_list->set_custom_minimum_size(godot::Vector2(0, list_height));
     
@@ -258,7 +253,7 @@ void GameHubUI::build_games_list() {
 void GameHubUI::get_game_state() {
     if (game_hub == nullptr) return;
     
-    godot::TypedArray<godot::String> paths = game_hub->call("get_game_paths");
+    godot::TypedArray<godot::String> paths = game_hub->get_game_paths();
     
     if (selected_game_id < 0 || selected_game_id >= paths.size()) {
         if (game_state_label) game_state_label->set_text("Invalid ID");
@@ -270,24 +265,22 @@ void GameHubUI::get_game_state() {
         return;
     }
     
-    // Check loaded games dictionary from hub
-    godot::Dictionary loaded_games = game_hub->call("get_loaded_games");
+    godot::Dictionary loaded_games = game_hub->get_loaded_games();
     if (loaded_games.has(selected_game_id)) {
         godot::Object* loaded_game_obj = loaded_games[selected_game_id];
         Game* loaded_game = godot::Object::cast_to<Game>(loaded_game_obj);
         
         if (loaded_game != nullptr) {
-            // Using enum from Game class port [cite: 2]
-            int state = loaded_game->call("get_game_state");
+            GameState state = loaded_game->get_game_state();
             
             godot::String state_text = "Unknown";
             switch (state) {
-                case 0: state_text = "Uninitialized"; break; // GameState::UNINITIALIZED
-                case 1: state_text = "Pregame"; break;      // GameState::PREGAME
-                case 2: state_text = "Playing"; break;      // GameState::PLAYING
-                case 3: state_text = "Paused"; break;       // GameState::PAUSED
-                case 4: state_text = "Resolution"; break;   // GameState::RESOLUTION
-                case 5: state_text = "Complete"; break;     // GameState::COMPLETE
+                case GameState::UNINITIALIZED: state_text = "Uninitialized"; break;
+                case GameState::PREGAME:       state_text = "Pregame"; break;
+                case GameState::PLAYING:       state_text = "Playing"; break;
+                case GameState::PAUSED:        state_text = "Paused"; break;
+                case GameState::RESOLUTION:    state_text = "Resolution"; break;
+                case GameState::COMPLETE:      state_text = "Complete"; break;
             }
             
             if (game_state_label) game_state_label->set_text(state_text);

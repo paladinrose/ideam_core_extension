@@ -1,10 +1,10 @@
+#include "game_entity.h"
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 
-#include "game_entity.h"
-
+// Explicit includes for static resolution
 #include "game.h"
 #include "gameplay/gameplay_style.h"
 
@@ -56,11 +56,13 @@ void GameEntity::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("game_continue"), &GameEntity::game_continue);
     godot::ClassDB::bind_method(godot::D_METHOD("game_process", "delta"), &GameEntity::game_process);
     godot::ClassDB::bind_method(godot::D_METHOD("game_process_clear"), &GameEntity::game_process_clear);
+    
     godot::ClassDB::bind_method(godot::D_METHOD("toggle_game_entity_enabled"), &GameEntity::toggle_game_entity_enabled);
     godot::ClassDB::bind_method(godot::D_METHOD("enable_game_entity"), &GameEntity::enable_game_entity);
     godot::ClassDB::bind_method(godot::D_METHOD("disable_game_entity"), &GameEntity::disable_game_entity);
     godot::ClassDB::bind_method(godot::D_METHOD("action_consequences", "score", "consequences"), &GameEntity::action_consequences);
     godot::ClassDB::bind_method(godot::D_METHOD("apply_gameplay_style", "newStyle"), &GameEntity::apply_gameplay_style);
+    
     godot::ClassDB::bind_method(godot::D_METHOD("save_data"), &GameEntity::save_data);
     godot::ClassDB::bind_method(godot::D_METHOD("load_data", "data"), &GameEntity::load_data);
 }
@@ -75,34 +77,32 @@ void GameEntity::_ready() {
     }
 
     entity_is_initialized = true;
-
+    
     if (enabled) {
         enable_game_entity();
     }
 }
 
-// Setters / Getters Implementations
+// Setters / Getters
 void GameEntity::set_enabled(bool p_enabled) {
-    if (p_enabled == enabled) return;
-    
+    if (enabled == p_enabled) return;
     enabled = p_enabled;
     
-    if (godot::Engine::get_singleton()->is_editor_hint()) {
-        return;
-    }
-        
+    if (godot::Engine::get_singleton()->is_editor_hint()) return;
+    
     if (enabled && entity_is_initialized) {
         enable_game_entity();
     } else {
         disable_game_entity();
     }
 }
+
 bool GameEntity::get_enabled() const { return enabled; }
 
 void GameEntity::set_title(const godot::String& p_title) { title = p_title; }
 godot::String GameEntity::get_title() const { return title; }
 
-void GameEntity::set_root_node(godot::Node* p_node) { root_node = p_node; }
+void GameEntity::set_root_node(godot::Node* p_root) { root_node = p_root; }
 godot::Node* GameEntity::get_root_node() const { return root_node; }
 
 void GameEntity::set_game(Game* p_game) {
@@ -118,8 +118,7 @@ void GameEntity::set_game(Game* p_game) {
     }
     
     _game = p_game;
-    
-    if (_game) { // Safe guard
+    if (_game) {
         enter_game();
     }
 }
@@ -131,30 +130,38 @@ float GameEntity::get_time_scale() const { return time_scale; }
 void GameEntity::set_gameplay_style(const godot::Ref<GameplayStyle>& p_style) { gameplay_style = p_style; }
 godot::Ref<GameplayStyle> GameEntity::get_gameplay_style() const { return gameplay_style; }
 
+bool GameEntity::get_entity_is_paused() const { return entity_is_paused; }
+void GameEntity::set_entity_is_paused(bool p_paused) { entity_is_paused = p_paused; }
 
-// Methods
 void GameEntity::validate_game() {
-    if (_game == nullptr) {
-        godot::Node* currentNode = get_parent();
-        
-        while (currentNode && currentNode->get_class() != "Game") {
-            currentNode = currentNode->get_parent();
-        }
-        
-        if (currentNode && currentNode->get_class() == "Game") {
-            // Note: Use object cast to target the actual class pointer.
-            // _game = godot::Object::cast_to<Game>(currentNode); 
+    if (!_game) {
+        godot::Node* p = get_parent();
+        while (p) {
+            Game* g = godot::Object::cast_to<Game>(p);
+            if (g) {
+                _game = g;
+                break;
+            }
+            p = p->get_parent();
         }
     }
 }
 
-void GameEntity::game_start() { emit_signal("game_started"); }
+void GameEntity::game_start() {
+    emit_signal("game_started");
+}
 
-void GameEntity::enter_game() { emit_signal("game_entered", _game); }
+void GameEntity::enter_game() {
+    emit_signal("game_entered", _game);
+}
 
-void GameEntity::game_end() { emit_signal("game_ended"); }
+void GameEntity::game_end() {
+    emit_signal("game_ended");
+}
 
-void GameEntity::exit_game() { emit_signal("game_exited"); }
+void GameEntity::exit_game() {
+    emit_signal("game_exited");
+}
 
 void GameEntity::game_pause() {
     if (entity_is_paused) return;
@@ -168,9 +175,13 @@ void GameEntity::game_continue() {
     emit_signal("game_continued");
 }
 
-void GameEntity::game_process(double delta) { /* Pass */ }
+void GameEntity::game_process(double delta) {
+    // Defined intentionally as a base stub mirroring GDScript
+}
 
-void GameEntity::game_process_clear() { game_processed = false; }
+void GameEntity::game_process_clear() {
+    game_processed = false;
+}
 
 void GameEntity::toggle_game_entity_enabled() {
     set_enabled(!enabled);
@@ -186,22 +197,24 @@ void GameEntity::disable_game_entity() {
 
 void GameEntity::action_consequences(int score, const godot::Dictionary& consequences) {
     if (consequences.has("set_time_scale")) {
-        godot::Variant val = consequences["set_time_scale"];
-        if (val.get_type() == godot::Variant::STRING) {
-            godot::String str_val = val;
+        godot::Variant ts_val = consequences["set_time_scale"];
+        if (ts_val.get_type() == godot::Variant::STRING) {
+            godot::String str_val = ts_val;
             if (str_val == "score") time_scale = static_cast<float>(score);
             else if (str_val == "-score") time_scale = static_cast<float>(-score);
+            else time_scale = str_val.to_float();
         } else {
-            time_scale = val;
+            time_scale = static_cast<float>(ts_val);
         }
     } else if (consequences.has("change_time_scale")) {
-        godot::Variant val = consequences["change_time_scale"];
-        if (val.get_type() == godot::Variant::STRING) {
-            godot::String str_val = val;
+        godot::Variant ts_val = consequences["change_time_scale"];
+        if (ts_val.get_type() == godot::Variant::STRING) {
+            godot::String str_val = ts_val;
             if (str_val == "score") time_scale += static_cast<float>(score);
             else if (str_val == "-score") time_scale -= static_cast<float>(score);
+            else time_scale += str_val.to_float();
         } else {
-            time_scale += static_cast<float>(val);
+            time_scale += static_cast<float>(ts_val);
         }
     }
     
@@ -210,7 +223,12 @@ void GameEntity::action_consequences(int score, const godot::Dictionary& consequ
     }
     
     if (consequences.has("set_root_node")) {
-        root_node = godot::Object::cast_to<godot::Node>(consequences["set_root_node"]);
+        godot::Variant node_val = consequences["set_root_node"];
+        if (node_val.get_type() == godot::Variant::OBJECT) {
+            root_node = godot::Object::cast_to<godot::Node>(node_val);
+        } else if (node_val.get_type() == godot::Variant::NODE_PATH) {
+            root_node = get_node_or_null(node_val);
+        }
     }
     
     if (consequences.has("exit_game")) {
@@ -227,16 +245,15 @@ void GameEntity::action_consequences(int score, const godot::Dictionary& consequ
     }
     
     if (consequences.has("set_gameplay_style")) {
-        godot::Ref<GameplayStyle> new_style = consequences["set_gameplay_style"];
-        apply_gameplay_style(new_style);
+        apply_gameplay_style(consequences["set_gameplay_style"]);
     }
 }
 
 void GameEntity::apply_gameplay_style(const godot::Ref<GameplayStyle>& newStyle) {
     if (newStyle.is_valid()) {
-        _resolved_gameplay_style = newStyle->duplicate(true);
+        _resolved_gameplay_style = godot::Ref<GameplayStyle>(godot::Object::cast_to<GameplayStyle>(newStyle->duplicate(true).ptr()));
         if (gameplay_style.is_valid()) {
-            // _resolved_gameplay_style->apply_style(gameplay_style); // Assuming existance
+            _resolved_gameplay_style->apply_style(gameplay_style); 
         }
     }
 }
@@ -252,9 +269,9 @@ godot::Dictionary GameEntity::save_data() const {
     data["time_scale"] = time_scale;
     
     if (gameplay_style.is_valid()) {
-        bool local_to_scene = gameplay_style->is_local_to_scene(); // assuming Resource method wrapper
+        bool local_to_scene = gameplay_style->is_local_to_scene(); 
         if (local_to_scene) {
-            // data["style"] = gameplay_style->save_style(); 
+            data["style"] = gameplay_style->save_style(); 
         } else {
             data["style_path"] = gameplay_style->get_path();
         }
@@ -267,22 +284,24 @@ void GameEntity::load_data(const godot::Dictionary& data) {
     if (data.has("title")) {
         title = data["title"];
     }
+    
     if (data.has("root_node")) {
         godot::NodePath path = data["root_node"];
         if (has_node(path)) {
-            // Explicitly tell the template to return a godot::Node*
-            root_node = get_node<godot::Node>(path);
+            root_node = get_node_or_null(path);
         }
     }
+    
     if (data.has("time_scale")) {
         time_scale = data["time_scale"];
     }
+    
     if (data.has("style_path")) {
         gameplay_style = godot::ResourceLoader::get_singleton()->load(data["style_path"]);
     } else if (data.has("style")) {
-        // gameplay_style.instantiate();
-        // gameplay_style->set_local_to_scene(true);
-        // gameplay_style->load_style(data["style"]);
+        gameplay_style.instantiate();
+        gameplay_style->setup_local_to_scene();
+        gameplay_style->load_style(data["style"]);
     }
 }
 

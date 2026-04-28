@@ -57,6 +57,8 @@ public:
     virtual void _ready() override;
 
     // Setters / Getters
+    godot::Dictionary get_loaded_games() const;
+
     void set_game_paths(const godot::TypedArray<godot::String>& p_paths);
     godot::TypedArray<godot::String> get_game_paths() const;
 

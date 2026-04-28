@@ -11,7 +11,6 @@ namespace ideam::godot_ext {
 
 // Forward Declarations
 class GameBoard;
-
 class GameplayStyle;
 class GameInteraction;
 
@@ -93,7 +92,7 @@ private:
     // DOD NOTE: Object pooling `Node` instances still incurs vtable lookup and memory 
     // indirection overhead. In C++26, interactions should be modeled as pure data structs 
     // in a `std::pmr::monotonic_buffer_resource` to guarantee contiguous layout and zero-fragmentation.
-    godot::TypedArray<godot::Object> interactions_pool;
+    godot::TypedArray<godot::Object> interactions_pool; // Explicit cast to GameInteraction internally
 
     bool _is_ready = false;
 
@@ -105,6 +104,8 @@ public:
     virtual void _process(double delta) override;
 
     // Setters / Getters
+    godot::String get_continue_play_state() const;
+    
     void set_game_root(godot::Node* p_root);
     godot::Node* get_game_root() const;
 
@@ -158,6 +159,9 @@ public:
 
     void set_gameplay_style(const godot::Ref<GameplayStyle>& p_style);
     godot::Ref<GameplayStyle> get_gameplay_style() const;
+
+    void set_game_hub_ID(int p_id);
+    int get_game_hub_ID() const;
 
     // Class Methods
     void load_dependencies(const godot::TypedArray<godot::String>& dependencies);

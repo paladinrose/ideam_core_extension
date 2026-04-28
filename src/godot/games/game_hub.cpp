@@ -45,6 +45,8 @@ void GameHub::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_disable_hub_scene_on_game_load"), &GameHub::get_disable_hub_scene_on_game_load);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::BOOL, "disable_hub_scene_on_game_load"), "set_disable_hub_scene_on_game_load", "get_disable_hub_scene_on_game_load");
 
+    godot::ClassDB::bind_method(godot::D_METHOD("get_loaded_games"), &GameHub::get_loaded_games);
+
     // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("connect_to_player", "player"), &GameHub::connect_to_player);
     godot::ClassDB::bind_method(godot::D_METHOD("load_startup_game"), &GameHub::load_startup_game);
@@ -137,12 +139,23 @@ godot::Node* GameHub::get_hub_scene() const { return hub_scene; }
 void GameHub::set_disable_hub_scene_on_game_load(bool p_disable) { disable_hub_scene_on_game_load = p_disable; }
 bool GameHub::get_disable_hub_scene_on_game_load() const { return disable_hub_scene_on_game_load; }
 
+godot::Dictionary GameHub::get_loaded_games() const { 
+    return loaded_games; 
+}
 
 // Class Methods
 void GameHub::connect_to_player(GamePlayer* player) {
-    // Note: Assuming player->get_game_transition() exists per your game_player.gd script structure
-    // if (player && player->get_game_transition()) { ... }
-    // Implementing logically based on provided GDScript
+    if (!player) return;
+    
+    SceneTransition* transition = player->get_game_transition();
+    if (transition) {
+        if (_game_loader) {
+            _disconnect_from_game_loader();
+        }
+        
+        _game_loader = transition;
+        _connect_to_game_loader();
+    }
 }
 
 void GameHub::load_startup_game() {
@@ -175,17 +188,15 @@ void GameHub::load_game(int game_id) {
 
     godot::String gamePath = game_paths[game_id];
     
-    // Assumption: _game_loader has start_transition method
-    // _game_loader->start_transition(gamePath);
+    _game_loader->start_transition(gamePath);
     
     loading_games.append(gamePath);
     emit_signal("load_game_started", game_id);
 }
 
 void GameHub::game_load_complete(godot::Node* game_node) {
-    // Assumption: Cast Node to Game class
-    // Game* loadedGame = godot::Object::cast_to<Game>(game_node);
-    // if (!loadedGame) return;
+    Game* loadedGame = godot::Object::cast_to<Game>(game_node);
+    if (!loadedGame) return;
     
     if (!_game_loader) {
         if (!_default_game_loader) {
@@ -194,42 +205,73 @@ void GameHub::game_load_complete(godot::Node* game_node) {
         set_game_loader(_default_game_loader);
     }
 
-    // godot::String gamePath = _game_loader->get_to_path();
-    // Intended logic translation mapping path to id, removing from loading_games...
+    godot::String gamePath = _game_loader->get_to_path();
+    
+    int path_index = loading_games.find(gamePath);
+    if (path_index != -1) {
+        loading_games.remove_at(path_index);
+    }
+
+    int game_id = game_paths.find(gamePath);
+    loaded_games[game_id] = loadedGame;
+    
+    add_child(loadedGame);
+    
+    if (get_tree() && get_tree()->get_edited_scene_root()) {
+        loadedGame->set_owner(get_tree()->get_edited_scene_root());
+    }
+    
+    loadedGame->set_game_hub_ID(game_id);
+    
+    if (!loadedGame->is_connected("game_ended", godot::Callable(this, "unload_game"))) {
+        loadedGame->connect("game_ended", godot::Callable(this, "unload_game"));
+    }
     
     if (disable_hub_scene_on_game_load && hub_scene) {
         disable_hub_scene();
     }
     
-    // loadedGame->game_loaded_from_game_hub();
-    emit_signal("load_game_completed", game_node);
+    // Translating GDScript commented block:
+    // godot::PackedStringArray dependencies = godot::ResourceLoader::get_singleton()->get_dependencies(gamePath);
+    // if (dependencies.size() > 0) {
+    //      loadedGame->load_dependencies(dependencies);
+    // }
+        
+    loadedGame->game_loaded_from_game_hub();
+    emit_signal("load_game_completed", loadedGame);
     
-    // _game_loader->complete_transition();
+    _game_loader->complete_transition();
 }
 
 void GameHub::game_load_fail() {
-    // Pass
+    // Pass equivalent in GDScript
 }
 
 void GameHub::unload_game(int game_id) {
     if (!loaded_games.has(game_id)) return;
     
-    // DOD NOTE: Frequent runtime Node instancing and `queue_free()` introduces 
-    // heap fragmentation and destroys spatial locality. 
-    // Consider implementing a Polymorphic Memory Resource (std::pmr) based memory pool 
-    // for active Games to maintain L1/L2 cache coherency instead of destroying them outright.
+    Game* loadedGame = godot::Object::cast_to<Game>(loaded_games[game_id]);
+    if (!loadedGame) return;
     
-    // Game* loadedGame = godot::Object::cast_to<Game>(loaded_games[game_id]);
-    // if (!loadedGame) return;
-    
-    // if (loadedGame->close_hub_on_quit) {
-    //    get_tree()->get_root()->propagate_notification(NOTIFICATION_WM_CLOSE_REQUEST);
-    // } else {
-    //    emit_signal("game_unloaded", loadedGame);
-    //    get_tree()->get_current_scene()->remove_child(loadedGame);
-    //    loaded_games.erase(game_id);
-    //    loadedGame->queue_free();
-    // }
+    if (loadedGame->get_close_hub_on_quit()) {
+        if (get_tree() && get_tree()->get_root()) {
+            get_tree()->get_root()->propagate_notification(NOTIFICATION_WM_CLOSE_REQUEST);
+        }
+    } else {
+        emit_signal("game_unloaded", loadedGame);
+        
+        godot::Node* target_scene = nullptr;
+        if (get_tree()) {
+            target_scene = get_tree()->get_current_scene();
+        }
+        
+        if (target_scene) {
+            target_scene->remove_child(loadedGame);
+        }
+        
+        loaded_games.erase(game_id);
+        loadedGame->queue_free();
+    }
 }
 
 void GameHub::disable_hub_scene() {
@@ -263,28 +305,30 @@ void GameHub::remove_game(int game_id) {
 }
 
 void GameHub::_create_default_game_loader() {
-    // _default_game_loader = memnew(SceneTransition);
-    // add_child(_default_game_loader);
+    _default_game_loader = memnew(SceneTransition);
+    add_child(_default_game_loader);
 }
 
 void GameHub::_connect_to_game_loader() {
     if (!_game_loader) return;
-    // if (!_game_loader->is_connected("load_to_scene_completed", godot::Callable(this, "game_load_complete"))) {
-    //    _game_loader->connect("load_to_scene_completed", godot::Callable(this, "game_load_complete"));
-    // }
-    // if (!_game_loader->is_connected("load_to_scene_failed", godot::Callable(this, "game_load_fail"))) {
-    //    _game_loader->connect("load_to_scene_failed", godot::Callable(this, "game_load_fail"));
-    // }
+    
+    if (!_game_loader->is_connected("load_to_scene_completed", godot::Callable(this, "game_load_complete"))) {
+        _game_loader->connect("load_to_scene_completed", godot::Callable(this, "game_load_complete"));
+    }
+    if (!_game_loader->is_connected("load_to_scene_failed", godot::Callable(this, "game_load_fail"))) {
+        _game_loader->connect("load_to_scene_failed", godot::Callable(this, "game_load_fail"));
+    }
 }
 
 void GameHub::_disconnect_from_game_loader() {
     if (!_game_loader) return;
-    // if (_game_loader->is_connected("load_to_scene_completed", godot::Callable(this, "game_load_complete"))) {
-    //    _game_loader->disconnect("load_to_scene_completed", godot::Callable(this, "game_load_complete"));
-    // }
-    // if (_game_loader->is_connected("load_to_scene_failed", godot::Callable(this, "game_load_fail"))) {
-    //    _game_loader->disconnect("load_to_scene_failed", godot::Callable(this, "game_load_fail"));
-    // }
+    
+    if (_game_loader->is_connected("load_to_scene_completed", godot::Callable(this, "game_load_complete"))) {
+        _game_loader->disconnect("load_to_scene_completed", godot::Callable(this, "game_load_complete"));
+    }
+    if (_game_loader->is_connected("load_to_scene_failed", godot::Callable(this, "game_load_fail"))) {
+        _game_loader->disconnect("load_to_scene_failed", godot::Callable(this, "game_load_fail"));
+    }
 }
 
 } // namespace ideam::godot_ext
