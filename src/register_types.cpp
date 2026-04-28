@@ -210,6 +210,7 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		// --- Games Editors ---
 		GDREGISTER_CLASS(ideam::godot_ext::GameAgentEditorInspectorPlugin);
 		GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionEditorInspectorPlugin);
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamGamesPlugin);
 	}
 }
 

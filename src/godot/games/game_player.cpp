@@ -35,6 +35,10 @@ void GamePlayer::_bind_methods() {
     ADD_SIGNAL(godot::MethodInfo("game_loaded", godot::PropertyInfo(godot::Variant::OBJECT, "game", godot::PROPERTY_HINT_NODE_TYPE, "Game")));
 
     // Properties
+    godot::ClassDB::bind_method(godot::D_METHOD("set_player_profile", "profile"), &GamePlayer::set_player_profile);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_player_profile"), &GamePlayer::get_player_profile);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "player_profile", godot::PROPERTY_HINT_RESOURCE_TYPE, "GamePlayerProfile"), "set_player_profile", "get_player_profile");
+
     godot::ClassDB::bind_method(godot::D_METHOD("set_player_root", "new_root"), &GamePlayer::set_player_root);
     godot::ClassDB::bind_method(godot::D_METHOD("get_player_root"), &GamePlayer::get_player_root);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "player_root", godot::PROPERTY_HINT_NODE_TYPE, "Node"), "set_player_root", "get_player_root");
@@ -42,6 +46,34 @@ void GamePlayer::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_player_agent_name", "name"), &GamePlayer::set_player_agent_name);
     godot::ClassDB::bind_method(godot::D_METHOD("get_player_agent_name"), &GamePlayer::get_player_agent_name);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING, "player_agent_name"), "set_player_agent_name", "get_player_agent_name");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_allow_agent_reparenting", "allow"), &GamePlayer::set_allow_agent_reparenting);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_allow_agent_reparenting"), &GamePlayer::get_allow_agent_reparenting);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::BOOL, "allow_agent_reparenting"), "set_allow_agent_reparenting", "get_allow_agent_reparenting");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_join_game_on_load", "join"), &GamePlayer::set_join_game_on_load);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_join_game_on_load"), &GamePlayer::get_join_game_on_load);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::BOOL, "join_game_on_load"), "set_join_game_on_load", "get_join_game_on_load");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_game_transition", "transition"), &GamePlayer::set_game_transition);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_game_transition"), &GamePlayer::get_game_transition);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game_transition", godot::PROPERTY_HINT_NODE_TYPE, "SceneTransition"), "set_game_transition", "get_game_transition");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_board_transition", "transition"), &GamePlayer::set_board_transition);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_board_transition"), &GamePlayer::get_board_transition);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "board_transition", godot::PROPERTY_HINT_NODE_TYPE, "SceneTransition"), "set_board_transition", "get_board_transition");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_default_agent", "agent"), &GamePlayer::set_default_agent);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_default_agent"), &GamePlayer::get_default_agent);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "default_agent", godot::PROPERTY_HINT_NODE_TYPE, "GameAgent"), "set_default_agent", "get_default_agent");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_agent_node_assignments", "assignments"), &GamePlayer::set_agent_node_assignments);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_agent_node_assignments"), &GamePlayer::get_agent_node_assignments);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "agent_node_assignments", godot::PROPERTY_HINT_NODE_TYPE, "NodeRetargeter"), "set_agent_node_assignments", "get_agent_node_assignments");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_agent_signal_assignments", "assignments"), &GamePlayer::set_agent_signal_assignments);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_agent_signal_assignments"), &GamePlayer::get_agent_signal_assignments);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "agent_signal_assignments", godot::PROPERTY_HINT_NODE_TYPE, "SignalConnector"), "set_agent_signal_assignments", "get_agent_signal_assignments");
 
     // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("find_game_player_manager", "on"), &GamePlayer::find_game_player_manager, DEFVAL(nullptr));
@@ -82,6 +114,9 @@ void GamePlayer::_on_process_frame_find_game() {
     find_current_game();
 }
 
+void GamePlayer::set_player_profile(const godot::Ref<GamePlayerProfile>& p_profile) { player_profile = p_profile; }
+godot::Ref<GamePlayerProfile> GamePlayer::get_player_profile() const { return player_profile; }
+
 void GamePlayer::set_player_root(godot::Node* p_root) {
     if (p_root == _root) return;
     _root = p_root;
@@ -91,6 +126,27 @@ godot::Node* GamePlayer::get_player_root() const { return _root; }
 
 void GamePlayer::set_player_agent_name(const godot::String& p_name) { player_agent_name = p_name; }
 godot::String GamePlayer::get_player_agent_name() const { return player_agent_name; }
+
+void GamePlayer::set_allow_agent_reparenting(bool p_allow) { allow_agent_reparenting = p_allow; }
+bool GamePlayer::get_allow_agent_reparenting() const { return allow_agent_reparenting; }
+
+void GamePlayer::set_join_game_on_load(bool p_join) { join_game_on_load = p_join; }
+bool GamePlayer::get_join_game_on_load() const { return join_game_on_load; }
+
+void GamePlayer::set_game_transition(SceneTransition* p_transition) { game_transition = p_transition; }
+SceneTransition* GamePlayer::get_game_transition() const { return game_transition; }
+
+void GamePlayer::set_board_transition(SceneTransition* p_transition) { board_transition = p_transition; }
+SceneTransition* GamePlayer::get_board_transition() const { return board_transition; }
+
+void GamePlayer::set_default_agent(GameAgent* p_agent) { default_agent = p_agent; }
+GameAgent* GamePlayer::get_default_agent() const { return default_agent; }
+
+void GamePlayer::set_agent_node_assignments(NodeRetargeter* p_assignments) { agent_node_assignments = p_assignments; }
+NodeRetargeter* GamePlayer::get_agent_node_assignments() const { return agent_node_assignments; }
+
+void GamePlayer::set_agent_signal_assignments(SignalConnector* p_assignments) { agent_signal_assignments = p_assignments; }
+SignalConnector* GamePlayer::get_agent_signal_assignments() const { return agent_signal_assignments; }
 
 void GamePlayer::find_game_player_manager(godot::Node* on) {
     // Requires GamePlayerManager to expose static singleton accessor

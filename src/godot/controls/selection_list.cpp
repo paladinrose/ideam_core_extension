@@ -78,6 +78,7 @@ void SelectionList::set_text(const godot::String& p_text) {
         label->set_text(text);
     }
 }
+godot::String SelectionList::get_text() const { return text; }
 
 void SelectionList::validate_list_elements() {
     godot::Node* new_owner = get_owner();
