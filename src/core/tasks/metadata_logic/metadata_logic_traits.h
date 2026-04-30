@@ -7,6 +7,8 @@
 #include <concepts>
 #include <type_traits>
 
+#include <godot_cpp/variant/array.hpp>
+
 namespace ideam::core {
 
 struct MetadataLogicValidator {
@@ -48,7 +50,8 @@ concept IsMetadataLogic = requires {
     { T::required_layouts } -> std::convertible_to<BufferLayoutType>;
     { T::required_types } -> std::convertible_to<DataType>;
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
-
+    { T::get_ui_properties() } -> std::same_as<godot::Array>;
+    
     // Must implement templated execute_metadata handling the mutable selection
     { 
         std::declval<T>().template execute_metadata<typename T::DefaultView, typename T::DefaultStrategy>(

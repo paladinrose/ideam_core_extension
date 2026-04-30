@@ -10,6 +10,8 @@
 #include <concepts>
 #include <type_traits>
 
+#include <godot_cpp/variant/array.hpp>
+
 namespace ideam::core {
 
 /**
@@ -63,6 +65,7 @@ concept IsQueryLogic = requires {
     { T::supports_cull } -> std::convertible_to<bool>;
     { T::supports_addition } -> std::convertible_to<bool>;
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
+    { T::get_ui_properties() } -> std::same_as<godot::Array>;
     
     // Must implement pure 'execute' handling the selection mutation.
     { 

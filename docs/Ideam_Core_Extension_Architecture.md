@@ -7,7 +7,7 @@ This document serves as the baseline context for understanding the `ideam_core_e
 * **Godot Version:** 4.5 (utilizing latest `godot-cpp` bindings and GDExtension interface changes).
 * **Language:** C++26. Code should leverage modern features (e.g., `<concepts>`, `<span>`, advanced atomics) and compile cleanly under `-std=c++2b` or `-std=c++26` flags.
 * **Build System:** SCons.
-* **Design Philosophy ("Right Tool for the Right Job"):** The core memory and execution pipelines lean heavily into **Data-Oriented Design (DOD)** to maximize cache locality, parallel throughput, and GPU synchronization. However, this is *not* a strict, dogmatic DOD framework. Standard OOP concepts and Godot's node/resource paradigms are utilized where they make sense—particularly at the engine boundary layer, in UI components, and in domain-specific plugins that do not require batch-processed memory layouts.
+* **Design Philosophy:** The core memory and execution pipelines lean heavily into **Data-Oriented Design (DOD)** to maximize cache locality, parallel throughput, and GPU synchronization. However, this is *not* a strict, dogmatic DOD framework. Standard OOP concepts and Godot's node/resource paradigms are utilized where they make sense—particularly at the engine boundary layer, in UI components, and in domain-specific plugins that do not require batch-processed memory layouts.
 
 ---
 
@@ -32,13 +32,21 @@ Represents a structural slice of the Master Block. It defines *how* the memory i
 // memory_buffer_pod.h
 enum class BufferLayoutType : uint16_t {
     NONE       = 0,
-    FLAT       = 1 << 0,
-    AOS        = 1 << 1, // Array of Structures
-    SOA        = 1 << 2, // Structure of Arrays
+    FLAT       = 1 << 0, 
+    AOS        = 1 << 1,
+    SOA        = 1 << 2,
     SPARSE_SET = 1 << 3,
     TILED_SOA  = 1 << 4,
     RING       = 1 << 5,
-    PAGED      = 1 << 6
+    PAGED      = 1 << 6,
+
+    // --- UI/Graph Helper Masks ---
+    ANY_LINEAR   = FLAT | AOS | SOA | SPARSE_SET | TILED_SOA | RING | PAGED,
+    ANY_PARALLEL = SOA | TILED_SOA,
+    ANY_SPATIAL  = FLAT | SOA | TILED_SOA | PAGED,
+
+    // The Universal Mask: Matches any valid layout defined above.
+    ANY          = ANY_LINEAR 
 };
 ```
 
@@ -120,12 +128,18 @@ Views aren't just wrappers; they possess compile-time metadata defined in `view_
 ```cpp
 // view_traits.h
 enum class ViewCapability : uint32_t {
-    NONE            = 0,
-    LINEAR_ACCESS   = 1 << 0, // Supports operator[] selection-relative
-    SPATIAL_ACCESS  = 1 << 1, // Supports at(x, y, z)
-    SIMD_ACCESS     = 1 << 2, // Supports get_lane / LaneWidth
-    RANDOM_ACCESS   = 1 << 3, // Supports arbitrary ID lookups
-    VIRTUAL_MEMORY  = 1 << 4  // Paged/Indirect
+    NONE                   = 0,
+    LINEAR_ACCESS          = 1 << 0,  // Supports operator[] selection-relative
+    SPATIAL_ACCESS         = 1 << 1,  // Supports multidimensional indexing
+    SIMD_ACCESS            = 1 << 2,  // Supports get_lane / LaneWidth
+    RANDOM_ACCESS          = 1 << 3,  // Supports arbitrary ID lookups
+    VIRTUAL_MEMORY         = 1 << 4,  // Paged/Indirect (Strategy-dependent)
+    QUEUE_ACCESS           = 1 << 5,  // Supports stateful consumption (pop)
+    STENCIL_ACCESS         = 1 << 6,  // Supports center() and neighbor(k)
+    SWAP_ACCESS            = 1 << 7,  // Supports Temporal Ping-Pong read/write proxies
+    ENTITY_ID_ACCESS       = 1 << 8,  // Supports get_entity_at() for Sparse ECS bridging
+    MULTI_COMPONENT_ACCESS = 1 << 9,  // Supports pluck<T>() for heterogeneous payloads
+    ATOMIC_ACCESS          = 1 << 10  // Supports std::atomic_ref returns
 };
 ```
 
@@ -194,9 +208,9 @@ Using C++20 Concepts and `LogicTraits`, the wrappers enforce hardware requiremen
 
 #### 4. Logic Sub-Systems
 
-Operations are divided into distinct namespaces based on their mutation privileges:
+Operations are divided into distinct groups based on their mutation privileges:
 
-##### A. Transforms (`ideam::core::transforms`)
+##### A. Transforms
 Transforms are pure mathematical operations or reductions. They read data and mutate data, but they **cannot** alter the selection bitmask. 
 * *Examples:* `EulerIntegrationTransformLogic`, `FastNoiseLiteTransformLogic`.
 
@@ -226,12 +240,12 @@ struct alignas(64) EulerIntegrationTransformLogic {
 };
 ```
 
-##### B. Query Logic (`ideam::core::query_logic`)
+##### B. Query Logic
 Queries mutate the `MemoryBufferSelectionPOD`. They act as filters, evaluating data and either culling bits (deactivating elements) or pushing Add commands to the Tier 2 buffer (activating elements).
 * *Examples:* `ArchetypeQueryLogic`, `FrustumQueryLogic`.
 * **Bridge Queries:** A special subset of queries that read from a Source buffer to alter the selection of a Target buffer (e.g., `EventRingBridgeQueryLogic` drains an event ring to wake up sleeping entities in a Sparse Set).
 
-##### C. Metadata Logic (`ideam::core::metadata_logic`)
+##### C. Metadata Logic
 Operations that manipulate non-primary shadow buffers used for acceleration structures, such as hierarchical level-of-detail shifts or spatial clustering.
 * *Examples:* `GroupMaskMetadataLogic`, `DSUClusterMetadataLogic`.
 
@@ -301,7 +315,7 @@ To provide a smooth developer experience without compromising backend performanc
 * **Pragmatic Inspector Composition:** Unlike the Graph UI, the Inspector UIs intentionally *break* inheritance. While the data resources mirror inheritance, Godot's `_parse_begin()` control injection gets messy across module boundaries. Therefore, `TaskGraphInspector` safely composes its UI independently, proving a pragmatic approach to Godot UI development.
 
 
-## 5: Domain-Specific Subsystems (Narratives)
+## 5: Narratives
 
 **Target Directory:** `src/godot/narratives/`
 

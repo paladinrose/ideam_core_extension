@@ -7,6 +7,8 @@
 #include <concepts>
 #include <type_traits>
 
+#include <godot_cpp/variant/array.hpp>
+
 namespace ideam::core {
 
 struct TransformLogicValidator {
@@ -47,7 +49,8 @@ concept IsTransformLogic = requires {
     { T::required_layouts } -> std::convertible_to<BufferLayoutType>;
     { T::required_types } -> std::convertible_to<DataType>;
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
-
+    { T::get_ui_properties() } -> std::same_as<godot::Array>;
+    
     // Must implement templated execute_transform handling the injected Context and View
     { 
         std::declval<T>().template execute_transform<typename T::DefaultView, typename T::DefaultStrategy>(
