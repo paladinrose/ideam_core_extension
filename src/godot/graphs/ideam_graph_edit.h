@@ -2,18 +2,28 @@
 
 #include <godot_cpp/classes/graph_edit.hpp>
 #include <godot_cpp/classes/popup_menu.hpp>
+#include <godot_cpp/variant/typed_array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/string_name.hpp>
+
 #include "ideam_graph_node.h"
 #include "ideam_graph_resource.h" 
 
 namespace ideam::godot_ext {
 
+/**
+ * @class IdeamGraphEdit
+ * @brief The presentation and mutation-routing layer for the DOD graph topology.
+ * Enforces structural access rules and routes all user commands directly 
+ * to the underlying memory graph resource before visually reflecting changes.
+ */
 class IdeamGraphEdit : public godot::GraphEdit {
     GDCLASS(IdeamGraphEdit, godot::GraphEdit)
-
 
 protected:
     // The definitive source of truth for this graph's layout
     godot::Ref<IdeamGraphResource> current_blueprint;
+    
     // UI Elements
     godot::PopupMenu* context_popup = nullptr;
     godot::Vector2 popup_position;
@@ -23,7 +33,6 @@ protected:
 
     // Internal sync lock to prevent infinite feedback loops when dragging nodes
     bool is_syncing_ui = false;
-    
 
     static void _bind_methods();
 
@@ -52,14 +61,13 @@ public:
     virtual ~IdeamGraphEdit() override;
 
     void _ready() override;
+    
+    // Public entry point for nodes to request a context menu
+    void node_context_clicked(godot::Object* p_node);
 
-    // --- Blueprint Integration ---
+    // Resource Injection
     void set_blueprint(const godot::Ref<IdeamGraphResource>& p_blueprint);
     godot::Ref<IdeamGraphResource> get_blueprint() const { return current_blueprint; }
-
-    void node_context_clicked(IdeamGraphNode* p_node);
 };
 
 } // namespace ideam::godot_ext
-
- // IDEAM_GRAPH_EDIT_H

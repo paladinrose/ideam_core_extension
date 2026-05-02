@@ -43,6 +43,19 @@ struct DataSortTransformLogic {
     // Output Graph Port: Will contain the sorted sequence of buffer indices
     std::vector<int64_t>* output_destination = nullptr;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary dir_prop;
+        dir_prop["name"] = "direction";
+        dir_prop["type"] = godot::Variant::INT;
+        dir_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        dir_prop["hint_string"] = "Ascending,Descending";
+        props.push_back(dir_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
         return primary_buffer_id;
     }

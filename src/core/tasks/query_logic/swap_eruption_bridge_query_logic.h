@@ -33,6 +33,18 @@ struct SwapEruptionBridgeQueryLogic {
     uint32_t source_column_id = 0;
     T eruption_threshold;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary thresh_prop;
+        thresh_prop["name"] = "eruption_threshold";
+        thresh_prop["type"] = "T"; 
+        thresh_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(thresh_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     /**

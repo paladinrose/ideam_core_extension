@@ -35,6 +35,32 @@ struct ColorHSVAQueryLogic {
     uint32_t mask = 15; // Bitmask: H=1, S=2, V=4, A=8
     float threshold = 0.5f;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Equal,Not Equal,Less,Less Equal,Greater,Greater Equal";
+        props.push_back(op_prop);
+
+        godot::Dictionary mask_prop;
+        mask_prop["name"] = "mask";
+        mask_prop["type"] = godot::Variant::INT;
+        mask_prop["hint"] = godot::PROPERTY_HINT_FLAGS; // Suggests a checkbox list in UI
+        mask_prop["hint_string"] = "Hue,Saturation,Value,Alpha";
+        props.push_back(mask_prop);
+
+        godot::Dictionary thresh_prop;
+        thresh_prop["name"] = "threshold";
+        thresh_prop["type"] = godot::Variant::FLOAT;
+        thresh_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(thresh_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

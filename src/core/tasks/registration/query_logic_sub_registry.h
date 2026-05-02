@@ -4,6 +4,7 @@
 #include "task_view_bridge.h" // Ensures strict one-way dependency graph
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/packed_int64_array.hpp>
 
 // --- Logics ---
 #include "../query_logic/aabb_query_logic.h"
@@ -134,8 +135,6 @@ namespace {
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD430_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD140_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
     template <QueryLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct QueryViewResolver<MemoryView::AOSOA_STD140_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-
-    template <typename T_Array> inline void _append_unique(T_Array& p_array, const godot::String& p_val) { if (!p_array.has(p_val)) p_array.push_back(p_val); }
 }
 
 template <QueryLogicID L>
@@ -222,26 +221,25 @@ private:
                 return new QueryTask<L_Type, OpEnum, V_Type, T_Strategy>();
             };
 
-            /*
-            // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
-            if constexpr (O == 0) {
-                if (QueryTaskRegistry::ui_query_matrix) {
-                    godot::String logic_name(L_Type::type_name);
-                    if (!QueryTaskRegistry::ui_query_matrix->has(logic_name)) {
-                        godot::Dictionary dict;
-                        dict["ops"] = godot::Array(); dict["views"] = godot::Array(); dict["strategies"] = godot::Array();
-                        (*QueryTaskRegistry::ui_query_matrix)[logic_name] = dict;
-                    }
-                    godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[logic_name];
-                    _append_unique<godot::Array>(dict["views"], V_Type::type_name);
-                    _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
-                }
-            }
+            // Cold-Path UI Collection
             if (QueryTaskRegistry::ui_query_matrix) {
-                godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[L_Type::type_name];
-                _append_unique<godot::Array>(dict["ops"], (O == 0) ? "CULL" : "ADD");
+                godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
+                
+                if (!QueryTaskRegistry::ui_query_matrix->has(logic_key)) {
+                    godot::Dictionary dict;
+                    // Instantiate the property array exactly once per logic struct type
+                    dict["properties"] = L_Type::get_ui_properties();
+                    dict["valid_combinations"] = godot::PackedInt64Array(); 
+                    (*QueryTaskRegistry::ui_query_matrix)[logic_key] = dict;
+                }
+
+                // Map this valid 4D configuration hash (FlatIdx) so the UI knows it's an allowed permutation
+                godot::Dictionary dict = (*QueryTaskRegistry::ui_query_matrix)[logic_key];
+                godot::PackedInt64Array combos = dict["valid_combinations"];
+                combos.push_back(static_cast<int64_t>(FlatIdx));
+                dict["valid_combinations"] = combos; 
+                (*QueryTaskRegistry::ui_query_matrix)[logic_key] = dict; 
             }
-            */
         }
     }
 };

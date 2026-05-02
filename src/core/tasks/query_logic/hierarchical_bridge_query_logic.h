@@ -31,6 +31,10 @@ struct HierarchicalBridgeQueryLogic {
     const MemoryBufferSelectionPOD* parent_selection = nullptr;
     uint32_t target_buffer_id = 0;
 
+    static godot::Array get_ui_properties() {
+        return godot::Array();
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     /**

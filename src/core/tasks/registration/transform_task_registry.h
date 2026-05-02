@@ -45,12 +45,22 @@ public:
 
     // --- The O(1) Multi-Dimensional Factory Routers ---
     static std::array<const SubMatrix*, L_COUNT> logic_matrices;
+    
+    /**
+     * ui_transform_matrix Data Schema (Exported to Godot):
+     * {
+     * "LogicID (Stringified Int)": {
+     * "properties": [ Array of godot::Dictionary (PropertyInfo structures from Logic::get_ui_properties) ],
+     * "valid_combinations": PackedInt64Array [ FlatIdx hashes of valid View/Strategy/Type combinations ]
+     * }
+     * }
+     */
     static godot::Dictionary* ui_transform_matrix;
 
     static void init();
     static void cleanup();
 
-    [[nodiscard]] static std::unique_ptr<INativeTask> create(uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id);
+    static std::unique_ptr<INativeTask> create(uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id);
 };
 
 } // namespace ideam::core

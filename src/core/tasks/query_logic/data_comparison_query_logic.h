@@ -34,6 +34,19 @@ struct DataComparisonQueryLogic {
     uint32_t column_id_b = 0;
     Operator op = Operator::EQUAL;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Equal,Not Equal,Less Than,Less Equal,Greater Than,Greater Equal";
+        props.push_back(op_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
 

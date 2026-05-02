@@ -46,6 +46,55 @@ struct DSUClusterMetadataLogic {
     int32_t partition_id_offset = 0;
     uint32_t target_buffer_id = 0;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        // 1. Mode
+        godot::Dictionary mode_prop;
+        mode_prop["name"] = "mode";
+        mode_prop["type"] = godot::Variant::INT;
+        mode_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        mode_prop["hint_string"] = "Absolute Value,Angular,Bitmask Match";
+        props.push_back(mode_prop);
+
+        // 2. Tolerance
+        godot::Dictionary tol_prop;
+        tol_prop["name"] = "tolerance";
+        tol_prop["type"] = godot::Variant::FLOAT;
+        tol_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(tol_prop);
+
+        // 3. Cos Threshold
+        godot::Dictionary cos_prop;
+        cos_prop["name"] = "cos_threshold";
+        cos_prop["type"] = godot::Variant::FLOAT;
+        cos_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(cos_prop);
+
+        // 4. Bitmask
+        godot::Dictionary bit_prop;
+        bit_prop["name"] = "bitmask";
+        bit_prop["type"] = godot::Variant::INT;
+        bit_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(bit_prop);
+
+        // 5. Min Cluster Size
+        godot::Dictionary min_prop;
+        min_prop["name"] = "min_cluster_size";
+        min_prop["type"] = godot::Variant::INT;
+        min_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(min_prop);
+
+        // 6. Partition ID Offset
+        godot::Dictionary part_offset_prop;
+        part_offset_prop["name"] = "partition_id_offset";
+        part_offset_prop["type"] = godot::Variant::INT;
+        part_offset_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(part_offset_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <typename T_View, typename T_Strategy>

@@ -34,6 +34,31 @@ struct DirectionalQueryLogic {
     float angle_threshold = 0.0f; // Cosine of angle
     Comparison op = Comparison::WITHIN_ANGLE;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Within Angle,Outside Angle,Facing Each Other,Perpendicular";
+        props.push_back(op_prop);
+
+        godot::Dictionary dir_prop;
+        dir_prop["name"] = "target_direction";
+        dir_prop["type"] = "T"; 
+        dir_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(dir_prop);
+
+        godot::Dictionary angle_prop;
+        angle_prop["name"] = "angle_threshold";
+        angle_prop["type"] = godot::Variant::FLOAT;
+        angle_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(angle_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

@@ -5,6 +5,7 @@
 #include "../transform_task.h"
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/packed_int64_array.hpp>
 
 // --- Logics ---
 #include "../transform_logic/boundary_constraint_transform_logic.h"
@@ -34,7 +35,7 @@
 namespace ideam::core {
 
 namespace {
-    // --- Resolvers & Memory Core ---
+    // --- Resolvers & Extractor Logic ---
     consteval size_t floor_power_of_2(size_t n) {
         if (n == 0) return 1;
         size_t res = 1;
@@ -56,93 +57,29 @@ namespace {
         }
     };
 
-    // --- Transform Logic Resolver ---
-    // Maps the TransformLogicID enum pseudo-entries into concrete, fully specialized Logic types.
-    template <TransformLogicID L, typename T, typename T_Strategy>
-    struct TransformLogicResolver {
-        static constexpr bool is_valid = false;
-    };
-
-    // --- Single Template Argument (<T>) ---
-    
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::BoundaryConstraint, T, T_Strategy> {
-        using Type = BoundaryConstraintTransformLogic<T>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::BoundsExtraction, T, T_Strategy> {
-        using Type = BoundsExtractionTransformLogic<T>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::DataScatter, T, T_Strategy> {
-        using Type = DataScatterTransformLogic<T>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::DataSort, T, T_Strategy> {
-        using Type = DataSortTransformLogic<T>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::NoiseInjection, T, T_Strategy> {
-        using Type = NoiseInjectionTransformLogic<T>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::ValueAccumulation, T, T_Strategy> {
-        using Type = ValueAccumulationTransformLogic<T>; static constexpr bool is_valid = true;
-    };
-
-    // --- Concrete Types (No Template Arguments) ---
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::EulerIntegration, T, T_Strategy> {
-        using Type = EulerIntegrationTransformLogic; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::FastNoiseLite, T, T_Strategy> {
-        using Type = FastNoiseLiteTransformLogic; static constexpr bool is_valid = true;
-    };
-
-    // --- Stencil Pseudo-Variants (<T, T_Strategy, KernelSize>) ---
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 9>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 49>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 5>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 13>; static constexpr bool is_valid = true;
-    };
-
-    template <typename T, typename T_Strategy>
-    struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, T, T_Strategy> {
-        using Type = StencilConvolutionTransformLogic<T, T_Strategy, 25>; static constexpr bool is_valid = true;
-    };
+    template <typename S, typename = void> struct StrategyDimExtractor { static constexpr size_t value = 1; };
+    template <typename S> struct StrategyDimExtractor<S, std::void_t<decltype(S::dimensions)>> { static constexpr size_t value = S::dimensions; };
 
     template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
-    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::Type::KernelSize)>> { static constexpr size_t value = T_Resolver::Type::KernelSize; static constexpr bool has_kernel = true; };
-    
-    template <TransformLogicID LogicID, typename T_Concrete, typename T_Strategy> struct LogicKernelExtractor : KernelExtractorImpl<TransformLogicResolver<LogicID, T_Concrete, T_Strategy>> {};
+    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::Type::KERNEL_POINTS)>> { static constexpr size_t value = T_Resolver::Type::KERNEL_POINTS; static constexpr bool has_kernel = true; };
+
+    template <TransformLogicID ID, typename T_Concrete, typename T_Strategy> struct TransformLogicResolver { static constexpr bool is_valid = false; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundaryConstraint, C, S> { using Type = BoundaryConstraintTransformLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundsExtraction, C, S> { using Type = BoundsExtractionTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::DataScatter, C, S> { using Type = DataScatterTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::DataSort, C, S> { using Type = DataSortTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::FastNoiseLite, C, S> { using Type = FastNoiseLiteTransformLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::NoiseInjection, C, S> { using Type = NoiseInjectionTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, 9>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, 25>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, 49>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, 5>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, 13>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, 25>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ValueAccumulation, C, S> { using Type = ValueAccumulationTransformLogic<C>; static constexpr bool is_valid = true; };
+
+    template <TransformLogicID LogicID, typename C, typename S> struct LogicKernelExtractor : KernelExtractorImpl<TransformLogicResolver<LogicID, C, S>> {};
 
     template <MemoryStrategy ID> struct StrategyResolver { static constexpr bool is_valid = false; };
     template <> struct StrategyResolver<MemoryStrategy::FlatStrategy> { using Type = FlatStrategy; static constexpr bool is_valid = true; };
@@ -155,30 +92,23 @@ namespace {
     template <> struct StrategyResolver<MemoryStrategy::RingStrategy> { using Type = RingStrategy; static constexpr bool is_valid = true; };
     template <> struct StrategyResolver<MemoryStrategy::PagedStrategy> { using Type = PagedStrategy; static constexpr bool is_valid = true; };
 
-    template <MemoryView ViewID, TransformLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy> struct ViewResolver { static constexpr bool is_valid = false; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::PagedView, LogicID, MemType, C, S> { using Type = PagedView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::RingView, LogicID, MemType, C, S> { using Type = RingView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::StencilView, LogicID, MemType, C, S> { using Type = StencilView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::AtomicView, LogicID, MemType, C, S> { using Type = AtomicView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::SwapView, LogicID, MemType, C, S> { using Type = SwapView<C, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::BridgeView, LogicID, MemType, C, S> { static constexpr size_t DimCount = S::dimensions; using Type = BridgeView<C, C, DimCount, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::StaticStencilView, LogicID, MemType, C, S> { using Extractor = LogicKernelExtractor<LogicID, C, S>; static constexpr size_t PointCount = Extractor::has_kernel ? Extractor::value : 1; using Type = StaticStencilView<C, S, PointCount>; static constexpr bool is_valid = Extractor::has_kernel; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::AOSOA_Tight_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::AOSOA_Tight_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::AOSOA_STD430_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::AOSOA_STD430_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::AOSOA_STD140_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct ViewResolver<MemoryView::AOSOA_STD140_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-
-    template <typename T_Array>
-    inline void _append_unique(T_Array& p_array, const godot::String& p_val) {
-        if (!p_array.has(p_val)) {
-            p_array.push_back(p_val);
-        }
-    }
+    template <MemoryView ViewID, TransformLogicID LogicID, MemoryTypes MemType, typename T_Concrete, typename T_Strategy> struct TransformViewResolver { static constexpr bool is_valid = false; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::SingleElementView, LogicID, MemType, C, S> { using Type = SingleElementView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::MultiElementView, LogicID, MemType, C, S> { using Type = MultiElementView<S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::SparseSetView, LogicID, MemType, C, S> { using Type = SparseSetView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::PagedView, LogicID, MemType, C, S> { using Type = PagedView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::RingView, LogicID, MemType, C, S> { using Type = RingView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::StencilView, LogicID, MemType, C, S> { using Type = StencilView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::AtomicView, LogicID, MemType, C, S> { using Type = AtomicView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::SwapView, LogicID, MemType, C, S> { using Type = SwapView<C, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::BridgeView, LogicID, MemType, C, S> { static constexpr size_t DimCount = StrategyDimExtractor<S>::value; using Type = BridgeView<C, C, DimCount, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::StaticStencilView, LogicID, MemType, C, S> { using Extractor = LogicKernelExtractor<LogicID, C, S>; static constexpr size_t PointCount = Extractor::has_kernel ? Extractor::value : 1; using Type = StaticStencilView<C, S, PointCount>; static constexpr bool is_valid = Extractor::has_kernel; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::AOSOA_Tight_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::AOSOA_Tight_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::TIGHT, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::AOSOA_STD430_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::AOSOA_STD430_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::AOSOA_STD140_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
+    template <TransformLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct TransformViewResolver<MemoryView::AOSOA_STD140_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
 }
 
 template <TransformLogicID L>
@@ -204,7 +134,6 @@ private:
         constexpr size_t T_COUNT = TransformTaskRegistry::T_COUNT;
         constexpr size_t S_COUNT = TransformTaskRegistry::S_COUNT;
 
-        // Decode the flat index back into 3D coordinates
         constexpr size_t T = FlatIdx % T_COUNT;
         constexpr size_t S = (FlatIdx / T_COUNT) % S_COUNT;
         constexpr size_t V = FlatIdx / (T_COUNT * S_COUNT);
@@ -225,23 +154,23 @@ private:
         if constexpr (!ResolvedLogic::is_valid) return;
         using L_Type = typename ResolvedLogic::Type;
 
-        using ResolvedView = ViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
+        using ResolvedView = TransformViewResolver<ViewEnum, L, MemTypeEnum, ConcreteType, T_Strategy>;
         if constexpr (!ResolvedView::is_valid) return;
         using V_Type = typename ResolvedView::Type;
         using V_Traits = ViewTraits<V_Type>;
 
         // --- FAST-FAIL TIER 2: Deep DOD Intersection ---
         constexpr bool is_fully_valid = []() consteval {
-            // 1. Does the View support the Strategy?
+            // 1. Does the View support this Strategy at all?
             constexpr ViewStrategies iter_strategy_mask = to_view_strategy_mask(StrategyEnum);
             if ((V_Traits::supported_strategies & iter_strategy_mask) == ViewStrategies::NONE) return false;
 
-            // 2. Does the Primitive DataType align across Logic and View requirements?
+            // 2. Does the primitive type satisfy both the View and the Logic?
             constexpr DataType iter_type_mask = Traits::DataFlag;
             if ((L_Type::required_types & iter_type_mask) == DataType::NONE) return false;
             if ((V_Traits::supported_types & iter_type_mask) == DataType::NONE) return false;
 
-            // 3. The Core 6-Argument DOD Validator
+            // 3. The 6-Argument Core Contract Validation
             return TransformLogicValidator::validate(
                 L_Type::required_capabilities, 
                 L_Type::required_layouts, 
@@ -258,21 +187,25 @@ private:
                 return new TransformTask<L_Type, V_Type, T_Strategy>();
             };
 
-            /*
-            // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
+            // Cold-Path UI Collection
             if (TransformTaskRegistry::ui_transform_matrix) {
-                godot::String logic_name(L_Type::type_name);
-                if (!TransformTaskRegistry::ui_transform_matrix->has(logic_name)) {
+                godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
+                
+                if (!TransformTaskRegistry::ui_transform_matrix->has(logic_key)) {
                     godot::Dictionary dict;
-                    dict["views"] = godot::Array(); 
-                    dict["strategies"] = godot::Array();
-                    (*TransformTaskRegistry::ui_transform_matrix)[logic_name] = dict;
+                    // Instantiate the property array exactly once per logic struct type
+                    dict["properties"] = L_Type::get_ui_properties();
+                    dict["valid_combinations"] = godot::PackedInt64Array(); 
+                    (*TransformTaskRegistry::ui_transform_matrix)[logic_key] = dict;
                 }
-                godot::Dictionary dict = (*TransformTaskRegistry::ui_transform_matrix)[logic_name];
-                _append_unique<godot::Array>(dict["views"], V_Type::type_name);
-                _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
+
+                // Map this valid 3D configuration hash (FlatIdx) so the UI knows it's an allowed permutation
+                godot::Dictionary dict = (*TransformTaskRegistry::ui_transform_matrix)[logic_key];
+                godot::PackedInt64Array combos = dict["valid_combinations"];
+                combos.push_back(static_cast<int64_t>(FlatIdx));
+                dict["valid_combinations"] = combos; 
+                (*TransformTaskRegistry::ui_transform_matrix)[logic_key] = dict; 
             }
-            */
         }
     }
 };

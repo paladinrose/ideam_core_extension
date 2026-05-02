@@ -37,6 +37,18 @@ struct LimitQueryLogic {
     uint32_t target_buffer_id = 0;
     int64_t limit = 0;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary limit_prop;
+        limit_prop["name"] = "limit";
+        limit_prop["type"] = godot::Variant::INT;
+        limit_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(limit_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

@@ -47,6 +47,20 @@ struct alignas(64) ValueAccumulationTransformLogic {
     uint32_t primary_buffer_id = INVALID_ID;
     AccumulationResult* output_destination = nullptr;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary mode_prop;
+        mode_prop["name"] = "mode";
+        mode_prop["type"] = godot::Variant::INT;
+        mode_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        // Map the C++ enum sequence strictly to the Godot dropdown index
+        mode_prop["hint_string"] = "Sum,Average,Min,Max,Count Non Zero";
+        props.push_back(mode_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
         return primary_buffer_id;
     }

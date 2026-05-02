@@ -33,6 +33,31 @@ struct DataRangeQueryLogic {
     T max_val;
     RangeMode mode = RangeMode::INCLUSIVE;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary mode_prop;
+        mode_prop["name"] = "mode";
+        mode_prop["type"] = godot::Variant::INT;
+        mode_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        mode_prop["hint_string"] = "Inclusive,Exclusive";
+        props.push_back(mode_prop);
+
+        godot::Dictionary min_prop;
+        min_prop["name"] = "min_val";
+        min_prop["type"] = "T"; // Caught by your registry
+        min_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(min_prop);
+
+        godot::Dictionary max_prop;
+        max_prop["name"] = "max_val";
+        max_prop["type"] = "T"; // Caught by your registry
+        max_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(max_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

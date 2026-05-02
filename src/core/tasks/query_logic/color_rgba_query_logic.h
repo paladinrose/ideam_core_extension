@@ -45,6 +45,45 @@ struct ColorRGBAQueryLogic {
     godot::Color target_color;     // Used as the origin point for DISTANCE mode
     float distance_threshold_sq = 0.25f; // Pre-calculated: threshold * threshold
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary mode_prop;
+        mode_prop["name"] = "mode";
+        mode_prop["type"] = godot::Variant::INT;
+        mode_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        mode_prop["hint_string"] = "Channels,Distance";
+        props.push_back(mode_prop);
+
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Equal,Not Equal,Less,Less Equal,Greater,Greater Equal";
+        props.push_back(op_prop);
+
+        godot::Dictionary mask_prop;
+        mask_prop["name"] = "mask";
+        mask_prop["type"] = godot::Variant::INT;
+        mask_prop["hint"] = godot::PROPERTY_HINT_FLAGS;
+        mask_prop["hint_string"] = "Red,Green,Blue,Alpha";
+        props.push_back(mask_prop);
+
+        godot::Dictionary thresh_prop;
+        thresh_prop["name"] = "threshold";
+        thresh_prop["type"] = godot::Variant::FLOAT;
+        thresh_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(thresh_prop);
+
+        godot::Dictionary color_prop;
+        color_prop["name"] = "target_color";
+        color_prop["type"] = godot::Variant::COLOR;
+        color_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(color_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

@@ -33,7 +33,17 @@ void MemoryGrantInspector::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_manager_version"), &MemoryGrantInspector::get_manager_version);
     godot::ClassDB::bind_method(godot::D_METHOD("is_active"), &MemoryGrantInspector::is_active);
     godot::ClassDB::bind_method(godot::D_METHOD("get_part_count"), &MemoryGrantInspector::get_part_count);
-    godot::ClassDB::bind_method(godot::D_METHOD("get_parts_info"), &MemoryGrantInspector::get_parts_info);
+    
+    godot::ClassDB::bind_method(godot::D_METHOD("get_part_snapshot", "index"), &MemoryGrantInspector::get_part_snapshot);
+    godot::ClassDB::bind_method(godot::D_METHOD("has_error"), &MemoryGrantInspector::has_error);
+    godot::ClassDB::bind_method(godot::D_METHOD("is_dirty"), &MemoryGrantInspector::is_dirty);
+}
+
+godot::Dictionary MemoryGrantInspector::get_part_snapshot(int p_index) const {
+    if (p_index >= 0 && p_index < part_snapshots.size()) {
+        return part_snapshots[p_index];
+    }
+    return godot::Dictionary(); // Return empty dictionary if out of bounds
 }
 
 } // namespace ideam::godot_ext

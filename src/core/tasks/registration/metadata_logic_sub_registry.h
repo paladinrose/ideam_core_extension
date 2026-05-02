@@ -2,6 +2,7 @@
 
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/string.hpp>
+#include <godot_cpp/variant/packed_int64_array.hpp>
 
 #include "metadata_task_registry.h"
 #include "task_view_bridge.h"
@@ -104,13 +105,6 @@ namespace {
     template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_STD430_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD430, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
     template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_STD140_AVX2, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 32>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
     template <MetadataLogicID LogicID, MemoryTypes MemType, typename C, typename S> struct MetadataViewResolver<MemoryView::AOSOA_STD140_AVX512, LogicID, MemType, C, S> { static constexpr size_t LaneWidth = AOSOALaneCalculator<MemType, BufferAlignmentMode::STD140, 64>::get_lane_width(); using Type = AOSOAView<C, LaneWidth, S>; static constexpr bool is_valid = true; };
-
-    template <typename T_Array>
-    inline void _append_unique(T_Array& p_array, const godot::String& p_val) {
-        if (!p_array.has(p_val)) {
-            p_array.push_back(p_val);
-        }
-    }
 }
 
 template <MetadataLogicID L>
@@ -189,21 +183,25 @@ private:
                 return new MetadataTask<L_Type, V_Type, T_Strategy>();
             };
 
-            /*
-            // UI Dictionary block temporarily commented out to fix missing `type_name` MSVC errors
+            // Cold-Path UI Collection
             if (MetadataTaskRegistry::ui_metadata_matrix) {
-                godot::String logic_name(L_Type::type_name);
-                if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_name)) {
+                godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
+                
+                if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_key)) {
                     godot::Dictionary dict;
-                    dict["views"] = godot::Array(); 
-                    dict["strategies"] = godot::Array();
-                    (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name] = dict;
+                    // Instantiate the property array exactly once per logic struct type
+                    dict["properties"] = L_Type::get_ui_properties();
+                    dict["valid_combinations"] = godot::PackedInt64Array(); 
+                    (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key] = dict;
                 }
-                godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_name];
-                _append_unique<godot::Array>(dict["views"], V_Type::type_name);
-                _append_unique<godot::Array>(dict["strategies"], T_Strategy::type_name);
+
+                // Map this valid 3D configuration hash (FlatIdx) so the UI knows it's an allowed permutation
+                godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key];
+                godot::PackedInt64Array combos = dict["valid_combinations"];
+                combos.push_back(static_cast<int64_t>(FlatIdx));
+                dict["valid_combinations"] = combos; 
+                (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key] = dict; 
             }
-            */
         }
     }
 };

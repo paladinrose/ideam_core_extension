@@ -34,6 +34,18 @@ struct PagedToTiledBridgeQueryLogic {
     // The ratio of TILED_SOA elements per PAGED table entry
     int64_t elements_per_page = 1; 
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary ratio_prop;
+        ratio_prop["name"] = "elements_per_page";
+        ratio_prop["type"] = godot::Variant::INT;
+        ratio_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(ratio_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

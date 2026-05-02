@@ -3,6 +3,7 @@
 #include "../graphs/ideam_graph_edit.h"
 #include "memory_graph_resource.h"
 #include "memory_inspectors.h"
+#include "memory_graph_node.h"
 #include <godot_cpp/classes/popup_menu.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string_name.hpp>
@@ -14,8 +15,8 @@ namespace ideam::godot_ext {
 /**
  * @class MemoryGraphEdit
  * @brief Specialized GraphEdit for Memory topologies.
- * Handles reverse-lookup telemetry routing from the C++ DOD backend to the UI,
- * and context-aware port signature filtering for rapid graphing.
+ * Enforces strict DOD access constraints (Exclusive Writes, Atomic Locks)
+ * and physically visualizes memory telemetry across execution edges.
  */
 class MemoryGraphEdit : public IdeamGraphEdit {
     GDCLASS(MemoryGraphEdit, IdeamGraphEdit)
@@ -29,22 +30,42 @@ private:
     uint32_t current_filter_mask = 0;
     godot::Vector2 memory_popup_position;
 
+    // --- Tier 2: Edge Topography Tracking ---
+    struct EdgeMetadata {
+        core::BufferAccessMode access_mode = core::BufferAccessMode::READ;
+        bool is_error = false;
+        bool is_atomic = false;
+    };
+    
+    // Hash map for O(1) edge metadata lookup during the hot draw loop
+    std::unordered_map<uint64_t, EdgeMetadata> edge_meta_cache;
+    uint64_t _hash_edge(const godot::StringName& p_from, int p_from_port, const godot::StringName& p_to, int p_to_port) const;
+
+    // Math helper for drawing custom splines
+    godot::Vector2 _evaluate_bezier(const godot::Vector2& p0, const godot::Vector2& p1, const godot::Vector2& p2, const godot::Vector2& p3, float t) const;
+
 protected:
     static void _bind_methods();
+    void _notification(int p_what);
 
     void _create_filtered_popup();
-    
-    // Signal handler for drawing lines into empty space
     void _on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position);
-    
-    // Display the filtered creation menu
     void _show_filtered_popup(const godot::Vector2 &p_at, uint32_t p_filter_mask);
-    
-    // Handle selection from the filtered popup
     void _filtered_popup_select(int p_id);
 
-    // Virtual method to get the list of memory-specific nodes, filtered by trait mask
     virtual godot::TypedArray<godot::String> _get_filtered_node_types(uint32_t p_filter_mask) const;
+
+    // --- Tier 2: Strict Access Routers ---
+    // Safely shadows the base class router to inject Memory-specific validation
+    void _memory_request_connect(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
+    
+    // Validation Rules
+    bool _validate_write_collision(const godot::StringName &p_to_node, int p_to_port, core::BufferAccessMode p_incoming_mode);
+    bool _validate_fork_grant(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
+
+    // Visuals
+    void _draw_custom_edges();
+    void _refresh_edge_cache();
 
 public:
     MemoryGraphEdit();
@@ -53,13 +74,8 @@ public:
     void _ready() override;
 
     // --- Telemetry Routing ---
-    // Called by MemoryGraphHost/DOD core to map execution IDs back to UI node names
     void set_telemetry_mapping(const godot::Dictionary& p_map);
-
-    // Broadcasts an active memory grant snapshot to the specific visual node
     void push_telemetry(int p_core_id, const godot::Ref<MemoryGrantInspector>& p_inspector);
 };
 
 } // namespace ideam::godot_ext
-
- // IDEAM_GODOT_MEMORY_GRAPH_EDIT_H

@@ -34,6 +34,19 @@ struct alignas(64) FastNoiseLiteTransformLogic {
     //Internal State (Trivially Copyable)
     FastNoiseLite noise_generator;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary noise_prop;
+        noise_prop["name"] = "noise_setup";
+        noise_prop["type"] = godot::Variant::OBJECT;
+        noise_prop["hint"] = godot::PROPERTY_HINT_RESOURCE_TYPE;
+        noise_prop["hint_string"] = "FastNoiseLite";
+        props.push_back(noise_prop);
+
+        return props;
+    }
+    
     // Build Phase Initialization
     FastNoiseLiteTransformLogic(int seed, float frequency, FastNoiseLite::NoiseType type) {
         noise_generator.SetSeed(seed);

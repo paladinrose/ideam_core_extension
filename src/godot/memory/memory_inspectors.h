@@ -46,7 +46,8 @@ public:
 
 /**
  * MemoryGrantInspector
- * A lightweight, read-only snapshot of a MemoryGrantPOD.
+ * A lightweight, thread-safe, read-only snapshot of an active MemoryGrantPOD.
+ * Provides the Editor UI with non-blocking access to telemetry and execution states.
  */
 class MemoryGrantInspector : public godot::RefCounted {
     GDCLASS(MemoryGrantInspector, godot::RefCounted)
@@ -54,6 +55,10 @@ class MemoryGrantInspector : public godot::RefCounted {
 private:
     uint64_t manager_version = 0;
     bool active = false;
+    
+    // Telemetry and validation states
+    bool error_state = false;
+    bool dirty_state = false;
     
     // An array of dictionaries, each describing a GrantPartPOD
     godot::TypedArray<godot::Dictionary> part_snapshots;
@@ -70,6 +75,14 @@ public:
     void initialize_from_grant(const TGrant& p_grant) {
         manager_version = p_grant.manager_version_at_issue;
         active = p_grant.active;
+        
+        // Validation check against dangling pointers and layout mismatch
+        error_state = !p_grant.is_valid();
+        
+        // Dirty flag for execution staleness. 
+        // Can be hooked up directly to a dirty_parts_mask in future iterations.
+        dirty_state = false; 
+        
         part_snapshots.clear();
 
         for (uint32_t i = 0; i < p_grant.part_count; ++i) {
@@ -80,6 +93,7 @@ public:
             dict["access_mode"] = part.access_mode == core::BufferAccessMode::WRITE ? "WRITE" : "READ";
             dict["element_stride"] = part.element_stride;
             dict["element_count"] = part.selection.element_count;
+            dict["capacity"] = part.selection.capacity; // Required for node canvas telemetry
             
             part_snapshots.push_back(dict);
         }
@@ -89,9 +103,10 @@ public:
     int get_manager_version() const { return static_cast<int>(manager_version); }
     bool is_active() const { return active; }
     int get_part_count() const { return part_snapshots.size(); }
-    godot::TypedArray<godot::Dictionary> get_parts_info() const { return part_snapshots; }
+    
+    godot::Dictionary get_part_snapshot(int p_index) const;
+    bool has_error() const { return error_state; }
+    bool is_dirty() const { return dirty_state; }
 };
 
 } // namespace ideam::godot_ext
-
- // IDEAM_GODOT_MEMORY_INSPECTORS_H

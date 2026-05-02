@@ -36,6 +36,27 @@ struct PartitionMetadataLogic {
     std::array<Mapping, N> mappings;
     int32_t default_partition = -1;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        // 1. Default Partition
+        godot::Dictionary def_part_prop;
+        def_part_prop["name"] = "default_partition";
+        def_part_prop["type"] = godot::Variant::INT;
+        def_part_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(def_part_prop);
+
+        // 2. Mappings Array
+        godot::Dictionary map_prop;
+        map_prop["name"] = "mappings";
+        map_prop["type"] = godot::Variant::ARRAY;
+        map_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        map_prop["hint_string"] = "Array of PartitionMapping"; 
+        props.push_back(map_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <typename T_View, typename T_Strategy>

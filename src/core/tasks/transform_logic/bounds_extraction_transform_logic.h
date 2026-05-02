@@ -40,6 +40,10 @@ struct alignas(64) BoundsExtractionTransformLogic {
     uint32_t primary_buffer_id = INVALID_ID;
     BoundsResult<T>* output_destination = nullptr;
 
+    static godot::Array get_ui_properties() {
+        return godot::Array(); 
+    }
+    
     [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
         return primary_buffer_id;
     }

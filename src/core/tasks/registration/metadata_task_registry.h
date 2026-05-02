@@ -50,6 +50,16 @@ public:
 
     // --- The O(1) Multi-Dimensional Factory Routers ---
     static std::array<const SubMatrix*, L_COUNT> logic_matrices;
+    
+    /**
+     * ui_metadata_matrix Data Schema (Exported to Godot):
+     * {
+     * "LogicID (Stringified Int)": {
+     * "properties": [ Array of godot::Dictionary (PropertyInfo structures from Logic::get_ui_properties) ],
+     * "valid_combinations": PackedInt64Array [ FlatIdx hashes of valid View/Strategy/Type combinations ]
+     * }
+     * }
+     */
     static godot::Dictionary* ui_metadata_matrix;
 
     static void init();

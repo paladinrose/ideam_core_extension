@@ -36,6 +36,31 @@ struct DistanceQueryLogic {
     float distance_threshold = 0.0f;
     Comparison op = Comparison::LESS_EQUAL;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Equal,Not Equal,Less,Less Equal,Greater,Greater Equal";
+        props.push_back(op_prop);
+
+        godot::Dictionary target_prop;
+        target_prop["name"] = "target_point";
+        target_prop["type"] = "T"; 
+        target_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(target_prop);
+
+        godot::Dictionary dist_prop;
+        dist_prop["name"] = "distance_threshold";
+        dist_prop["type"] = godot::Variant::FLOAT;
+        dist_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(dist_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

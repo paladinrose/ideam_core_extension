@@ -39,6 +39,34 @@ struct alignas(64) StencilConvolutionTransformLogic {
     uint32_t cached_buffer_version = 0;
     std::array<intptr_t, KernelSize> persistent_baked_offsets{};
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+        
+        // 1. Center Weight (Type T)
+        godot::Dictionary cw_prop;
+        cw_prop["name"] = "center_weight";
+        cw_prop["type"] = "T"; // Caught and parsed by your dynamic registry
+        props.push_back(cw_prop);
+
+        // 2. Kernel Weights (Fixed-size Array of T)
+        godot::Dictionary kw_prop;
+        kw_prop["name"] = "kernel_weights";
+        kw_prop["type"] = godot::Variant::ARRAY;
+        kw_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        kw_prop["hint_string"] = "Array of T"; // Tells your UI builder what variants to lock the array to
+        props.push_back(kw_prop);
+
+        // 3. Kernel Deltas (Fixed-size Array of spatial offsets)
+        godot::Dictionary kd_prop;
+        kd_prop["name"] = "kernel_deltas";
+        kd_prop["type"] = godot::Variant::ARRAY;
+        kd_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        kd_prop["hint_string"] = "Array of Int Offsets";
+        props.push_back(kd_prop);
+
+        return props;
+    }
+    
     /**
      * get_transient_requirement (Dynamic Scaling)
      * We just need space for our Kernel weights. 

@@ -41,6 +41,18 @@ struct MorphologicalQueryLogic {
     uint32_t target_buffer_id = 0;
     int32_t iterations = 1;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary iter_prop;
+        iter_prop["name"] = "iterations";
+        iter_prop["type"] = godot::Variant::INT;
+        iter_prop["hint"] = godot::PROPERTY_HINT_RANGE;
+        iter_prop["hint_string"] = "1,100,1"; // Safe bounds for erosion passes
+        props.push_back(iter_prop);
+
+        return props;
+    }
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

@@ -36,6 +36,26 @@ struct AABBQueryLogic {
     godot::Vector3 box_max;
     uint32_t target_buffer_id = 0; 
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary min_prop;
+        min_prop["name"] = "box_min";
+        min_prop["type"] = godot::Variant::VECTOR3;
+        min_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        min_prop["hint_string"] = "suffix:m";
+        props.push_back(min_prop);
+
+        godot::Dictionary max_prop;
+        max_prop["name"] = "box_max";
+        max_prop["type"] = godot::Variant::VECTOR3;
+        max_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        max_prop["hint_string"] = "suffix:m";
+        props.push_back(max_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template<QueryOp Op, typename T_View, typename T_Strategy>

@@ -44,6 +44,36 @@ struct GroupMaskMetadataLogic {
     GroupMaskOp op = GroupMaskOp::SET;
     float tolerance = 0.0001f;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        // 1. Operation Mode
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Set,Add,Remove";
+        props.push_back(op_prop);
+
+        // 2. Tolerance
+        godot::Dictionary tol_prop;
+        tol_prop["name"] = "tolerance";
+        tol_prop["type"] = godot::Variant::FLOAT;
+        tol_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(tol_prop);
+
+        // 3. Mappings Array
+        godot::Dictionary map_prop;
+        map_prop["name"] = "mappings";
+        map_prop["type"] = godot::Variant::ARRAY;
+        map_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        // Instructs your UI builder to construct an array of this specific sub-type
+        map_prop["hint_string"] = "Array of GroupMaskMapping"; 
+        props.push_back(map_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <typename T_View, typename T_Strategy>

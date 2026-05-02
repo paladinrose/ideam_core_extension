@@ -35,6 +35,25 @@ struct PredicateQueryLogic {
     T target_value;
     Comparison op = Comparison::EQUAL;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Equal,Not Equal,Less,Less Equal,Greater,Greater Equal,Bit And,Bit Or,Bit Xor";
+        props.push_back(op_prop);
+
+        godot::Dictionary val_prop;
+        val_prop["name"] = "target_value";
+        val_prop["type"] = "T"; // Caught and mapped by your registry
+        val_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(val_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

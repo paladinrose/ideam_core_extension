@@ -34,6 +34,10 @@ struct ArchetypeQueryLogic {
     uint32_t required_buffer_ids[MAX_SIGNATURE_SIZE] = {0};
     uint32_t required_count = 0;
 
+    static godot::Array get_ui_properties() {
+        return godot::Array();
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template<QueryOp Op, typename T_View, typename T_Strategy>

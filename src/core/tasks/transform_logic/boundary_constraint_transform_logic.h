@@ -41,6 +41,57 @@ struct alignas(64) BoundaryConstraintTransformLogic {
     BoundaryMode mode = BoundaryMode::CLAMP;
     float bounce_dampening = 0.8f;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        // 1. mode (Native Godot Enum Dropdown)
+        godot::Dictionary mode_prop;
+        mode_prop["name"] = "mode";
+        mode_prop["type"] = godot::Variant::INT;
+        mode_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        mode_prop["hint_string"] = "Clamp,Wrap,Bounce";
+        props.push_back(mode_prop);
+
+        // --- Dynamic Vector Type Hints ---
+        // Since 'T' can be any Vector3 variant, we provide detailed type hints for the Inspector.
+        // Godot natively handles Vectors, but specifying the exact Variant type 
+        // and step/suffix hints makes the Inspector much more robust.
+        godot::Dictionary type_hints;
+
+        // Hint for Floating-Point Vectors
+        godot::Dictionary float_vec_hint;
+        float_vec_hint["type"] = godot::Variant::VECTOR3; // Explicitly map to Godot's Float Vector
+        float_vec_hint["hint"] = godot::PROPERTY_HINT_NONE;
+        float_vec_hint["hint_string"] = "suffix:m"; // Optional: Adds 'm' (meters) to the UI boxes
+        
+        // Hint for Integer Vectors
+        godot::Dictionary int_vec_hint;
+        int_vec_hint["type"] = godot::Variant::VECTOR3I; // Explicitly map to Godot's Int Vector
+        int_vec_hint["hint"] = godot::PROPERTY_HINT_NONE;
+        int_vec_hint["hint_string"] = ""; 
+
+        // Note: Adjust the enums below to match your exact MemoryTypes definitions
+        type_hints[static_cast<uint32_t>(MemoryTypes::VECTOR3)] = float_vec_hint;
+        type_hints[static_cast<uint32_t>(MemoryTypes::VECTOR3D)] = float_vec_hint;
+        type_hints[static_cast<uint32_t>(MemoryTypes::VECTOR3I)]   = int_vec_hint;
+
+        // 2. bounds_min (Dynamic Type 'T')
+        godot::Dictionary min_prop;
+        min_prop["name"] = "bounds_min";
+        min_prop["type"] = "T"; 
+        min_prop["type_hints"] = type_hints;
+        props.push_back(min_prop);
+
+        // 3. bounds_max (Dynamic Type 'T')
+        godot::Dictionary max_prop;
+        max_prop["name"] = "bounds_max";
+        max_prop["type"] = "T";
+        max_prop["type_hints"] = type_hints;
+        props.push_back(max_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] inline uint32_t get_primary_buffer_id() const { return position_buffer_id; }
 
     template <typename T_View, typename T_Strategy>

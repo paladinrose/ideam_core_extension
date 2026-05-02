@@ -34,6 +34,24 @@ struct alignas(64) NoiseInjectionTransformLogic {
     float magnitude = 1.0f;
     uint32_t seed = 0x4D595DF4;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary mag_prop;
+        mag_prop["name"] = "magnitude";
+        mag_prop["type"] = godot::Variant::FLOAT;
+        mag_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(mag_prop);
+
+        godot::Dictionary seed_prop;
+        seed_prop["name"] = "seed";
+        seed_prop["type"] = godot::Variant::INT;
+        seed_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(seed_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
         return target_buffer_id;
     }

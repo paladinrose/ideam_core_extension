@@ -33,6 +33,18 @@ struct BooleanQueryLogic {
     uint32_t column_id   = 0; 
     bool target_value    = true;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary val_prop;
+        val_prop["name"] = "target_value";
+        val_prop["type"] = godot::Variant::BOOL;
+        val_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(val_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

@@ -43,6 +43,27 @@ struct BitmaskQueryLogic {
     T mask = 0;
     BitOp op = MATCH_ALL;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        // 1. Bitwise Operator
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Match All,Match Any,Match None";
+        props.push_back(op_prop);
+
+        // 2. Mask
+        godot::Dictionary mask_prop;
+        mask_prop["name"] = "mask";
+        mask_prop["type"] = "T"; // Caught by your registry (Byte, Int32, Int64)
+        mask_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(mask_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

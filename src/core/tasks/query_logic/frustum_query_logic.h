@@ -37,6 +37,33 @@ struct FrustumQueryLogic {
     std::array<godot::Vector3, MAX_PLANES> plane_normals;
     std::array<float, MAX_PLANES> plane_distances;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary num_prop;
+        num_prop["name"] = "num_planes";
+        num_prop["type"] = godot::Variant::INT;
+        num_prop["hint"] = godot::PROPERTY_HINT_RANGE;
+        num_prop["hint_string"] = "0,6,1"; // min, max, step
+        props.push_back(num_prop);
+
+        godot::Dictionary norm_prop;
+        norm_prop["name"] = "plane_normals";
+        norm_prop["type"] = godot::Variant::ARRAY;
+        norm_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        norm_prop["hint_string"] = "Array of Vector3"; 
+        props.push_back(norm_prop);
+
+        godot::Dictionary dist_prop;
+        dist_prop["name"] = "plane_distances";
+        dist_prop["type"] = godot::Variant::ARRAY;
+        dist_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        dist_prop["hint_string"] = "Array of Float";
+        props.push_back(dist_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

@@ -29,6 +29,19 @@ struct alignas(64) EulerIntegrationTransformLogic {
     uint32_t velocity_buffer_id = INVALID_ID; // The Secondary View
     float time_scale = 1.0f;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary time_prop;
+        time_prop["name"] = "time_scale";
+        time_prop["type"] = godot::Variant::FLOAT;
+        time_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        time_prop["hint_string"] = "suffix:x"; // Visual indicator for multiplier
+        props.push_back(time_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
         return position_buffer_id;
     }

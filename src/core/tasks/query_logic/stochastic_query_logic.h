@@ -34,6 +34,25 @@ struct StochasticQueryLogic {
     float global_probability = 0.5f; 
     uint32_t seed_base       = 0x811c9dc5; 
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        godot::Dictionary prob_prop;
+        prob_prop["name"] = "global_probability";
+        prob_prop["type"] = godot::Variant::FLOAT;
+        prob_prop["hint"] = godot::PROPERTY_HINT_RANGE;
+        prob_prop["hint_string"] = "0.0,1.0,0.01"; 
+        props.push_back(prob_prop);
+
+        godot::Dictionary seed_prop;
+        seed_prop["name"] = "seed_base";
+        seed_prop["type"] = godot::Variant::INT;
+        seed_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(seed_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>

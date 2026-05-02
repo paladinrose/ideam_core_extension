@@ -38,6 +38,34 @@ struct LODMetadataLogic {
     uint8_t default_lod = 0;
     float tolerance = 0.0001f;
 
+    static godot::Array get_ui_properties() {
+        godot::Array props;
+
+        // 1. Default LOD
+        godot::Dictionary def_lod_prop;
+        def_lod_prop["name"] = "default_lod";
+        def_lod_prop["type"] = godot::Variant::INT;
+        def_lod_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(def_lod_prop);
+
+        // 2. Tolerance
+        godot::Dictionary tol_prop;
+        tol_prop["name"] = "tolerance";
+        tol_prop["type"] = godot::Variant::FLOAT;
+        tol_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(tol_prop);
+
+        // 3. Mappings Array
+        godot::Dictionary map_prop;
+        map_prop["name"] = "mappings";
+        map_prop["type"] = godot::Variant::ARRAY;
+        map_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        map_prop["hint_string"] = "Array of LODMapping"; 
+        props.push_back(map_prop);
+
+        return props;
+    }
+    
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     template <typename T_View, typename T_Strategy>

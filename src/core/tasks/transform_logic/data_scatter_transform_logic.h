@@ -35,6 +35,10 @@ struct alignas(64) DataScatterTransformLogic {
     // The sorted index map provided by DataSortTransformLogic or SpatialHash task
     const std::vector<int64_t>* input_index_map = nullptr;
 
+    static godot::Array get_ui_properties() {
+        return godot::Array(); 
+    }
+    
     [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
         return target_buffer_id;
     }
