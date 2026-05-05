@@ -52,6 +52,14 @@ void TaskGraphNode::_build_ui() {
     custom_parameters_container->set_name("CustomParameters");
     add_child(custom_parameters_container);
 
+    // 3. Logic Inspector Setup (Persistent parameter controls)
+    logic_inspector = memnew(RuntimeInspector);
+    logic_inspector->set_name("LogicInspector");
+    add_child(logic_inspector);
+    
+    // Route the inspector's mutations up to the graph resource
+    logic_inspector->connect("property_changed", Callable(this, "_on_custom_param_changed"));
+
     // Sub-nodes override this to populate their specific OptionButtons/SpinBoxes
     _rebuild_dynamic_ui();
 }
@@ -97,7 +105,102 @@ void TaskGraphNode::_rebuild_dynamic_ui() {
         Node* child = custom_parameters_container->get_child(i);
         child->queue_free();
     }
+
+    // Also clear the logic inspector to prevent ghost parameters
+    if (logic_inspector) {
+        logic_inspector->clear_inspector();
+    }
 }
+
+void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_current_type_id) {
+    for (int i = 0; i < r_properties.size(); ++i) {
+        Dictionary prop = r_properties[i];
+
+        // 1. Resolve dynamic 'T' types
+        if (prop.has("type") && prop["type"].get_type() == Variant::STRING && String(prop["type"]) == "T") {
+            if (prop.has("type_hints")) {
+                Dictionary hints = prop["type_hints"];
+                
+                if (hints.has(p_current_type_id)) {
+                    Dictionary concrete_hint = hints[p_current_type_id];
+                    
+                    // Overwrite generic markers with concrete variant instructions
+                    prop["type"] = concrete_hint.has("type") ? concrete_hint["type"] : Variant::NIL;
+                    if (concrete_hint.has("hint")) prop["hint"] = concrete_hint["hint"];
+                    if (concrete_hint.has("hint_string")) prop["hint_string"] = concrete_hint["hint_string"];
+                } else {
+                    // Fallback if the selected DOD type isn't mapped in the logic struct
+                    prop["type"] = Variant::NIL; 
+                }
+                
+                // Erase the hints payload to save memory overhead in the UI layer
+                prop.erase("type_hints");
+            }
+        }
+
+        // 2. Recursively resolve nested structs (e.g., Array of GroupMaskMapping)
+        if (prop.has("struct_properties")) {
+            Array sub_schema = prop["struct_properties"];
+            // Recurse down into the struct's definition
+            _reify_property_schema(sub_schema, p_current_type_id);
+            prop["struct_properties"] = sub_schema;
+        }
+        
+        if (prop.has("port_override")) {
+            uint64_t mask = prop["port_override"];
+            
+            uint8_t slot          = mask & 0xFF;
+            bool override_left    = (mask >> 8) & 1;
+            bool enable_left      = (mask >> 9) & 1;
+            auto layout_left      = static_cast<core::BufferLayoutType>((mask >> 10) & 0xFFFF);
+            
+            bool override_right   = (mask >> 26) & 1;
+            bool enable_right     = (mask >> 27) & 1;
+            auto layout_right     = static_cast<core::BufferLayoutType>((mask >> 28) & 0xFFFF);
+
+            // Execute the UI update. 
+            // update_memory_port() naturally sets icons based on the BufferLayoutType.
+            if (override_left) {
+                set_slot_enabled_left(slot, enable_left);
+                if (enable_left) update_memory_port(slot, true, layout_left);
+            }
+            
+            if (override_right) {
+                set_slot_enabled_right(slot, enable_right);
+                if (enable_right) update_memory_port(slot, false, layout_right);
+            }
+        }
+        // Write the mutated dictionary back to the array. 
+        // (Required because extracting `prop` creates a shallow Variant copy of the dictionary ref)
+        r_properties[i] = prop;
+    }
+}
+
+void TaskGraphNode::_rebuild_logic_inspector(const Array& p_properties) {
+    if (!logic_inspector) return;
+    
+    Dictionary state = get_properties();
+    
+    // We must resolve what the generic type "T" represents for DOD alignments
+    Variant::Type resolved_t = Variant::NIL;
+    uint32_t current_type_id = 0; // Default fallback
+    
+    if (state.has("type_id")) {
+        current_type_id = static_cast<uint32_t>(state["type_id"]);
+        resolved_t = static_cast<Variant::Type>(current_type_id);
+    }
+    
+    // CRITICAL: Deep copy the registry blueprint so we don't permanently overwrite 
+    // the generic "T" markers for other nodes using this same logic ID.
+    Array instanced_schema = p_properties.duplicate(true);
+    
+    // Perform the Type Reification pass
+    _reify_property_schema(instanced_schema, current_type_id);
+    
+    // Hand the concrete, flattened schema to the inspector
+    logic_inspector->build_inspector(instanced_schema, state, resolved_t);
+}
+
 
 void TaskGraphNode::_update_matrix_guardrails() {
     // Base implementation is empty. Sub-nodes override this to parse the 

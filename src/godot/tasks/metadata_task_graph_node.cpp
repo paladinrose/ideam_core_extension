@@ -51,6 +51,16 @@ void MetadataTaskGraphNode::_rebuild_dynamic_ui() {
 
     // 5. Run initial guardrail evaluation to prune invalid combos
     _update_matrix_guardrails();
+
+    Dictionary matrix = core::NativeTaskRegistry::get_ui_metadata_matrix();
+    String logic_str = String::num_int64(get_logic_id());
+    
+    if (matrix.has(logic_str)) {
+        Dictionary logic_def = matrix[logic_str];
+        if (logic_def.has("properties")) {
+            _rebuild_logic_inspector(logic_def["properties"]);
+        }
+    }
 }
 
 uint64_t MetadataTaskGraphNode::_calculate_flat_index() const {
@@ -130,6 +140,16 @@ void MetadataTaskGraphNode::_on_strategy_selected(int p_index) {
 
 void MetadataTaskGraphNode::_on_type_selected(int p_index) {
     _on_custom_param_changed("type_id", p_index);
+    
+    Dictionary matrix = core::NativeTaskRegistry::get_ui_metadata_matrix();
+    String logic_str = String::num_int64(get_logic_id());
+    
+    if (matrix.has(logic_str)) {
+        Dictionary logic_def = matrix[logic_str];
+        if (logic_def.has("properties")) {
+            _rebuild_logic_inspector(logic_def["properties"]);
+        }
+    }
 }
 
 // --- Population Helpers ---

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../memory/memory_graph_node.h"
+#include "../controls/runtime_inspector.h"
 #include <godot_cpp/classes/label.hpp>
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
@@ -39,6 +40,9 @@ private:
 protected:
     // The dedicated container for dynamic Tier 3 parameters (matrices, logic thresholds)
     godot::VBoxContainer* custom_parameters_container = nullptr;
+    
+    // Dedicated, persistent inspector for logic-specific properties
+    RuntimeInspector* logic_inspector = nullptr;
 
     static void _bind_methods();
     
@@ -64,6 +68,18 @@ protected:
      * @brief Calculates the flat 1D index for matrix validation based on DOD dimensionality.
      */
     virtual uint64_t _calculate_flat_index() const;
+
+    /**
+     * @brief Recursively flattens generic "T" types and struct boundaries into concrete Variant UI instructions.
+     * @param r_properties The deep-copied array of dictionaries to mutate.
+     * @param p_current_type_id The currently selected structural DOD type (e.g., VECTOR3, FLOAT32).
+     */
+    void _reify_property_schema(godot::Array& r_properties, uint32_t p_current_type_id);
+    
+    /**
+     * @brief Core method to build the inspector from the derived node's registry payload.
+     */
+    void _rebuild_logic_inspector(const godot::Array& p_properties);
 
     // Generalized signal router for dynamic controls connected by sub-nodes
     void _on_custom_param_changed(const godot::StringName& p_param_name, const godot::Variant& p_value);

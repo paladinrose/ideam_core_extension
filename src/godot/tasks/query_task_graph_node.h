@@ -31,10 +31,11 @@ private:
 
 protected:
     static void _bind_methods();
-
     virtual void _rebuild_dynamic_ui() override;
     virtual void _update_matrix_guardrails() override;
     virtual uint64_t _calculate_flat_index() const override;
+
+    void _rebuild_ports();
 
     // UI Signal Handlers
     void _on_op_selected(int p_index);

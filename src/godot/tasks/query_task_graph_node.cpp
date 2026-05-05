@@ -20,12 +20,12 @@ QueryTaskGraphNode::QueryTaskGraphNode() {
 }
 
 void QueryTaskGraphNode::_rebuild_dynamic_ui() {
-    // 1. Mandatory base teardown
+    // Mandatory base teardown
     TaskGraphNode::_rebuild_dynamic_ui();
 
     if (!custom_parameters_container) return;
 
-    // 2. Instantiate the 4D Matrix Controls
+    // Instantiate the 4D Matrix Controls
     // We emphasize the QueryOp as it alters the fundamental topology of the node.
     Label* op_label = memnew(Label);
     op_label->set_text("Operational Topology");
@@ -51,21 +51,102 @@ void QueryTaskGraphNode::_rebuild_dynamic_ui() {
     custom_parameters_container->add_child(strategy_dropdown);
     custom_parameters_container->add_child(type_dropdown);
 
-    // 3. Bind UI Signals
+    // Bind UI Signals
     op_dropdown->connect("item_selected", Callable(this, "_on_op_selected"));
     view_dropdown->connect("item_selected", Callable(this, "_on_view_selected"));
     strategy_dropdown->connect("item_selected", Callable(this, "_on_strategy_selected"));
     type_dropdown->connect("item_selected", Callable(this, "_on_type_selected"));
 
-    // 4. Restore state from DOD Property Dictionary
+    // Restore state from DOD Property Dictionary
     Dictionary props = get_properties();
     if (props.has("op_id")) op_dropdown->select(static_cast<int>(props["op_id"]));
     if (props.has("view_id")) view_dropdown->select(static_cast<int>(props["view_id"]));
     if (props.has("strategy_id")) strategy_dropdown->select(static_cast<int>(props["strategy_id"]));
     if (props.has("type_id")) type_dropdown->select(static_cast<int>(props["type_id"]));
 
-    // 5. Run initial guardrail evaluation to prune invalid combos
+    // Run initial guardrail evaluation to prune invalid combos
     _update_matrix_guardrails();
+    Dictionary matrix = core::NativeTaskRegistry::get_ui_query_matrix();
+    String logic_str = String::num_int64(get_logic_id());
+    
+    if (matrix.has(logic_str)) {
+        Dictionary logic_def = matrix[logic_str];
+        if (logic_def.has("properties")) {
+            _rebuild_logic_inspector(logic_def["properties"]);
+        }
+    }
+
+    // Regenerate Ports based on the current Topology
+    _rebuild_ports();
+}
+
+void QueryTaskGraphNode::_rebuild_ports() {
+    // 1. Lock the anchor to the Telemetry Button established in MemoryGraphNode
+    int port_anchor_index = 0; 
+    
+    // Clear visual slot and logical signatures
+    set_slot(port_anchor_index, false, 0, Color(1,1,1), false, 0, Color(1,1,1));
+    input_port_signatures.clear();
+    output_port_signatures.clear();
+
+    Dictionary matrix = core::NativeTaskRegistry::get_ui_query_matrix();
+    String logic_str = String::num_int64(get_logic_id());
+    if (!matrix.has(logic_str)) return;
+    
+    Dictionary logic_def = matrix[logic_str];
+    
+    // Default Fallbacks
+    int input_type = 0, output_type = 0; 
+    Color input_color = Color(0.8f, 0.8f, 0.8f);
+    Color output_color = Color(0.8f, 0.8f, 0.8f);
+    
+    uint32_t input_traits = TRAIT_LINEAR_ACCESS;
+    uint32_t output_traits = TRAIT_LINEAR_ACCESS;
+    
+    core::BufferLayoutType input_layout = core::BufferLayoutType::FLAT;
+    core::BufferLayoutType output_layout = core::BufferLayoutType::FLAT;
+
+    int current_op = op_dropdown->get_selected_id();
+
+    // 2. Extract Topological Overrides
+    if (logic_def.has("port_overrides")) {
+        Dictionary overrides = logic_def["port_overrides"];
+        String op_str = String::num_int64(current_op);
+        
+        if (overrides.has(op_str)) {
+            Dictionary op_ports = overrides[op_str];
+            
+            if (op_ports.has("input_type")) input_type = op_ports["input_type"];
+            if (op_ports.has("input_color")) input_color = op_ports["input_color"];
+            if (op_ports.has("input_traits")) input_traits = op_ports["input_traits"];
+            if (op_ports.has("input_layout")) input_layout = static_cast<core::BufferLayoutType>((int)op_ports["input_layout"]);
+            
+            if (op_ports.has("output_type")) output_type = op_ports["output_type"];
+            if (op_ports.has("output_color")) output_color = op_ports["output_color"];
+            if (op_ports.has("output_traits")) output_traits = op_ports["output_traits"];
+            if (op_ports.has("output_layout")) output_layout = static_cast<core::BufferLayoutType>((int)op_ports["output_layout"]);
+        }
+    } else {
+        // Asymmetric fallback for Deferred Adds
+        if (current_op == 1) { 
+            output_type = 2; // Event Port
+            output_color = Color(1.0f, 0.6f, 0.2f);
+            output_traits = TRAIT_NONE; // Breaks linear flow
+        }
+    }
+
+    // 3. Apply standard Godot Slot Colors/Types
+    set_slot(port_anchor_index, 
+        true, input_type, input_color, 
+        true, output_type, output_color);
+
+    // 4. Apply DOD Signatures to the MemoryGraphNode boundary
+    register_port_signature(port_anchor_index, false, input_traits);
+    register_port_signature(port_anchor_index, true, output_traits);
+
+    // 5. Apply DOD Shape Iconography
+    update_memory_port(port_anchor_index, true, input_layout);
+    update_memory_port(port_anchor_index, false, output_layout);
 }
 
 uint64_t QueryTaskGraphNode::_calculate_flat_index() const {
@@ -144,6 +225,7 @@ void QueryTaskGraphNode::_update_matrix_guardrails() {
 
 void QueryTaskGraphNode::_on_op_selected(int p_index) {
     _on_custom_param_changed("op_id", p_index);
+    _rebuild_ports();
 }
 
 void QueryTaskGraphNode::_on_view_selected(int p_index) {
@@ -156,6 +238,16 @@ void QueryTaskGraphNode::_on_strategy_selected(int p_index) {
 
 void QueryTaskGraphNode::_on_type_selected(int p_index) {
     _on_custom_param_changed("type_id", p_index);
+
+    Dictionary matrix = core::NativeTaskRegistry::get_ui_query_matrix();
+    String logic_str = String::num_int64(get_logic_id());
+    
+    if (matrix.has(logic_str)) {
+        Dictionary logic_def = matrix[logic_str];
+        if (logic_def.has("properties")) {
+            _rebuild_logic_inspector(logic_def["properties"]);
+        }
+    }
 }
 
 // --- Population Helpers ---

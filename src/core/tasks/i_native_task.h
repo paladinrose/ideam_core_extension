@@ -119,6 +119,29 @@ public:
     virtual void execute(const TaskContextPOD& p_context) = 0;
 };
 
+
+// Bit layout:
+// [0-7]   Slot Index (0-255 slots max)
+// [8]     Override Left Side? (1 bit)
+// [9]     Enable Left? (1 bit)
+// [10-25] Layout Type Left (16 bits)
+// [26]    Override Right Side? (1 bit)
+// [27]    Enable Right? (1 bit)
+// [28-43] Layout Type Right (16 bits)
+constexpr uint64_t pack_port_property_override(
+    uint8_t slot, 
+    bool override_left,  bool enable_left,  BufferLayoutType layout_left,
+    bool override_right, bool enable_right, BufferLayoutType layout_right) 
+{
+    return (static_cast<uint64_t>(slot)) |
+           (static_cast<uint64_t>(override_left) << 8)  | 
+           (static_cast<uint64_t>(enable_left)   << 9)  |
+           (static_cast<uint64_t>(layout_left)   << 10) |
+           (static_cast<uint64_t>(override_right)<< 26) | 
+           (static_cast<uint64_t>(enable_right)  << 27) |
+           (static_cast<uint64_t>(layout_right)  << 28);
+}
+
 } // namespace ideam::core
 
  // IDEAM_CORE_I_NATIVE_TASK_H
