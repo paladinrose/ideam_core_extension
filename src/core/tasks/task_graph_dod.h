@@ -129,6 +129,10 @@ public:
 
     MemoryGrantPOD* get_grant_mutable(NodeID p_id);
 
+    [[nodiscard]] inline std::span<const TaskGraphCommandPOD> get_tier1_commands() const noexcept {
+        return tier1_meta;
+    }
+    
     void sync_with_manager() {
         if (manager) {
             rd = manager->get_rendering_device();

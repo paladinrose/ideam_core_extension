@@ -7,6 +7,7 @@
 
 // --- Manual Tasks ---
 #include "../entry_fill_task.h"
+#include "../sub_graph_task.h"
 
 #include <godot_cpp/variant/utility_functions.hpp>
 
@@ -28,6 +29,7 @@ void NativeTaskRegistry::init() {
     
     // 3. Register Unique Tasks
     register_task<EntryFillTask>("EntryFillTask"); 
+    register_task<SubGraphTask>("SubGraphTask");
 }
 
 std::unique_ptr<INativeTask> NativeTaskRegistry::create(const godot::StringName& p_name) {

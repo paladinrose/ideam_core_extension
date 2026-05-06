@@ -41,27 +41,34 @@ struct LODMetadataLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
-        // 1. Default LOD
-        godot::Dictionary def_lod_prop;
-        def_lod_prop["name"] = "default_lod";
-        def_lod_prop["type"] = godot::Variant::INT;
-        def_lod_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        props.push_back(def_lod_prop);
+        godot::Dictionary buffer_prop;
+        buffer_prop["name"] = "target_buffer_id";
+        buffer_prop["type"] = godot::Variant::INT;
+        props.push_back(buffer_prop);
 
-        // 2. Tolerance
-        godot::Dictionary tol_prop;
-        tol_prop["name"] = "tolerance";
-        tol_prop["type"] = godot::Variant::FLOAT;
-        tol_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        props.push_back(tol_prop);
+        godot::Dictionary default_lod_prop;
+        default_lod_prop["name"] = "default_lod";
+        default_lod_prop["type"] = godot::Variant::INT;
+        props.push_back(default_lod_prop);
 
-        // 3. Mappings Array
-        godot::Dictionary map_prop;
-        map_prop["name"] = "mappings";
-        map_prop["type"] = godot::Variant::ARRAY;
-        map_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        map_prop["hint_string"] = "Array of LODMapping"; 
-        props.push_back(map_prop);
+        godot::Dictionary mappings_prop;
+        mappings_prop["name"] = "mappings";
+        mappings_prop["type"] = godot::Variant::ARRAY;
+        
+        godot::Array struct_props;
+        
+        godot::Dictionary target_val_prop;
+        target_val_prop["name"] = "target_value";
+        target_val_prop["type"] = "T"; // Dynamically resolved by RuntimeInspector
+        struct_props.push_back(target_val_prop);
+
+        godot::Dictionary lod_level_prop;
+        lod_level_prop["name"] = "lod_level";
+        lod_level_prop["type"] = godot::Variant::INT;
+        struct_props.push_back(lod_level_prop);
+
+        mappings_prop["struct_properties"] = struct_props;
+        props.push_back(mappings_prop);
 
         return props;
     }

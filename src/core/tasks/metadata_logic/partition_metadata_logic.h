@@ -39,20 +39,34 @@ struct PartitionMetadataLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
-        // 1. Default Partition
-        godot::Dictionary def_part_prop;
-        def_part_prop["name"] = "default_partition";
-        def_part_prop["type"] = godot::Variant::INT;
-        def_part_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        props.push_back(def_part_prop);
+        godot::Dictionary buffer_prop;
+        buffer_prop["name"] = "target_buffer_id";
+        buffer_prop["type"] = godot::Variant::INT;
+        props.push_back(buffer_prop);
 
-        // 2. Mappings Array
-        godot::Dictionary map_prop;
-        map_prop["name"] = "mappings";
-        map_prop["type"] = godot::Variant::ARRAY;
-        map_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        map_prop["hint_string"] = "Array of PartitionMapping"; 
-        props.push_back(map_prop);
+        godot::Dictionary default_part_prop;
+        default_part_prop["name"] = "default_partition";
+        default_part_prop["type"] = godot::Variant::INT;
+        props.push_back(default_part_prop);
+
+        godot::Dictionary mappings_prop;
+        mappings_prop["name"] = "mappings";
+        mappings_prop["type"] = godot::Variant::ARRAY;
+        
+        godot::Array struct_props;
+        
+        godot::Dictionary source_val_prop;
+        source_val_prop["name"] = "source_value";
+        source_val_prop["type"] = "T"; // Dynamically resolved by RuntimeInspector
+        struct_props.push_back(source_val_prop);
+
+        godot::Dictionary part_id_prop;
+        part_id_prop["name"] = "partition_id";
+        part_id_prop["type"] = godot::Variant::INT;
+        struct_props.push_back(part_id_prop);
+
+        mappings_prop["struct_properties"] = struct_props;
+        props.push_back(mappings_prop);
 
         return props;
     }

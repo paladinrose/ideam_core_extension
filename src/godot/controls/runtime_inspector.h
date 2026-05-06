@@ -38,7 +38,8 @@ protected:
     godot::Control* _create_packed_color_edit(const godot::Dictionary& p_prop, const godot::Variant& p_value);
     godot::Control* _create_array_edit(const godot::Dictionary& p_prop, const godot::Variant& p_value);
     godot::Control* _create_resource_picker(const godot::Dictionary& p_prop, const godot::Variant& p_value);
-
+    godot::Control* _create_struct_edit(const godot::Dictionary& p_prop, const godot::Variant& p_value);
+    
     // Array Struct Mutators
     void _on_array_element_added(const godot::StringName& p_array_name, const godot::Array& p_schema);
     void _on_array_element_removed(const godot::StringName& p_array_name, int p_index);

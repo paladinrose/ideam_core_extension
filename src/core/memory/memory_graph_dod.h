@@ -62,6 +62,8 @@ protected:
     // Internal Custom Dirty Flag
     static constexpr uint32_t RESOURCES = 1 << 3;
 
+    
+
     // Internal Helpers
     void _bake_requirements();
     
@@ -87,6 +89,25 @@ public:
      */
     void fork_grant(NodeID p_parent_idx, NodeID p_child_idx);
 
+    /**
+     * inject_external_grant
+     * Forces a pre-secured grant into the graph, bypassing the manager's collision checks.
+     */
+    inline void inject_external_grant(NodeID p_id, const MemoryGrantPOD& p_grant) {
+        if (p_id >= active_grants.size()) {
+            active_grants.resize(p_id + 1);
+            selection_metadata.resize(p_id + 1);
+        }
+        
+        // Release any existing grant cleanly if it belongs to a different manager/version
+        if (active_grants[p_id].active && active_grants[p_id].manager_version_at_issue != p_grant.manager_version_at_issue) {
+            manager->release_grant(active_grants[p_id]);
+        }
+        
+        active_grants[p_id] = p_grant;
+        selection_metadata[p_id].dirty_parts_mask = 0xFF; // Force child views to refresh
+    }
+    
     /**
      * mark_selection_dirty
      * Manually flag a part of a node's selection as needing a re-query.

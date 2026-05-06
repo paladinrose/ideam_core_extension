@@ -60,13 +60,26 @@ void RuntimeInspector::build_inspector(const Array& p_properties, const Dictiona
 
         HBoxContainer* row = memnew(HBoxContainer);
         
-        // For Array properties, we push the label handling into the creator 
+        // For Array and Struct properties, push the label handling into the creator 
         // to give it full structural width.
-        if (prop_def.has("type") && (int)prop_def["type"] == Variant::ARRAY) {
-            Control* array_control = _create_control_for_property(prop_def, current_val);
-            if (array_control) {
-                array_control->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-                row->add_child(array_control);
+        bool is_structural = false;
+        if (prop_def.has("type")) {
+            Variant type_val = prop_def["type"];
+            if (type_val.get_type() == Variant::INT && (int)type_val == Variant::ARRAY) {
+                is_structural = true;
+            } else if (type_val.get_type() == Variant::STRING) {
+                String type_str = type_val;
+                if (type_str == "Struct" || type_str == "Custom") {
+                    is_structural = true;
+                }
+            }
+        }
+
+        if (is_structural) {
+            Control* complex_control = _create_control_for_property(prop_def, current_val);
+            if (complex_control) {
+                complex_control->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+                row->add_child(complex_control);
             }
         } else {
             Label* label = memnew(Label);
@@ -89,8 +102,18 @@ Control* RuntimeInspector::_create_control_for_property(const Dictionary& p_prop
     Variant type_val = p_prop["type"];
     Variant::Type actual_type = Variant::NIL;
 
-    if (type_val.get_type() == Variant::STRING && String(type_val) == "T") {
-        actual_type = current_t_type;
+    // Type Designation via String Interception
+    if (type_val.get_type() == Variant::STRING) {
+        String type_str = type_val;
+        if (type_str == "T") {
+            actual_type = current_t_type;
+        } else if (type_str == "Struct" || type_str == "Custom") {
+            return _create_struct_edit(p_prop, p_current_value);
+        } else {
+            Label* error_lbl = memnew(Label);
+            error_lbl->set_text(String("[Unsupported String Type: ") + type_str + "]");
+            return error_lbl;
+        }
     } else {
         actual_type = static_cast<Variant::Type>((int)type_val);
     }
@@ -132,8 +155,6 @@ Control* RuntimeInspector::_create_control_for_property(const Dictionary& p_prop
     error_lbl->set_text("[Unsupported DOD Type]");
     return error_lbl;
 }
-
-// ... [Existing _create_bool_edit to _create_packed_color_edit remain unchanged] ...
 
 Control* RuntimeInspector::_create_bool_edit(const Dictionary& p_prop, const Variant& p_value) {
     CheckBox* cb = memnew(CheckBox);
@@ -297,11 +318,65 @@ Control* RuntimeInspector::_create_resource_picker(const Dictionary& p_prop, con
     return pick_btn;
 }
 
+Control* RuntimeInspector::_create_struct_edit(const Dictionary& p_prop, const Variant& p_value) {
+    VBoxContainer* struct_vbox = memnew(VBoxContainer);
+    StringName base_prop_name = p_prop["name"];
+
+    Label* title_lbl = memnew(Label);
+    title_lbl->set_text(String(base_prop_name).capitalize() + " (Struct)");
+    title_lbl->set_modulate(Color(0.8, 0.8, 0.8));
+    struct_vbox->add_child(title_lbl);
+
+    if (!p_prop.has("struct_properties")) {
+        Label* error_lbl = memnew(Label);
+        error_lbl->set_text("[Missing struct_properties schema]");
+        struct_vbox->add_child(error_lbl);
+        return struct_vbox;
+    }
+
+    Array struct_schema = p_prop["struct_properties"];
+    Dictionary struct_val;
+    if (p_value.get_type() == Variant::DICTIONARY) {
+        struct_val = p_value;
+    }
+
+    MarginContainer* margin = memnew(MarginContainer);
+    margin->add_theme_constant_override("margin_left", 15);
+    VBoxContainer* fields_vbox = memnew(VBoxContainer);
+
+    for (int j = 0; j < struct_schema.size(); ++j) {
+        Dictionary sub_prop = struct_schema[j];
+        String sub_name = sub_prop["name"];
+
+        Dictionary path_prop = sub_prop.duplicate();
+        path_prop["name"] = String(base_prop_name) + "/" + sub_name;
+
+        Variant sub_val = struct_val.has(sub_name) ? struct_val[sub_name] : Variant();
+
+        HBoxContainer* row = memnew(HBoxContainer);
+        Label* label = memnew(Label);
+        label->set_text(sub_name.capitalize());
+        label->set_custom_minimum_size(Vector2(120, 0));
+        row->add_child(label);
+
+        Control* input_control = _create_control_for_property(path_prop, sub_val);
+        if (input_control) {
+            input_control->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+            row->add_child(input_control);
+        }
+        fields_vbox->add_child(row);
+    }
+
+    margin->add_child(fields_vbox);
+    struct_vbox->add_child(margin);
+
+    return struct_vbox;
+}
+
 Control* RuntimeInspector::_create_array_edit(const Dictionary& p_prop, const Variant& p_value) {
     VBoxContainer* vbox = memnew(VBoxContainer);
     StringName base_prop_name = p_prop["name"];
 
-    // Title label for the Array
     Label* title_lbl = memnew(Label);
     title_lbl->set_text(String(base_prop_name).capitalize() + " (Array)");
     title_lbl->set_modulate(Color(0.8, 0.8, 0.8));
@@ -311,14 +386,12 @@ Control* RuntimeInspector::_create_array_edit(const Dictionary& p_prop, const Va
         Array struct_schema = p_prop["struct_properties"];
         Array current_array = (p_value.get_type() == Variant::ARRAY) ? static_cast<Array>(p_value) : Array();
 
-        // Recursively build out the controls for each active element in the array
         for (int i = 0; i < current_array.size(); ++i) {
             VBoxContainer* element_vbox = memnew(VBoxContainer);
             
             HSeparator* sep = memnew(HSeparator);
             element_vbox->add_child(sep);
 
-            // Element Header (Index + Remove Button)
             HBoxContainer* header = memnew(HBoxContainer);
             Label* idx_lbl = memnew(Label);
             idx_lbl->set_text(String("Element ") + String::num_int64(i));
@@ -337,32 +410,20 @@ Control* RuntimeInspector::_create_array_edit(const Dictionary& p_prop, const Va
                 element_val = current_array[i];
             }
 
-            // Drill into the struct definition
-            for (int j = 0; j < struct_schema.size(); ++j) {
-                Dictionary sub_prop = struct_schema[j];
-                String sub_name = sub_prop["name"];
+            Dictionary pseudo_struct_prop;
+            pseudo_struct_prop["name"] = String(base_prop_name) + "/" + String::num_int64(i);
+            pseudo_struct_prop["struct_properties"] = struct_schema;
 
-                // Path Spoofing: Overwrite the property name with our nested path
-                Dictionary path_prop = sub_prop.duplicate();
-                path_prop["name"] = String(base_prop_name) + "/" + String::num_int64(i) + "/" + sub_name;
-
-                Variant sub_val = element_val.has(sub_name) ? element_val[sub_name] : Variant();
-
-                HBoxContainer* row = memnew(HBoxContainer);
-                Label* label = memnew(Label);
-                label->set_text(sub_name.capitalize());
-                label->set_custom_minimum_size(Vector2(120, 0));
-                row->add_child(label);
-
-                Control* input_control = _create_control_for_property(path_prop, sub_val);
-                if (input_control) {
-                    input_control->set_h_size_flags(Control::SIZE_EXPAND_FILL);
-                    row->add_child(input_control);
+            Control* struct_control = _create_struct_edit(pseudo_struct_prop, element_val);
+            if (struct_control) {
+                // We strip the title generated by _create_struct_edit to avoid redundancy in the array view
+                Node* struct_title = struct_control->get_child(0);
+                if (struct_title) {
+                    struct_title->queue_free();
                 }
-                element_vbox->add_child(row);
+                element_vbox->add_child(struct_control);
             }
             
-            // Indent the struct contents slightly for visual grouping
             MarginContainer* margin = memnew(MarginContainer);
             margin->add_theme_constant_override("margin_left", 15);
             margin->add_child(element_vbox);
@@ -375,7 +436,6 @@ Control* RuntimeInspector::_create_array_edit(const Dictionary& p_prop, const Va
         vbox->add_child(add_btn);
 
     } else {
-        // Flat Array Fallback
         Button* add_btn = memnew(Button);
         add_btn->set_text("Edit Array...");
         vbox->add_child(add_btn);
@@ -392,7 +452,6 @@ void RuntimeInspector::_on_array_element_added(const StringName& p_array_name, c
         arr = static_cast<Array>(cached_state[p_array_name]).duplicate(true);
     }
     
-    // Add a blank Dictionary element. The backend will initialize it to default DOD values.
     arr.push_back(Dictionary()); 
     
     cached_state[p_array_name] = arr;
@@ -475,32 +534,87 @@ void RuntimeInspector::_on_packed_color_changed(const Color& p_color, const Stri
 void RuntimeInspector::_emit_property_changed(const StringName& p_prop_name, const Variant& p_value) {
     String prop_str = p_prop_name;
     
-    // Path Resolution: Intercept nested struct updates
+    // Path Resolution: Intercept nested struct/array updates via dynamic token parsing
     if (prop_str.contains("/")) {
         PackedStringArray parts = prop_str.split("/");
-        
-        // Expected Format: "array_name/index/property_name"
-        if (parts.size() == 3) {
-            StringName array_name = parts[0];
-            int index = parts[1].to_int();
-            StringName sub_prop = parts[2];
+        if (parts.size() < 2) return;
 
-            if (cached_state.has(array_name) && cached_state[array_name].get_type() == Variant::ARRAY) {
-                Array arr = static_cast<Array>(cached_state[array_name]).duplicate(true);
-                
-                if (index >= 0 && index < arr.size()) {
-                    // Update the specific dictionary field
-                    Dictionary elem = arr[index];
-                    elem[sub_prop] = p_value;
-                    arr[index] = elem;
-                    
-                    // Commit to cache and emit top-level array
-                    cached_state[array_name] = arr;
-                    emit_signal("property_changed", array_name, arr);
-                    return; // Prevent standard emission
+        StringName root_name = parts[0];
+        if (!cached_state.has(root_name)) {
+            return; 
+        }
+
+        Variant current_node = cached_state[root_name].duplicate(true);
+        Array node_chain;
+        node_chain.push_back(current_node);
+
+        // Traverse down the hierarchy, pushing copies onto the stack
+        for (int i = 1; i < parts.size() - 1; ++i) {
+            Variant parent = node_chain[i - 1];
+            String token = parts[i];
+            
+            if (parent.get_type() == Variant::ARRAY) {
+                Array arr = parent;
+                int idx = token.to_int();
+                if (idx >= 0 && idx < arr.size()) {
+                    node_chain.push_back(arr[idx].duplicate(true));
+                } else {
+                    return; 
                 }
+            } else if (parent.get_type() == Variant::DICTIONARY) {
+                Dictionary dict = parent;
+                if (dict.has(token)) {
+                    node_chain.push_back(dict[token].duplicate(true));
+                } else {
+                    node_chain.push_back(Dictionary()); 
+                }
+            } else {
+                return; 
             }
         }
+
+        // Apply mutation to the leaf
+        Variant leaf = node_chain[node_chain.size() - 1];
+        String leaf_token = parts[parts.size() - 1];
+
+        if (leaf.get_type() == Variant::ARRAY) {
+            Array arr = leaf;
+            int idx = leaf_token.to_int();
+            if (idx >= 0 && idx < arr.size()) {
+                arr[idx] = p_value;
+            }
+            leaf = arr;
+        } else if (leaf.get_type() == Variant::DICTIONARY) {
+            Dictionary dict = leaf;
+            dict[leaf_token] = p_value;
+            leaf = dict;
+        } else {
+            Dictionary dict;
+            dict[leaf_token] = p_value;
+            leaf = dict;
+        }
+
+        // Reconstruct the chain from leaf to root
+        Variant mutated_child = leaf;
+        for (int i = node_chain.size() - 2; i >= 0; --i) {
+            Variant parent = node_chain[i];
+            String token = parts[i + 1];
+
+            if (parent.get_type() == Variant::ARRAY) {
+                Array arr = parent;
+                arr[token.to_int()] = mutated_child;
+                parent = arr;
+            } else if (parent.get_type() == Variant::DICTIONARY) {
+                Dictionary dict = parent;
+                dict[token] = mutated_child;
+                parent = dict;
+            }
+            mutated_child = parent;
+        }
+
+        cached_state[root_name] = mutated_child;
+        emit_signal("property_changed", root_name, mutated_child);
+        return; 
     }
     
     // Standard flat property routing

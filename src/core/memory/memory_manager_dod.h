@@ -148,6 +148,22 @@ public:
      */
     void ensure_transient_capacity(size_t p_required_capacity);
 
+    /**
+     * get_transient_mark
+     * Returns the current offset of the lock-free bump allocator.
+     */
+    [[nodiscard]] inline size_t get_transient_mark() const noexcept {
+        return transient_used.load(std::memory_order_relaxed);
+    }
+
+    /**
+     * restore_transient_mark
+     * Rolls back the allocator to a previous state (used for hierarchical graph execution).
+     */
+    inline void restore_transient_mark(size_t p_mark) noexcept {
+        transient_used.store(p_mark, std::memory_order_release);
+    }
+    
     // --- Ring Operations ---
     bool ring_push(uint32_t p_id, const void* p_data, size_t p_size);
     bool ring_pop(uint32_t p_id, void* r_dest, size_t p_size);

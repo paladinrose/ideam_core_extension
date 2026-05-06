@@ -47,29 +47,29 @@ struct GroupMaskMetadataLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
-        // 1. Operation Mode
-        godot::Dictionary op_prop;
-        op_prop["name"] = "op";
-        op_prop["type"] = godot::Variant::INT;
-        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
-        op_prop["hint_string"] = "Set,Add,Remove";
-        props.push_back(op_prop);
+        godot::Dictionary buffer_prop;
+        buffer_prop["name"] = "target_buffer_id";
+        buffer_prop["type"] = godot::Variant::INT;
+        props.push_back(buffer_prop);
 
-        // 2. Tolerance
-        godot::Dictionary tol_prop;
-        tol_prop["name"] = "tolerance";
-        tol_prop["type"] = godot::Variant::FLOAT;
-        tol_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        props.push_back(tol_prop);
+        godot::Dictionary mappings_prop;
+        mappings_prop["name"] = "mappings";
+        mappings_prop["type"] = godot::Variant::ARRAY;
+        
+        godot::Array struct_props;
+        
+        godot::Dictionary target_val_prop;
+        target_val_prop["name"] = "target_value";
+        target_val_prop["type"] = "T"; // Dynamically resolved by RuntimeInspector
+        struct_props.push_back(target_val_prop);
 
-        // 3. Mappings Array
-        godot::Dictionary map_prop;
-        map_prop["name"] = "mappings";
-        map_prop["type"] = godot::Variant::ARRAY;
-        map_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        // Instructs your UI builder to construct an array of this specific sub-type
-        map_prop["hint_string"] = "Array of GroupMaskMapping"; 
-        props.push_back(map_prop);
+        godot::Dictionary bit_flag_prop;
+        bit_flag_prop["name"] = "bit_flag";
+        bit_flag_prop["type"] = godot::Variant::INT;
+        struct_props.push_back(bit_flag_prop);
+
+        mappings_prop["struct_properties"] = struct_props;
+        props.push_back(mappings_prop);
 
         return props;
     }
