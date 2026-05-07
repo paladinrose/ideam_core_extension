@@ -9,12 +9,13 @@ private:
     uint32_t target_buffer_id = 0;
 
 public:
-    // FIX 2: Default parameter added to satisfy parameterless construction in the NativeTaskRegistry
-    explicit EntryFillTask(uint32_t p_buffer_id = 0) : target_buffer_id(p_buffer_id) {}
 
-    // FIX 1: Implement the pure virtual prepare method. 
-    // Since this task is 'final', the compiler can successfully devirtualize this 
-    // and completely inline/strip the empty call during execution, avoiding a vtable jump.
+    inline void apply_properties(const godot::Dictionary& p_props) override {
+        if (p_props.has("target_buffer_id")) {
+            target_buffer_id = static_cast<uint32_t>(p_props["target_buffer_id"]);
+        }
+    }
+    
     inline void prepare(const TaskContextPOD& p_context) override {}
 
     #if defined(_MSC_VER)

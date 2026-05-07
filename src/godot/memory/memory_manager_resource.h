@@ -42,7 +42,9 @@ public:
 
     void set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) { buffer_schemas = p_schemas; }
     godot::TypedArray<MemoryBufferResource> get_buffer_schemas() const { return buffer_schemas; }
-
+    godot::TypedArray<godot::StringName> get_buffer_names() const;
+    godot::TypedArray<godot::StringName> get_selected_buffer_names(const godot::PackedInt32Array& p_buffer_ids) const;
+    
     void set_scaling_strategy(int p_strategy) { scaling_strategy = static_cast<ScalabilityStrategy>(p_strategy); }
     int get_scaling_strategy() const { return scaling_strategy; }
 

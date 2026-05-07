@@ -60,6 +60,8 @@ public:
     explicit QueryTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~QueryTask() override = default;
 
+    virtual void apply_properties(const godot::Dictionary& p_props) override { logic.apply_properties(p_props); }
+
     virtual void prepare(const TaskContextPOD& p_context) override {
         if constexpr (requires { logic.prepare(p_context); }) {
             logic.prepare(p_context);

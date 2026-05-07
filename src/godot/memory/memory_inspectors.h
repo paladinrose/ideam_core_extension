@@ -55,7 +55,8 @@ class MemoryGrantInspector : public godot::RefCounted {
 private:
     uint64_t manager_version = 0;
     bool active = false;
-    
+    bool emulated = false;
+
     // Telemetry and validation states
     bool error_state = false;
     bool dirty_state = false;
@@ -99,14 +100,23 @@ public:
         }
     }
 
+    /**
+     * @brief Injects an artificial layout state derived from setup-time data (e.g., MemoryManagerResource).
+     * Bypasses the need for an active runtime DOD structure to render node ports.
+     */
+    void setup_emulated_grant(const godot::TypedArray<godot::Dictionary>& p_mock_parts);
+    
     // Read-only GDScript API
     int get_manager_version() const { return static_cast<int>(manager_version); }
     bool is_active() const { return active; }
+    bool is_emulated() const { return emulated; }
     int get_part_count() const { return part_snapshots.size(); }
     
     godot::Dictionary get_part_snapshot(int p_index) const;
     bool has_error() const { return error_state; }
     bool is_dirty() const { return dirty_state; }
+
+    godot::PackedInt32Array get_buffer_ids() const;
 };
 
 } // namespace ideam::godot_ext

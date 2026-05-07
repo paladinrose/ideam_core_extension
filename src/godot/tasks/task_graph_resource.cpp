@@ -116,6 +116,7 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
                         auto native_interface = core::NativeTaskRegistry::create(native_class);
                         
                         if (native_interface) {
+                            native_interface->apply_properties(props);
                             task_graph->configure_native_interface(core_id, std::move(native_interface));
                         } else {
                             godot::UtilityFunctions::printerr("TaskGraph Compiler: Unable to find registered native task '", native_class, "' for node '", ui_name, "'");

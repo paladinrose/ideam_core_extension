@@ -16,9 +16,17 @@ void MemoryGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("update_memory_port", "slot_index", "is_left", "layout_type"), &MemoryGraphNode::update_memory_port);
 
     ADD_SIGNAL(MethodInfo("inspect_memory_requested", PropertyInfo(Variant::OBJECT, "inspector", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGrantInspector")));
+    ADD_SIGNAL(MethodInfo("buffer_names_requested", 
+        PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGraphNode"),
+        PropertyInfo(Variant::ARRAY, "buffer_ids", PROPERTY_HINT_ARRAY_TYPE, "int")));
+    
 }
 
 MemoryGraphNode::MemoryGraphNode() {
+}
+
+void MemoryGraphNode::receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names) {
+    
 }
 
 void MemoryGraphNode::_build_ui() {

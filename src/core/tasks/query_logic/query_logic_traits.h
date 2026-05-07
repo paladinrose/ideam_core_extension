@@ -66,6 +66,7 @@ concept IsQueryLogic = requires {
     { T::supports_addition } -> std::convertible_to<bool>;
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
     { T::get_ui_properties() } -> std::same_as<godot::Array>;
+    { std::declval<T>().apply_properties(std::declval<const godot::Dictionary&>()) } -> std::same_as<void>;
     
     // Must implement pure 'execute' handling the selection mutation.
     { 

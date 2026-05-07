@@ -114,6 +114,8 @@ public:
     virtual size_t get_transient_requirement(const TaskContextPOD& p_context) const { 
         return 0; 
     }
+
+    virtual void apply_properties(const godot::Dictionary& p_props) {}
     virtual void prepare(const TaskContextPOD& p_context) = 0;
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) = 0;
     virtual void execute(const TaskContextPOD& p_context) = 0;

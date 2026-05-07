@@ -51,6 +51,7 @@ concept IsMetadataLogic = requires {
     { T::required_types } -> std::convertible_to<DataType>;
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
     { T::get_ui_properties() } -> std::same_as<godot::Array>;
+    { std::declval<T>().apply_properties(std::declval<const godot::Dictionary&>()) } -> std::same_as<void>;
     
     // Must implement templated execute_metadata handling the mutable selection
     { 

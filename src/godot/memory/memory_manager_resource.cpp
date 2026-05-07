@@ -14,6 +14,7 @@ void MemoryManagerResource::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("set_buffer_schemas", "schemas"), &MemoryManagerResource::set_buffer_schemas);
     ClassDB::bind_method(D_METHOD("get_buffer_schemas"), &MemoryManagerResource::get_buffer_schemas);
+    ClassDB::bind_method(D_METHOD("get_buffer_names"), &MemoryManagerResource::get_buffer_names);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "buffer_schemas", PROPERTY_HINT_ARRAY_TYPE, "MemoryBufferResource"), "set_buffer_schemas", "get_buffer_schemas");
 
     ClassDB::bind_method(D_METHOD("set_scaling_strategy", "strategy"), &MemoryManagerResource::set_scaling_strategy);
@@ -33,6 +34,37 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_projected_footprint_string"), &MemoryManagerResource::get_projected_footprint_string);
     ClassDB::bind_method(D_METHOD("buffer_contains_id", "buffer_id", "entity_id"), &MemoryManagerResource::buffer_contains_id);
     ClassDB::bind_method(D_METHOD("get_dense_index", "buffer_id", "entity_id"), &MemoryManagerResource::get_dense_index);
+}
+
+godot::TypedArray<godot::StringName> MemoryManagerResource::get_buffer_names() const {
+    godot::TypedArray<godot::StringName> names;
+    
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        godot::Ref<MemoryBufferResource> schema = buffer_schemas[i];
+        if (schema.is_valid()) {
+            names.push_back(schema->get_buffer_name());
+        }
+    }
+    
+    return names;
+}
+
+godot::TypedArray<godot::StringName> MemoryManagerResource::get_selected_buffer_names(const godot::PackedInt32Array& p_buffer_ids) const {
+    godot::TypedArray<godot::StringName> names;
+
+    for (int i = 0; i < p_buffer_ids.size(); ++i) {
+        uint32_t id = static_cast<uint32_t>(p_buffer_ids[i]);
+        
+        // Relies on 1:1 schema index assumption
+        if (id < static_cast<uint32_t>(buffer_schemas.size())) {
+            godot::Ref<MemoryBufferResource> schema = buffer_schemas[id];
+            if (schema.is_valid()) {
+                names.push_back(schema->get_buffer_name());
+            }
+        }
+    }
+
+    return names;
 }
 
 void MemoryManagerResource::register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferProfile>& p_profiles) {

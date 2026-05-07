@@ -68,6 +68,8 @@ public:
     // Transforms are pure math/reductions, they do not prune bitmask selections.
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
 
+    virtual void apply_properties(const godot::Dictionary& p_props) override { logic.apply_properties(p_props); }
+
     virtual void prepare(const TaskContextPOD& p_context) override {
         // Compile-time check: Only call prepare if the Logic struct defines it.
         // This keeps simple logic structs lightweight without forcing empty virtuals.
