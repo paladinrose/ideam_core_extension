@@ -14,11 +14,13 @@
 namespace ideam::core {
 
 godot::HashMap<godot::StringName, NativeTaskFactory>* NativeTaskRegistry::manual_factories = nullptr;
+godot::Dictionary* NativeTaskRegistry::ui_utility_matrix = nullptr;
 
 void NativeTaskRegistry::init() {
     // 1. Initialize self
     if (!manual_factories) {
         manual_factories = new godot::HashMap<godot::StringName, NativeTaskFactory>();
+        ui_utility_matrix = new godot::Dictionary();
     }
 
     // 2. Delegate O(1) Matrix Initializations
@@ -53,6 +55,10 @@ void NativeTaskRegistry::cleanup() {
         delete manual_factories; 
         manual_factories = nullptr;
     }
+    if (ui_utility_matrix) {
+        delete ui_utility_matrix;
+        ui_utility_matrix = nullptr;
+    }
 }
 
 // --- Routing UI Dictionary Getters to Sub-Registries ---
@@ -72,6 +78,10 @@ godot::Dictionary NativeTaskRegistry::get_ui_simulation_matrix() {
     // Assuming you have a SimulationTaskRegistry structured identically to the others.
     // return (SimulationTaskRegistry::ui_simulation_matrix) ? *SimulationTaskRegistry::ui_simulation_matrix : godot::Dictionary();
     return godot::Dictionary(); 
+}
+
+godot::Dictionary NativeTaskRegistry::get_ui_utility_matrix() {
+    return (ui_utility_matrix) ? *ui_utility_matrix : godot::Dictionary();
 }
 
 } // namespace ideam::core

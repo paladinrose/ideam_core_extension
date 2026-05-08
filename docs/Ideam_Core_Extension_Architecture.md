@@ -319,9 +319,9 @@ To provide a smooth developer experience without compromising backend performanc
 
 **Target Directory:** `src/godot/narratives/`
 
-The highest level of abstraction in the Ideam Core is the application of the DOD Memory and Graph systems to specific game logic domains. The `narratives` module demonstrates how to map abstract concepts (like story progression and character relationships) onto the high-performance infrastructure.
+The `narratives` module demonstrates how to map abstract concepts (like story progression and character relationships).
 
-By treating story logic as a massive, parallel simulation rather than a web of Godot Object references, the framework can evaluate thousands of narrative conditions and state changes per frame without stuttering.
+When eventually integrated with the DOD framework, by treating story logic as a massive, parallel simulation rather than a web of Godot Object references, the framework can evaluate thousands of narrative conditions and state changes per frame without stuttering.
 
 ### Key Components
 
@@ -330,23 +330,61 @@ The fundamental unit of narrative data. Registered as an abstract base class, it
 * All narrative entities (Characters, Props, Locations) and narrative events (Incidents, Plots) inherit from `Narreme`.
 * By standardizing the base class, the underlying `TaskGraphDOD` can process mixed narrative elements efficiently using Sparse Sets and Archetype Queries.
 
-#### 2. Narrative Entities
-These are the "nouns" of the simulation, representing persistent state data in the memory blocks:
-* **`Character`**: Holds dynamic state (health, mood, allegiances).
-* **`Location`**: Holds spatial context and ownership data.
-* **`Prop`**: Holds inventory and utility state.
+#### 2. The Narrative
+The master container tracking the global state of the story.
 
-#### 3. Narrative Events
-These are the "verbs" of the simulation. They utilize the Graph's Command Arenas (Tier 1 and Tier 2) to trigger mutations:
-* **`Incident`**: A localized event (e.g., "A sword is swung," "A dialogue line is spoken").
-* **`Plot`**: A macro-structure that tracks the progression of multiple incidents.
-* **`Narrative`**: The master container tracking the global state of the story.
+#### 3. Narrative Entities
+These are the "nouns" of the plugin:
+* **`Character`**: Has a `Location`. Takes actions within a narrative. Has `Relationships` with other narremes. Has `goals` in the form of specialized `Plots`. The "who" of the narrative.
+* **`Location`**: Holds lists of present `Characters` and `Props`. The "where" of the narrative.
+* **`Prop`**: Has a `Location`. Has a `possessor` in the form of a `Character`. The "what" of the narrative.
 
-#### 4. Condition Evaluators (The Query Logic Bridge)
-To determine *if* an Incident should occur or *how* a Character feels, the system uses Condition helpers. These map directly to the high-performance `QueryLogic` systems established in Phase 2:
-* **`Causal_Condition`**: Evaluates historical data (e.g., "Did Event A happen before Event B?").
-* **`Gameplay_Condition`**: Bridges narrative logic with physics/engine logic (e.g., "Is the player inside the Trigger Volume?"). Maps cleanly to a `Spatial_Inclusion_Bridge_Query_Logic` task.
-* **`Relationship`**: Evaluates the affinity between two entities. When processed en masse, this acts as a high-speed matrix multiplication (Transform Task) across the relationship buffer.
+#### 4. Narrative Events
+These are the "verbs" of the narrative:
+* **`Incident`**: A localized event (e.g., "A sword is swung," "A dialogue line is spoken"). Has `Incident_Conditions` which must be met for the incident to take place. Rather than a simple boolean state, it can have complex states like "Cannot Happen" vs "Has Not Happened" vs "Happened". The "how" of the narrative. 
+* **`Plot`**: A macro-structure that tracks the progression of multiple `Incidents`. 
+
+
+#### 5. Condition Evaluators
+To determine *if* an Incident should occur, the system uses Condition helpers:
+* **`Causal_Condition`**: Evaluates historical data (e.g., "Did Incident A happen? Is it impossible for Incident B to happen?").
+* **`Gameplay_Condition`**: Bridges narrative logic with physics/engine logic (e.g., "Is the player inside the Trigger Volume?").
+* **`Relationship`**: Evaluates the affinity between a `Character` and another `Narreme`.
 
 ### The Domain Takeaway
 The Narrative system proves that the DOD core is not just for particle systems or physics. By flattening "Story" into contiguous memory arrays, the engine can execute complex, reactive, and highly branchable narratives using the exact same Wave-based execution loops that drive standard gameplay systems.
+
+## 6: Games
+
+**Target Directory:** `src/godot/games/`
+
+The `games` plugin establishes boilerplate video game logic and structures that are more specific that Godot's Nodes and Scenes, but more generic and flexible than genre or gameplay style. 
+
+### Key Components
+
+#### 1. The Root Component: `GameHub`
+Handles things like application startup, `Game` loading / unloading, `GamePlayer` logging, etc. Crucially, provides a deliberately potentially recursive relationship with `Games`, where the hub can allow for cross-game rule synthesis and interactions, while also potentially being active components OF one or more `Games`. To wit: hubs can load and unload games, which can contain and direct hubs, which can bridge one came to another which... This is, against all sense, intentional. There is simply no way to no what form a user's complex game-within-a-game projects might take. And so, we aim for flexibility and risk management.
+
+#### 2. The Core: `Game`
+Handles loading / unloading of `GameBoards`, application of `GameRules`, `GameplayStyle`, `GameplayOptions`, `GameplayAccessibilityOptions`, even the flow of time for all `GameEntities` within this game. Most critically, it establishes the major lifecycle events of most video games and establishes open signals that users can utilize for their own purposes. These events (sans signals) are trickled down to all `GameEntities` within the game:
+* **`Game_Started`**: Called not when the game finishes loading, but when the game is formally "started", usually through a main menu button, or other user interaction.
+* **`Game_Ended`**: Called at the end of a "Game Over" state, when the user chooses "End Game" from the pause menu, etc. Called before anything is actually cleaned up in memory, to give the user a last chance to manage the games state prior to formally closing and unloading the games assets. 
+* **`Game_Paused`**: Called when the user or game event pauses gameplay, usually opening a "Pause Menu" in the process.
+* **`Game_Continued`**: Called when the game resumes active gameplay from a pause state.
+* **`Game_Processed`**: Called through the _process or _physics_process Godot Node loops. Scales the delta_time argument by a custom time_scale value. As a result, all GameEntities are processing timing based activities on a potentially scaled time.
+
+
+#### 3. GameEntities
+The `GameEntity` is the base class for all the different parts that interact directly with the `Game`, its rules, and the larger Godot environment. It establishes hooks for all of the `Game's` major lifecycle events. It has its own time_scale that it applies to the delta_time received in its _game_process method. 
+If one entity 'contains' or 'owns' another, that owned entity receives this yet-further scaled time. Receives the GameplayStyle from its owner (or a `Game`), including the rules by which the game is played. This is treated like a UI Style, or CSS: At each cascading level, all applicable styles are inherited and all others are ignored, but any utilized style can be overridden. This somewhat-inherited, somewhat-overridden style is passed from each entity(including those styles it ignored) on to any entities 'owned' by it. 
+
+* **`GameBoard`**: A hypothetical 'where' for game-related activities to take place within. Holds dual lists of `GamePieces` and `GameAgents` which are 'present' on that board. Establishes necessary pseudo-spatial indicators for `GameInteractions` and various kinds of entity actions.
+* **`GameAgent`**: Exerts control over `GamePieces` by using `GameAgentActions` to direct these pieces to take their various `GamePieceActions`. Often 'possessed' (controlled) by a `GamePlayer`, or an AI of some sort. 
+* **`GamePiece`**: GamePieces have `GameProperties` and take `GamePieceActions` which can be components of `GameInteractions`. Pieces can't take actions on their own. Left to their own devices, a GamePiece usually just sits on or beside a `GameBoard`. Usually, actions are instigated by either a `GameAgent` or a gameplay situation, such as a physics entity entering a trigger zone, etc. 
+
+#### 4. GameInteractions
+ A GameInteraction is a managed synthesis or disruption of two or more actions within the rules of the `Game`. This necessitates a multi-level architecture of different types of actions and interactions, managed ways that each level of programmatic interaction takes places, and highly managed ways for those levels to influence one another.
+ * **`GameAgentAction`**: Fundamentally operates as a sequence manager. It evaluates whether other agent / piece actions compete with, or assist itself and makes decisions about what `GamePieces` to direct to take what `GamePieceActions`. 
+ * **`GamePieceAction`**: Holds the more state-specific information necessary to orchestrate the spatial and temporal aspects of GameInteractions. The primary space where Godot-side systems interact with the Games plugin, as a whole. Actions have an integer scoring system built into them. This is both vital for the layers of action / interaction relations, and also easy for a user to user for RPG style numbers. This integer scoring is centered around an actions associated `GameProperties`
+ * **`GameProperty`**: Encapsulates a single numeric value modified dynamically at runtime. Keeps optional Minimum and Maximum range limits. The Value, Min, and Max can all be dynamically modified through the use of `GamePropertyModifiers`. Keeps complex, stateful information (e.g. real_value vs modified_value).
+ * **`GamePropertyModifier`**: Fundamentally just a math operation with an optional timer. They raise or lower a `GameProperty's` current value, maximum limit, or mimimum limit. The amount they do this by might vary over the lifetime of the modifier, or be constant. The modifier itself might have a fixed lifetime, a number of 'uses', or be constant (until removed from the GameProperty).

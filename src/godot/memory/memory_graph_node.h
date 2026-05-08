@@ -89,7 +89,7 @@ public:
      */
     void update_memory_port(int p_slot_index, bool p_is_left, core::BufferLayoutType p_layout);
 
-    void receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names);
+    virtual void receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names);
 };
 
 } // namespace ideam::godot_ext

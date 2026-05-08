@@ -12,7 +12,7 @@ using namespace godot;
 namespace ideam::godot_ext {
 
 void TaskGraphEdit::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("_on_task_popup_select", "id"), &TaskGraphEdit::_on_task_popup_select);
+    // Relying on the base class's _popup_select routing instead of a custom intercept
 }
 
 TaskGraphEdit::TaskGraphEdit() {
@@ -23,13 +23,8 @@ TaskGraphEdit::~TaskGraphEdit() {
 
 void TaskGraphEdit::_ready() {
     MemoryGraphEdit::_ready();
-
-    if (PopupMenu* popup = Object::cast_to<PopupMenu>(find_child("PopupMenu", true, false))) {
-        if (popup->is_connected("id_pressed", Callable(this, "_filtered_popup_select"))) {
-            popup->disconnect("id_pressed", Callable(this, "_filtered_popup_select"));
-        }
-        popup->connect("id_pressed", Callable(this, "_on_task_popup_select"));
-    }
+    // Removed the manual popup disconnect/reconnect logic since we now hook the sub-menus
+    // directly into the parent's native _popup_select.
 }
 
 bool TaskGraphEdit::_strategy_supports_layout(core::MemoryStrategy p_strategy, core::BufferLayoutType p_layout) const {
@@ -54,36 +49,58 @@ bool TaskGraphEdit::_strategy_supports_layout(core::MemoryStrategy p_strategy, c
     return core::has_layout(p_layout, strategy_layout_mask);
 }
 
-TypedArray<String> TaskGraphEdit::_get_filtered_node_types(uint32_t p_filter_mask) const {
-    TypedArray<String> popup_items;
-    
-    // We cast away const to modify our internal linear cache. 
-    // This is safe here as this is strictly a UI generation pass.
+TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
+    // We cast away const to modify our internal linear cache and inject sub-menus into the parent's popup.
     auto* mutable_this = const_cast<TaskGraphEdit*>(this);
     mutable_this->spawn_options_cache.clear();
 
-    core::BufferLayoutType layout_requirement = static_cast<core::BufferLayoutType>(p_filter_mask);
+    if (!mutable_this->context_popup) return TypedArray<String>();
+
+    // Clean up any stale sub-menus from the previous popup invocation
+    for (int i = mutable_this->context_popup->get_child_count() - 1; i >= 0; --i) {
+        Node* child = mutable_this->context_popup->get_child(i);
+        if (Object::cast_to<PopupMenu>(child)) {
+            child->queue_free();
+        }
+    }
+
+    // Helper to generate and bind sub-menus
+    auto create_submenu = [&](const String& p_name) -> PopupMenu* {
+        PopupMenu* sub = memnew(PopupMenu);
+        sub->set_name(p_name);
+        mutable_this->context_popup->add_child(sub);
+        mutable_this->context_popup->add_submenu_node_item(p_name, sub);
+        
+        // Route selections dynamically back up to _spawn_node_by_type via the parent
+        sub->connect("id_pressed", Callable(mutable_this, "_popup_select"));
+        return sub;
+    };
+
+    PopupMenu* transform_menu = create_submenu("Transform");
+    PopupMenu* metadata_menu = create_submenu("Metadata");
+    PopupMenu* query_menu = create_submenu("Query");
+    PopupMenu* utility_menu = create_submenu("Utility");
+
+    core::BufferLayoutType layout_requirement = static_cast<core::BufferLayoutType>(mutable_this->active_filter_mask);
     bool check_layout = layout_requirement != core::BufferLayoutType::NONE && layout_requirement != core::BufferLayoutType::ANY;
 
-    auto process_matrix = [&](const Dictionary& p_matrix, TaskCategory p_category, const String& p_prefix) {
+    int current_global_id = 0;
+
+    auto process_matrix = [&](const Dictionary& p_matrix, TaskCategory p_category, PopupMenu* p_submenu) {
         Array keys = p_matrix.keys();
         for (int i = 0; i < keys.size(); ++i) {
             String logic_str = keys[i];
-            uint32_t logic_id = static_cast<uint32_t>(logic_str.to_int());
+            
+            // UINT32_MAX avoids parsing collisions for utility tasks.
+            uint32_t logic_id = (p_category == CATEGORY_MANUAL) ? UINT32_MAX : static_cast<uint32_t>(logic_str.to_int());
             Dictionary logic_def = p_matrix[keys[i]];
             
-            // Tier 3: ViewCapability Interrogation
-            // If dragging from a specific port, validate against the O(1) permutation matrix
             if (check_layout && logic_def.has("valid_combinations")) {
                 PackedInt64Array valid_hashes = logic_def["valid_combinations"];
                 bool has_compatible_strategy = false;
                 
                 for (int h = 0; h < valid_hashes.size(); ++h) {
                     uint64_t hash = valid_hashes[h];
-                    
-                    // Decode the flat index. 
-                    // Matrix Dimensions: O_COUNT(2) * V_COUNT(16) * S_COUNT(9) * T_COUNT(17)
-                    // The Strategy dimension is heavily restricted by layout types.
                     uint32_t s_index = 0;
                     if (p_category == CATEGORY_QUERY) {
                         s_index = (hash % 2448 % 153) / 17;
@@ -97,44 +114,43 @@ TypedArray<String> TaskGraphEdit::_get_filtered_node_types(uint32_t p_filter_mas
                     }
                 }
                 
-                // Prune task entirely from the UI if it cannot handle the incoming topology
                 if (!has_compatible_strategy) continue;
             }
             
-            // Add to linear cache
             SpawnDescriptor desc;
             desc.category = p_category;
             desc.logic_id = logic_id;
             desc.logic_name = StringName(logic_str);
             mutable_this->spawn_options_cache.push_back(desc);
             
-            // Add to UI
-            // Example Output: "Transform: FastNoiseLite"
-            popup_items.push_back(p_prefix + logic_str); 
+            // Assuming your DOD dictionaries hold a "name" property for standard matrix tasks.
+            // If they don't, this safely falls back to printing the logic_str.
+            String display_name = (p_category == CATEGORY_MANUAL) ? logic_str : String(logic_def.get("name", logic_str));
+            p_submenu->add_item(display_name, current_global_id);
+            current_global_id++;
         }
     };
 
-    // Process all sub-registries
-    process_matrix(core::NativeTaskRegistry::get_ui_transform_matrix(), CATEGORY_TRANSFORM, "Transform: ");
-    process_matrix(core::NativeTaskRegistry::get_ui_metadata_matrix(), CATEGORY_METADATA, "Metadata: ");
-    process_matrix(core::NativeTaskRegistry::get_ui_query_matrix(), CATEGORY_QUERY, "Query: ");
+    process_matrix(core::NativeTaskRegistry::get_ui_transform_matrix(), CATEGORY_TRANSFORM, transform_menu);
+    process_matrix(core::NativeTaskRegistry::get_ui_metadata_matrix(), CATEGORY_METADATA, metadata_menu);
+    process_matrix(core::NativeTaskRegistry::get_ui_query_matrix(), CATEGORY_QUERY, query_menu);
+    process_matrix(core::NativeTaskRegistry::get_ui_utility_matrix(), CATEGORY_MANUAL, utility_menu);
 
-    return popup_items;
+    // Return empty array. We manually constructed the hierarchy, so we don't want the 
+    // base class to append any generic flat strings to the root popup menu.
+    return TypedArray<String>();
 }
 
-void TaskGraphEdit::_on_task_popup_select(int p_id) {
+void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     if (current_blueprint.is_null()) return;
-    if (p_id < 0 || p_id >= spawn_options_cache.size()) return;
+    if (p_type_id < 0 || p_type_id >= spawn_options_cache.size()) return;
 
-    const SpawnDescriptor& desc = spawn_options_cache[p_id];
+    const SpawnDescriptor& desc = spawn_options_cache[p_type_id];
     StringName unique_name = String("TaskNode_") + String::num_int64(UtilityFunctions::randi());
 
-    // Map Category to the specific DOD sub-type and construct the base dictionary
     Dictionary props;
     props["logic_id"] = desc.logic_id;
     props["logic_name"] = desc.logic_name;
-
-    // Default indices to zero (User configures these via the new dynamic UI)
     props["view_id"] = 0;
     props["strategy_id"] = 0;
     props["type_id"] = 0;
@@ -143,13 +159,16 @@ void TaskGraphEdit::_on_task_popup_select(int p_id) {
     new_node["name"] = unique_name;
     new_node["properties"] = props;
 
-    // We explicitly store the type classification so GraphEdit knows which sub-node UI to instantiate
     switch (desc.category) {
         case CATEGORY_TRANSFORM: new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_NATIVE_CPU); break; 
         case CATEGORY_METADATA:  new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_NATIVE_CPU); break;
         case CATEGORY_QUERY:     
             new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_QUERY_CULLER); 
             props["op_id"] = 0; // 0 = CULL, 1 = ADD
+            break;
+        case CATEGORY_MANUAL:
+            // STUB: You'll want to map this to whatever your manual task GUI node type is mapped to.
+            new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_NATIVE_CPU); 
             break;
         default: break;
     }

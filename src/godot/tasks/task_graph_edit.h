@@ -36,13 +36,15 @@ protected:
     };
     std::vector<SpawnDescriptor> spawn_options_cache;
 
+    // The active mask for context-aware port dragging. 
+    // Default to 0 (No filter) for generic canvas right-clicks.
+    uint32_t active_filter_mask = 0; 
+
     static void _bind_methods();
 
-    // Overrides to inject Tier 3 matrix validation and filtering
-    virtual godot::TypedArray<godot::String> _get_filtered_node_types(uint32_t p_filter_mask) const override;
-    
-    // Intercept popup selection to build the correct dictionary structure and route to specific sub-nodes
-    void _on_task_popup_select(int p_id);
+    // Overrides to build our hierarchical popup and instantiate DOD nodes
+    virtual godot::TypedArray<godot::String> _get_new_node_types() const override;
+    virtual void _spawn_node_by_type(int p_type_id) override;
 
     // Helper: Maps the underlying DOD MemoryStrategy to the structural BufferLayoutType
     bool _strategy_supports_layout(core::MemoryStrategy p_strategy, core::BufferLayoutType p_layout) const;

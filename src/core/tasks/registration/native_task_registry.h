@@ -103,6 +103,8 @@ class NativeTaskRegistry {
 private:
     // Only retains tasks that require dynamic/hashed lookups (e.g., manual overrides or entry tasks)
     static godot::HashMap<godot::StringName, NativeTaskFactory>* manual_factories;
+    // The structural manifest for Godot UI
+    static godot::Dictionary* ui_utility_matrix;
 
 public:
     // --- Lifecycle Management ---
@@ -115,10 +117,24 @@ public:
     // --- Variadic Registration (Added Args support for EntryFillTask's buffer_id) ---
     template <typename T_Task, typename... Args>
     static void register_task(const godot::StringName& p_name, Args... args) {
-        if (!manual_factories) return; // Safety check
+        if (!manual_factories) return; 
+
+        // 1. Register Execution Strategy
         (*manual_factories)[p_name] = [args...]() -> std::unique_ptr<INativeTask> {
             return std::make_unique<T_Task>(args...);
         };
+
+        // 2. Register UI Presentation Data
+        if (ui_utility_matrix) {
+            godot::Dictionary task_def;
+            
+            // Manual tasks (like SubGraphTask) generally handle layout routing internally 
+            // or perform structural operations. By omitting the "valid_combinations" key, 
+            // we implicitly signal to TaskGraphEdit that this node bypasses the strict 
+            // hardware-layout filter and should always be available in the Utility menu.
+            
+            (*ui_utility_matrix)[p_name] = task_def;
+        }
     }
     
     // --- Legacy Godot Accessors (Routing directly to specialized registries to avoid state duplication) ---
@@ -126,6 +142,7 @@ public:
     static godot::Dictionary get_ui_transform_matrix();
     static godot::Dictionary get_ui_metadata_matrix();
     static godot::Dictionary get_ui_simulation_matrix();
+    static godot::Dictionary get_ui_utility_matrix();
 };
 
 } // namespace ideam::core
