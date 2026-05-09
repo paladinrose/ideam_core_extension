@@ -10,14 +10,15 @@
 #include <godot_cpp/variant/color.hpp>
 #include <map>
 
+#include "ideam_graph_node_resource.h"
+
 namespace ideam::godot_ext {
 
 /**
  * @class IdeamGraphNode
  * @brief The visual UI component representing a node in the DOD graph.
- * This class acts strictly as a View. It reads from a state dictionary, 
- * reflects the underlying DOD resource topology, and emits signals 
- * when the user requests a mutation.
+ * This class acts strictly as a View. It reads directly from its strongly-typed 
+ * Authoring Resource, reflecting the underlying DOD topology without caching state locally.
  */
 class IdeamGraphNode : public godot::GraphNode {
     GDCLASS(IdeamGraphNode, godot::GraphNode)
@@ -38,15 +39,9 @@ public:
         PORT_ERROR
     };
 
-private:
-    // The unique ID linking this UI node to its entry in the IdeamGraphResource
-    godot::StringName blueprint_id;
-    
-    // The DOD classification type (determines ports and UI)
-    uint32_t type_id = 0;
-
-    // Cached state of node-specific properties
-    godot::Dictionary properties;
+protected:
+    // Strong 1:1 Reference to the Authoring Model
+    godot::Ref<IdeamGraphNodeResource> node_resource;
 
     // Structural states tracking DOD enforcement
     bool is_locked_state = false;
@@ -63,7 +58,6 @@ private:
     // Helper to extract the proper theme color based on logical port state
     godot::Color _get_color_for_port_state(PortState p_state) const;
 
-protected:
     static void _bind_methods();
 
     void _notification(int p_what);
@@ -91,18 +85,25 @@ public:
 
     // --- State Synchronization ---
     /**
-     * @brief Initializes or updates the node's visual state from the Resource dictionary.
+     * @brief Initializes or updates the node's visual state directly from the strong Resource type.
      */
-    void initialize(const godot::Dictionary& p_node_data);
+    void initialize(const godot::Ref<IdeamGraphNodeResource>& p_node_res);
 
-    godot::StringName get_blueprint_id() const { return blueprint_id; }
-    uint32_t get_type_id() const { return type_id; }
-    godot::Dictionary get_properties() const { return properties; }
+    // Direct access to the authoritative model
+    godot::Ref<IdeamGraphNodeResource> get_node_resource() const { return node_resource; }
+    
+    // Convenience wrapper for the core identity string
+    godot::StringName get_blueprint_id() const;
 
     // --- Interaction & Structural Invalidation Setters ---
     void set_locked(bool p_locked);
+    bool get_locked() const;
+
     void set_error_state(bool p_error);
+    bool get_error_state() const;
+    
     void set_context_hover(bool p_hovered);
+    bool get_context_hover() const;
 
     // --- Strict Port Access Control ---
     void update_port_state(int p_slot_index, bool p_is_left, PortState p_state);

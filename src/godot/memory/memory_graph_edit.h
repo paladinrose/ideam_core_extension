@@ -4,6 +4,7 @@
 #include "memory_graph_resource.h"
 #include "memory_inspectors.h"
 #include "memory_graph_node.h"
+#include "memory_graph_node_resource.h"
 #include <godot_cpp/classes/popup_menu.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string_name.hpp>
@@ -54,6 +55,9 @@ protected:
     void _filtered_popup_select(int p_id);
 
     virtual godot::TypedArray<godot::String> _get_filtered_node_types(uint32_t p_filter_mask) const;
+
+    // Incorporate strongly-typed node spawning locally
+    void _spawn_node_by_type(int p_type_id) override;
 
     // --- Tier 2: Strict Access Routers ---
     // Safely shadows the base class router to inject Memory-specific validation

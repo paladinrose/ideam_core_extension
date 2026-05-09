@@ -155,32 +155,35 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     props["strategy_id"] = 0;
     props["type_id"] = 0;
 
-    Dictionary new_node;
-    new_node["name"] = unique_name;
-    new_node["properties"] = props;
+    // Direct instantiation of the tightly packed C++ DOD Resource instead of generic maps
+    Ref<TaskGraphNodeResource> new_res;
+    new_res.instantiate();
+    new_res->set_node_name(unique_name);
 
     switch (desc.category) {
-        case CATEGORY_TRANSFORM: new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_NATIVE_CPU); break; 
-        case CATEGORY_METADATA:  new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_NATIVE_CPU); break;
+        case CATEGORY_TRANSFORM: new_res->set_task_type(TASK_NATIVE_CPU); break; 
+        case CATEGORY_METADATA:  new_res->set_task_type(TASK_NATIVE_CPU); break;
         case CATEGORY_QUERY:     
-            new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_QUERY_CULLER); 
+            new_res->set_task_type(TASK_QUERY_CULLER); 
             props["op_id"] = 0; // 0 = CULL, 1 = ADD
             break;
         case CATEGORY_MANUAL:
             // STUB: You'll want to map this to whatever your manual task GUI node type is mapped to.
-            new_node["type_id"] = static_cast<uint32_t>(TaskType::TASK_NATIVE_CPU); 
+            new_res->set_task_type(TASK_NATIVE_CPU); 
             break;
         default: break;
     }
+
+    new_res->set_task_properties(props);
 
     // Apply scroll offset compensation
     Vector2 spawn_pos = popup_position;
     if (get_zoom() > 0.0f) {
         spawn_pos = (spawn_pos + get_scroll_offset()) / get_zoom();
     }
-    new_node["position"] = spawn_pos;
+    new_res->set_position_offset(spawn_pos);
 
-    current_blueprint->action_add_node(new_node);
+    current_blueprint->action_add_node(new_res);
 }
 
 } // namespace ideam::godot_ext

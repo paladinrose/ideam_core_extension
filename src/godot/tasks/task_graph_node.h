@@ -2,6 +2,7 @@
 
 #include "../memory/memory_graph_node.h"
 #include "../controls/runtime_inspector.h"
+#include "task_graph_node_resource.h"
 #include <godot_cpp/classes/label.hpp>
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
@@ -25,11 +26,6 @@ public:
     };
 
 private:
-    // Core task classification (Populated during _build_ui)
-    uint32_t task_type = 0;
-    uint32_t logic_id = 0;
-    godot::StringName logic_name;
-
     // Visual indicators
     godot::Label* task_type_label = nullptr;
     TransientWorkspaceState workspace_state = WORKSPACE_HIDDEN;
@@ -88,9 +84,15 @@ public:
     TaskGraphNode();
     virtual ~TaskGraphNode() override = default;
 
-    uint32_t get_task_type() const { return task_type; }
-    uint32_t get_logic_id() const { return logic_id; }
-    godot::StringName get_logic_name() const { return logic_name; }
+    /**
+     * @brief O(1) typed getter for the underlying Task Resource.
+     */
+    godot::Ref<TaskGraphNodeResource> get_task_node_resource() const;
+
+    // Direct accessors pulling from the strictly typed Resource (No local state caching)
+    uint32_t get_task_type() const;
+    uint32_t get_logic_id() const;
+    godot::StringName get_logic_name() const;
 
     // External interface to flag heap allocation statuses (e.g., from the compiler or telemetry)
     void set_workspace_state(TransientWorkspaceState p_state);

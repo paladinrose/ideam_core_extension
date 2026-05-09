@@ -12,6 +12,7 @@ TaskGraphNode::TaskGraphNode() {
 }
 
 void TaskGraphNode::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_task_node_resource"), &TaskGraphNode::get_task_node_resource);
     ClassDB::bind_method(D_METHOD("get_task_type"), &TaskGraphNode::get_task_type);
     ClassDB::bind_method(D_METHOD("get_logic_id"), &TaskGraphNode::get_logic_id);
     ClassDB::bind_method(D_METHOD("get_logic_name"), &TaskGraphNode::get_logic_name);
@@ -19,24 +20,38 @@ void TaskGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_custom_param_changed", "param_name", "value"), &TaskGraphNode::_on_custom_param_changed);
 }
 
+Ref<TaskGraphNodeResource> TaskGraphNode::get_task_node_resource() const {
+    return Object::cast_to<TaskGraphNodeResource>(get_node_resource().ptr());
+}
+
+uint32_t TaskGraphNode::get_task_type() const {
+    Ref<TaskGraphNodeResource> res = get_task_node_resource();
+    return res.is_valid() ? static_cast<uint32_t>(res->get_task_type()) : 0;
+}
+
+uint32_t TaskGraphNode::get_logic_id() const {
+    Ref<TaskGraphNodeResource> res = get_task_node_resource();
+    return res.is_valid() ? static_cast<uint32_t>(res->get_task_properties().get("logic_id", 0)) : 0;
+}
+
+StringName TaskGraphNode::get_logic_name() const {
+    return StringName();
+}
+
 void TaskGraphNode::_build_ui() {
     MemoryGraphNode::_build_ui(); // Generates ports and base states
 
-    Dictionary props = get_properties();
-    
-    // Extract base identifiers injected by the GraphEdit Spawn Cache
-    if (props.has("type_id")) task_type = static_cast<uint32_t>(props["type_id"]);
-    if (props.has("logic_id")) logic_id = static_cast<uint32_t>(props["logic_id"]);
-    if (props.has("logic_name")) logic_name = props["logic_name"];
+    Ref<TaskGraphNodeResource> task_res = get_task_node_resource();
+    if (task_res.is_null()) return;
 
     // 1. Header Setup
     task_type_label = memnew(Label);
     
     // Display the specific logic name rather than the generic Task Type
-    String label_text = String("Logic: ") + logic_name;
+    String label_text = String("Logic: ") + get_logic_name();
     
-    // Tint the node to visually separate Culler/Transform/Godot domains
-    switch (task_type) {
+    // Tint the node to visually separate Culler/Transform/Godot domains directly from the strongly-typed enum
+    switch (task_res->get_task_type()) {
         case TASK_GODOT_REFLECTION: set_self_modulate(Color(0.5f, 0.5f, 1.0f)); break; // Blue
         case TASK_NATIVE_CPU:       set_self_modulate(Color(1.0f, 0.5f, 0.5f)); break; // Red
         case TASK_COMPUTE_GPU:      set_self_modulate(Color(0.8f, 0.3f, 0.8f)); break; // Purple
@@ -179,7 +194,10 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
 void TaskGraphNode::_rebuild_logic_inspector(const Array& p_properties) {
     if (!logic_inspector) return;
     
-    Dictionary state = get_properties();
+    Ref<TaskGraphNodeResource> task_res = get_task_node_resource();
+    if (task_res.is_null()) return;
+
+    Dictionary state = task_res->get_task_properties();
     
     // We must resolve what the generic type "T" represents for DOD alignments
     Variant::Type resolved_t = Variant::NIL;
@@ -201,7 +219,6 @@ void TaskGraphNode::_rebuild_logic_inspector(const Array& p_properties) {
     logic_inspector->build_inspector(instanced_schema, state, resolved_t);
 }
 
-
 void TaskGraphNode::_update_matrix_guardrails() {
     // Base implementation is empty. Sub-nodes override this to parse the 
     // registry valid_combinations PackedInt64Array based on their dimensions.
@@ -213,6 +230,7 @@ uint64_t TaskGraphNode::_calculate_flat_index() const {
 
 void TaskGraphNode::_on_custom_param_changed(const StringName& p_param_name, const Variant& p_value) {
     // 1. Immediately route the parameter change up to the graph resource
+    // IdeamGraphEdit will catch this and update the resource's dictionary
     emit_property_changed(p_param_name, p_value);
 
     // 2. Re-evaluate the matrix. 

@@ -9,6 +9,7 @@ using namespace godot;
 namespace ideam::godot_ext {
 
 void MemoryGraphNode::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_memory_node_resource"), &MemoryGraphNode::get_memory_node_resource);
     ClassDB::bind_method(D_METHOD("update_telemetry", "inspector"), &MemoryGraphNode::update_telemetry);
     ClassDB::bind_method(D_METHOD("_on_inspect_memory_pressed"), &MemoryGraphNode::_on_inspect_memory_pressed);
     ClassDB::bind_method(D_METHOD("get_port_signature", "port_idx", "is_output"), &MemoryGraphNode::get_port_signature);
@@ -24,6 +25,10 @@ void MemoryGraphNode::_bind_methods() {
 }
 
 MemoryGraphNode::MemoryGraphNode() {
+}
+
+Ref<MemoryGraphNodeResource> MemoryGraphNode::get_memory_node_resource() const {
+    return Object::cast_to<MemoryGraphNodeResource>(get_node_resource().ptr());
 }
 
 void MemoryGraphNode::receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names) {

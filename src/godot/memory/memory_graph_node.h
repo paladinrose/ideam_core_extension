@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../graphs/ideam_graph_node.h"
+#include "memory_graph_node_resource.h"
 #include "memory_inspectors.h"
 #include "../../core/memory/memory_buffer_pod.h"
 #include <godot_cpp/classes/button.hpp>
@@ -72,6 +73,12 @@ protected:
 public:
     MemoryGraphNode();
     virtual ~MemoryGraphNode() override = default;
+
+    /**
+     * @brief O(1) typed getter for the underlying Memory Resource.
+     * Replaces any dynamic Variant lookups for memory configurations.
+     */
+    godot::Ref<MemoryGraphNodeResource> get_memory_node_resource() const;
 
     /**
      * @brief Helper for derived classes to declare their compile-time traits to the UI.

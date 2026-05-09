@@ -56,8 +56,8 @@ void MemoryGraphEdit::_memory_request_connect(const StringName &p_from_node, int
     MemoryGraphNode* from_ign = Object::cast_to<MemoryGraphNode>(from_n);
     MemoryGraphNode* to_ign = Object::cast_to<MemoryGraphNode>(to_n);
 
-    if ((from_ign && from_ign->get_properties().has("locked") && from_ign->get_properties()["locked"]) || 
-        (to_ign && to_ign->get_properties().has("locked") && to_ign->get_properties()["locked"])) {
+    // FIX: Using the newly implemented strict $O(1)$ accessors from Phase 1, replacing Variant dictionary lookups.
+    if ((from_ign && from_ign->get_locked()) || (to_ign && to_ign->get_locked())) {
         return; 
     }
 
@@ -280,7 +280,26 @@ void MemoryGraphEdit::push_telemetry(int p_core_id, const Ref<MemoryGrantInspect
     }
 }
 
-// ... _create_filtered_popup, _on_connection_to_empty, _show_filtered_popup, _filtered_popup_select, _get_filtered_node_types remain same as base logic ...
+void MemoryGraphEdit::_spawn_node_by_type(int p_type_id) {
+    if (current_blueprint.is_null()) return;
+
+    // Use strongly-typed resource allocation instead of variants
+    Ref<MemoryGraphNodeResource> new_mem_res;
+    new_mem_res.instantiate();
+    
+    Vector2 spawn_offset = (popup_position + get_scroll_offset()) / get_zoom();
+    new_mem_res->set_position_offset(spawn_offset);
+    new_mem_res->set_type_id(p_type_id);
+    
+    // In a full implementation, you map p_type_id to the specific buffer/view string name 
+    String unique_name = "MemoryNode_" + String::num_int64(UtilityFunctions::randi() % 10000);
+    new_mem_res->set_node_name(unique_name);
+    
+    current_blueprint->action_add_node(new_mem_res);
+}
+
+
+// ... Filtered Context Menus ...
 void MemoryGraphEdit::_create_filtered_popup() {}
 void MemoryGraphEdit::_on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position) {}
 void MemoryGraphEdit::_show_filtered_popup(const godot::Vector2 &p_at, uint32_t p_filter_mask) {}
