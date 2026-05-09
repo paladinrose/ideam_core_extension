@@ -9,6 +9,7 @@
 
 #include "../../core/graphs/ideam_graph_dod.h"
 #include "../memory/memory_manager_resource.h" // Needed for the dependency handshake
+#include "ideam_graph_node_resource.h" // Needed for typed array node definitions
 
 namespace ideam::godot_ext {
 
@@ -16,7 +17,7 @@ class IdeamGraphResource : public godot::Resource {
     GDCLASS(IdeamGraphResource, godot::Resource)
 
 private:
-    godot::TypedArray<godot::Dictionary> nodes;
+    godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> nodes;
     godot::TypedArray<godot::Dictionary> edges;
     
     // --- DOD Structural Parameters ---
@@ -44,8 +45,8 @@ public:
     void set_memory_manager(const godot::Ref<MemoryManagerResource>& p_manager);
     godot::Ref<MemoryManagerResource> get_memory_manager() const { return memory_manager; }
 
-    void set_nodes(const godot::TypedArray<godot::Dictionary>& p_nodes);
-    godot::TypedArray<godot::Dictionary> get_nodes() const { return nodes; }
+    void set_nodes(const godot::TypedArray<godot::Ref<IdeamGraphNodeResource>>& p_nodes);
+    godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> get_nodes() const { return nodes; }
 
     void set_edges(const godot::TypedArray<godot::Dictionary>& p_edges);
     godot::TypedArray<godot::Dictionary> get_edges() const { return edges; }
@@ -67,13 +68,13 @@ public:
     void update_managed_profiles();
 
     // --- Tier 1: Action Routers (Called by UI) ---
-    void action_add_node(const godot::Dictionary& p_node_data);
+    void action_add_node(const godot::Ref<IdeamGraphNodeResource>& p_node);
     void action_remove_node(const godot::StringName& p_node_name);
     void action_add_edge(const godot::Dictionary& p_edge_data);
     void action_remove_edge(const godot::StringName& p_from, int p_from_port, const godot::StringName& p_to, int p_to_port);
 
     // --- Tier 2: Direct Execution (The "Do" / "Undo" Targets) ---
-    void _do_add_node(const godot::Dictionary& p_node_data);
+    void _do_add_node(const godot::Ref<IdeamGraphNodeResource>& p_node);
     void _undo_add_node(const godot::StringName& p_node_name);
     void _do_add_edge(const godot::Dictionary& p_edge_data);
 };

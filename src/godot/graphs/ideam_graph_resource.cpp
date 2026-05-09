@@ -14,7 +14,8 @@ void IdeamGraphResource::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("set_nodes", "nodes"), &IdeamGraphResource::set_nodes);
     ClassDB::bind_method(D_METHOD("get_nodes"), &IdeamGraphResource::get_nodes);
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "nodes", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_nodes", "get_nodes");
+    // Explicitly enforce the type constraint in the Godot inspector.
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "nodes", PROPERTY_HINT_ARRAY_TYPE, "IdeamGraphNodeResource", PROPERTY_USAGE_STORAGE), "set_nodes", "get_nodes");
     
     ClassDB::bind_method(D_METHOD("set_edges", "edges"), &IdeamGraphResource::set_edges);
     ClassDB::bind_method(D_METHOD("get_edges"), &IdeamGraphResource::get_edges);
@@ -32,8 +33,8 @@ void IdeamGraphResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_volatile_edge_capacity"), &IdeamGraphResource::get_volatile_edge_capacity);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "volatile_edge_capacity"), "set_volatile_edge_capacity", "get_volatile_edge_capacity");
 
-    // Execution methods bound below (unchanged)...
-    ClassDB::bind_method(D_METHOD("_do_add_node", "node_data"), &IdeamGraphResource::_do_add_node);
+    // Execution methods
+    ClassDB::bind_method(D_METHOD("_do_add_node", "node"), &IdeamGraphResource::_do_add_node);
     ClassDB::bind_method(D_METHOD("_undo_add_node", "node_name"), &IdeamGraphResource::_undo_add_node);
     ClassDB::bind_method(D_METHOD("_do_add_edge", "edge_data"), &IdeamGraphResource::_do_add_edge);
 }
@@ -47,7 +48,7 @@ void IdeamGraphResource::set_memory_manager(const godot::Ref<MemoryManagerResour
     emit_changed(); 
 }
 
-void IdeamGraphResource::set_nodes(const godot::TypedArray<godot::Dictionary>& p_nodes) { 
+void IdeamGraphResource::set_nodes(const godot::TypedArray<godot::Ref<IdeamGraphNodeResource>>& p_nodes) { 
     nodes = p_nodes; 
     update_managed_profiles();
     emit_changed(); 
@@ -134,8 +135,8 @@ void IdeamGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuffe
 
 // --- Tier 1: Action Routers (Called by UI) ---
 
-void IdeamGraphResource::action_add_node(const godot::Dictionary& p_node_data) {
-    _do_add_node(p_node_data);
+void IdeamGraphResource::action_add_node(const godot::Ref<IdeamGraphNodeResource>& p_node) {
+    _do_add_node(p_node);
 }
 
 void IdeamGraphResource::action_remove_node(const godot::StringName& p_node_name) {
@@ -161,16 +162,18 @@ void IdeamGraphResource::action_remove_edge(const godot::StringName& p_from, int
 
 // --- Tier 2: Direct Execution (The "Do" / "Undo" Targets) ---
 
-void IdeamGraphResource::_do_add_node(const godot::Dictionary& p_node_data) {
-    nodes.append(p_node_data);
-    update_managed_profiles(); // Ensures memory UI updates instantly
-    emit_changed();
+void IdeamGraphResource::_do_add_node(const godot::Ref<IdeamGraphNodeResource>& p_node) {
+    if (p_node.is_valid()) {
+        nodes.append(p_node);
+        update_managed_profiles(); // Ensures memory UI updates instantly
+        emit_changed();
+    }
 }
 
 void IdeamGraphResource::_undo_add_node(const godot::StringName& p_node_name) {
     for (int i = 0; i < nodes.size(); ++i) {
-        godot::Dictionary n = nodes[i];
-        if (n.has("name") && static_cast<godot::StringName>(n["name"]) == p_node_name) {
+        godot::Ref<IdeamGraphNodeResource> n = nodes[i];
+        if (n.is_valid() && n->get_node_name() == p_node_name) {
             nodes.remove_at(i);
             update_managed_profiles(); // Ensures memory UI updates instantly
             emit_changed();

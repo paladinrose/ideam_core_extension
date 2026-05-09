@@ -71,24 +71,27 @@ std::shared_ptr<core::MemoryGraphDOD> MemoryGraphResource::compile_to_memory_gra
     // 1. Instantiate the specialized MemoryGraphDOD
     auto memory_graph = std::make_shared<core::MemoryGraphDOD>(p_manager);
     
-    godot::TypedArray<godot::Dictionary> current_nodes = get_nodes();
+    // The base get_nodes() now returns a strongly-typed Array of IdeamGraphNodeResource references
+    godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> current_nodes = get_nodes();
     godot::TypedArray<godot::Dictionary> current_edges = get_edges();
 
     memory_graph->reserve(current_nodes.size(), current_edges.size());
     r_ui_to_dod_map.clear();
 
-    // 2. Compile Nodes
+    // 2. Compile Nodes (Fast Path via Direct Resource Pointers)
     for (int i = 0; i < current_nodes.size(); ++i) {
-        godot::Dictionary n = current_nodes[i];
-        if (!n.has("name") || !n.has("type_id")) continue;
+        godot::Ref<MemoryGraphNodeResource> n = current_nodes[i];
+        if (!n.is_valid()) continue;
 
-        godot::StringName ui_name = n["name"];
-        
-        core::NodeID core_id = memory_graph->add_node(static_cast<uint32_t>(n["type_id"]));
+        godot::StringName ui_name = n->get_node_name();
+        if (ui_name.is_empty()) continue; // Skip uninitialized identity
+
+        // Retrieve native POD values straight from the VTable, no Dictionary map-hashing
+        core::NodeID core_id = memory_graph->add_node(n->get_type_id());
         r_ui_to_dod_map[ui_name] = core_id;
     }
 
-    // 3. Compile Edges
+    // 3. Compile Edges (Remains Dict-based until Edge serialization is similarly refactored)
     for (int i = 0; i < current_edges.size(); ++i) {
         godot::Dictionary e = current_edges[i];
         if (!e.has("from") || !e.has("to")) continue;

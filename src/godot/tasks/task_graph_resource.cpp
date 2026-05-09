@@ -8,11 +8,6 @@ namespace ideam::godot_ext {
 void TaskGraphResource::_bind_methods() {
     using namespace godot;
 
-    ClassDB::bind_integer_constant(get_class_static(), "TaskType", "TASK_GODOT_REFLECTION", TASK_GODOT_REFLECTION);
-    ClassDB::bind_integer_constant(get_class_static(), "TaskType", "TASK_NATIVE_CPU", TASK_NATIVE_CPU);
-    ClassDB::bind_integer_constant(get_class_static(), "TaskType", "TASK_COMPUTE_GPU", TASK_COMPUTE_GPU);
-    ClassDB::bind_integer_constant(get_class_static(), "TaskType", "TASK_QUERY_CULLER", TASK_QUERY_CULLER);
-
     // Bind Command Arena Configurations
     ClassDB::bind_method(D_METHOD("set_command_arena_capacity_bytes", "bytes"), &TaskGraphResource::set_command_arena_capacity_bytes);
     ClassDB::bind_method(D_METHOD("get_command_arena_capacity_bytes"), &TaskGraphResource::get_command_arena_capacity_bytes);
@@ -69,7 +64,7 @@ void TaskGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuffer
     // --- Profile 7: Selection Command Queue ---
     // Backs the `TaskSelectionCommandPOD` index queue for wave expansion
     int sel_bytes = selection_queue_capacity_elements * sizeof(int64_t);
-    // FIX: Align to 4KB Virtual Pages to match _ensure_buffer projection
+    // Align to 4KB Virtual Pages to match _ensure_buffer projection
     int padded_sel_arena = ((sel_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
 
     godot::Ref<ManagedBufferProfile> sel_arena_profile;
@@ -87,48 +82,51 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
     core::MemoryManagerDOD* p_manager, 
     godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const 
 {
-    
     auto task_graph = std::make_shared<core::TaskGraphDOD>(p_manager);
     
-    godot::TypedArray<godot::Dictionary> current_nodes = get_nodes();
+    godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> current_nodes = get_nodes();
     godot::TypedArray<godot::Dictionary> current_edges = get_edges();
 
     task_graph->reserve(current_nodes.size(), current_edges.size());
     r_ui_to_dod_map.clear();
 
+    // Fast-path node compilation
     for (int i = 0; i < current_nodes.size(); ++i) {
-        godot::Dictionary n = current_nodes[i];
-        if (!n.has("name") || !n.has("task_type")) continue;
+        godot::Ref<TaskGraphNodeResource> n = current_nodes[i];
+        
+        // Skip null instances or pruned nodes directly via strongly-typed virtual call
+        if (!n.is_valid() || !n->get_is_active()) continue;
 
-        godot::StringName ui_name = n["name"];
-        core::TaskTypeDOD type_dod = static_cast<core::TaskTypeDOD>(static_cast<uint32_t>(n["task_type"]));
+        godot::StringName ui_name = n->get_node_name();
+        if (ui_name.is_empty()) continue;
+        
+        core::TaskTypeDOD type_dod = static_cast<core::TaskTypeDOD>(n->get_task_type());
         
         core::NodeID core_id = task_graph->add_task_node(type_dod);
         r_ui_to_dod_map[ui_name] = core_id;
 
-        if (n.has("properties")) {
-            godot::Dictionary props = n["properties"];
+        godot::Dictionary props = n->get_task_properties();
             
-            switch (type_dod) {
-                case core::TaskTypeDOD::NATIVE_CPU: {
-                    if (props.has("native_class")) {
-                        godot::StringName native_class = props["native_class"];
-                        auto native_interface = core::NativeTaskRegistry::create(native_class);
+        switch (type_dod) {
+            case core::TaskTypeDOD::NATIVE_CPU: {
+                if (props.has("native_class")) {
+                    godot::StringName native_class = props["native_class"];
+                    auto native_interface = core::NativeTaskRegistry::create(native_class);
                         
-                        if (native_interface) {
-                            native_interface->apply_properties(props);
-                            task_graph->configure_native_interface(core_id, std::move(native_interface));
-                        } else {
-                            godot::UtilityFunctions::printerr("TaskGraph Compiler: Unable to find registered native task '", native_class, "' for node '", ui_name, "'");
-                        }
+                    if (native_interface) {
+                        native_interface->apply_properties(props);
+                        task_graph->configure_native_interface(core_id, std::move(native_interface));
+                    } else {
+                        godot::UtilityFunctions::printerr("TaskGraph Compiler: Unable to find registered native task '", native_class, "' for node '", ui_name, "'");
                     }
-                    break;
                 }
-                default: break;
+                break;
             }
+            default: break;
         }
     }
 
+    // Edge Compilation (Still parsing AoS Dicts)
     for (int i = 0; i < current_edges.size(); ++i) {
         godot::Dictionary e = current_edges[i];
         if (!e.has("from") || !e.has("to")) continue;

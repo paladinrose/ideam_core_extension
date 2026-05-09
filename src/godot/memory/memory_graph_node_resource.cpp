@@ -11,6 +11,9 @@ MemoryGraphNodeResource::MemoryGraphNodeResource() {
 }
 
 void MemoryGraphNodeResource::_bind_methods() {
+    godot::ClassDB::bind_method(godot::D_METHOD("set_type_id", "id"), &MemoryGraphNodeResource::set_type_id);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_type_id"), &MemoryGraphNodeResource::get_type_id);
+
     godot::ClassDB::bind_method(godot::D_METHOD("set_memory_grant", "grant"), &MemoryGraphNodeResource::set_memory_grant);
     godot::ClassDB::bind_method(godot::D_METHOD("get_memory_grant"), &MemoryGraphNodeResource::get_memory_grant);
 
@@ -18,8 +21,18 @@ void MemoryGraphNodeResource::_bind_methods() {
     // This emphasizes to the user that these are hard execution constraints.
     ADD_GROUP("DOD Constraints", "");
     
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "type_id"), "set_type_id", "get_type_id");
+    
     // Enforce that the inspector only accepts MemoryGrantResource types
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "memory_grant", godot::PROPERTY_HINT_RESOURCE_TYPE, "MemoryGrantResource"), "set_memory_grant", "get_memory_grant");
+}
+
+void MemoryGraphNodeResource::set_type_id(uint32_t p_id) {
+    type_id = p_id;
+}
+
+uint32_t MemoryGraphNodeResource::get_type_id() const {
+    return type_id;
 }
 
 void MemoryGraphNodeResource::set_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) {

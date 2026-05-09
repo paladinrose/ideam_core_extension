@@ -2,6 +2,7 @@
 
 #include "../graphs/ideam_graph_resource.h"
 #include "../../core/memory/memory_graph_dod.h"
+#include "memory_graph_node_resource.h"
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <memory>

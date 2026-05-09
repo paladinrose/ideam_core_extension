@@ -17,8 +17,10 @@ class MemoryGraphNodeResource : public IdeamGraphNodeResource {
     GDCLASS(MemoryGraphNodeResource, IdeamGraphNodeResource)
 
 private:
-    // The setup-time blueprint for our cache-aligned MemoryGrantPOD
     godot::Ref<MemoryGrantResource> memory_grant;
+    
+    // Abstracted away from the loosely-packed dictionary, mapping 1:1 with DOD architecture
+    uint32_t type_id = 0; 
 
 protected:
     static void _bind_methods();
@@ -28,16 +30,13 @@ public:
     ~MemoryGraphNodeResource() override = default;
 
     // --- Configuration ---
+    void set_type_id(uint32_t p_id);
+    uint32_t get_type_id() const;
+
     void set_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant);
     godot::Ref<MemoryGrantResource> get_memory_grant() const;
 
     // --- DOD Compilation Interface ---
-    
-    /**
-     * @brief Ensures both the base topological data AND the specific hardware 
-     * memory constraints are valid before allowing the DOD Graph Compiler 
-     * to instantiate the raw runtime structures.
-     */
     bool validate_for_compilation() const override;
 };
 

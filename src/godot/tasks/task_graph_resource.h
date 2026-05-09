@@ -2,21 +2,12 @@
 
 #include "../memory/memory_graph_resource.h"
 #include "../../core/tasks/task_graph_dod.h"
+#include "task_graph_node_resource.h"
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include <memory>
 
 namespace ideam::godot_ext {
-
-/**
- * TaskType
- * Godot-exposed mirror of core::TaskTypeDOD
- */
-enum TaskType : uint32_t {
-    TASK_GODOT_REFLECTION = 0,
-    TASK_NATIVE_CPU       = 1,
-    TASK_COMPUTE_GPU      = 2,
-    TASK_QUERY_CULLER     = 3
-};
 
 class TaskGraphResource : public MemoryGraphResource {
     GDCLASS(TaskGraphResource, MemoryGraphResource)
