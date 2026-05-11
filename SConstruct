@@ -23,6 +23,7 @@ else:
 
 # --- INCLUDE PATHS ---
 env.Append(CPPPATH=["src/"])
+env.Append(CPPPATH=["src/external"])
 
 # --- SOURCE DISCOVERY ---
 # Using Python's os.walk guarantees we find every .cpp file, no matter how deep the folders go.

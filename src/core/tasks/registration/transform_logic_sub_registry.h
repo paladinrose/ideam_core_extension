@@ -64,21 +64,20 @@ namespace {
     template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::Type::KERNEL_POINTS)>> { static constexpr size_t value = T_Resolver::Type::KERNEL_POINTS; static constexpr bool has_kernel = true; };
 
     template <TransformLogicID ID, typename T_Concrete, typename T_Strategy> struct TransformLogicResolver { static constexpr bool is_valid = false; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundaryConstraint, C, S> { using Type = BoundaryConstraintTransformLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundaryConstraint, C, S> { using Type = BoundaryConstraintTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundsExtraction, C, S> { using Type = BoundsExtractionTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::DataScatter, C, S> { using Type = DataScatterTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::DataSort, C, S> { using Type = DataSortTransformLogic<C>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic<C>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::FastNoiseLite, C, S> { using Type = FastNoiseLiteTransformLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::FastNoiseLite, C, S> { using Type = FastNoiseLiteTransformLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::NoiseInjection, C, S> { using Type = NoiseInjectionTransformLogic<C>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, 9>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, 25>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, 49>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, 5>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, 13>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, 25>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 9>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 25>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 49>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 5>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 13>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 25>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ValueAccumulation, C, S> { using Type = ValueAccumulationTransformLogic<C>; static constexpr bool is_valid = true; };
-
     template <TransformLogicID LogicID, typename C, typename S> struct LogicKernelExtractor : KernelExtractorImpl<TransformLogicResolver<LogicID, C, S>> {};
 
     template <MemoryStrategy ID> struct StrategyResolver { static constexpr bool is_valid = false; };

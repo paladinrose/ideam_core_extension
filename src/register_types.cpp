@@ -12,6 +12,7 @@
 #include "godot/graphs/ideam_graphs_plugin.h"
 
 #include "godot/graphs/ideam_graph_resource.h"
+#include "godot/graphs/ideam_graph_node_resource.h"
 #include "godot/graphs/ideam_graph_edit.h"
 #include "godot/graphs/ideam_graph_node.h"
 #include "godot/graphs/ideam_graph_inspector.h"
@@ -23,10 +24,14 @@
 #include "godot/memory/memory_graph_edit.h"
 #include "godot/memory/memory_graph_node.h"
 #include "godot/memory/memory_graph_inspector.h"
+#include "godot/memory/memory_inspectors.h"
 #include "godot/memory/memory_buffer_resource.h"
 #include "godot/memory/managed_buffer_profile.h"
 #include "godot/memory/memory_manager_resource.h"
 #include "godot/memory/memory_graph_resource.h"
+#include "godot/memory/memory_graph_node_resource.h"
+#include "godot/memory/memory_grant_resource.h"
+#include "godot/memory/grant_part_resource.h"
 
 // --- Tasks UI & Editor ---
 #include "godot/tasks/ideam_tasks_plugin.h"
@@ -35,10 +40,12 @@
 #include "godot/tasks/task_graph_node.h"
 #include "godot/tasks/task_graph_inspector.h"
 #include "godot/tasks/task_graph_resource.h"
+#include "godot/tasks/task_graph_node_resource.h"
 #include "godot/tasks/task_graph_host.h" 
 
 // Native task registration
 #include "core/tasks/registration/native_task_registry.h"
+
 // --- Views ---
 #include "core/memory/views/single_element_view.h"
 #include "core/memory/views/multi_element_view.h"
@@ -55,7 +62,6 @@
 
 // --- Strategies ---
 #include "core/memory/views/strategies.h"
-
 
 // --- Narratives Plugin ---
 #include "godot/narratives/narreme.h"
@@ -111,20 +117,21 @@ using namespace ideam::core;
 void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	// ========================================================================
 	// SCENE LEVEL
-	// Register all runtime Nodes, Resources, and RefCounted objects here.
-	// These are available in the running game and the exported binary.
 	// ========================================================================
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		
 		// Foundational Base Classes - Registered as Abstract to protect constructors
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNodeResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::GameEntity);
 		
         // Graphs UI
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphNode);
+		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
 
 		// Memory UI
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
@@ -132,9 +139,12 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphEdit);
         GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphNode);
+		GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantResource);
+		GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
 
 		// Tasks UI 
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
+		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphNodeResource);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
         GDREGISTER_CLASS(ideam::godot_ext::TaskGraphNode);
@@ -185,8 +195,6 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 
 	// ========================================================================
 	// EDITOR LEVEL
-	// Register all Tool, Inspector, and Graph UI nodes here.
-	// These are stripped from the final exported binary.
 	// ========================================================================
 	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
 		
@@ -195,7 +203,6 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorInspectorPlugin);
 		
         // Graph tooling
-		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphInspector);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphsPlugin);
 

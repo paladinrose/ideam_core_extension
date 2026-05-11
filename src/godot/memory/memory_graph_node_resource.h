@@ -9,14 +9,19 @@ namespace ideam::godot_ext {
 /**
  * @class MemoryGraphNodeResource
  * @brief The intermediate Authoring component defining a node's memory footprint.
- * * Extends the visual/topological base node to include strict memory access 
- * requirements (Memory Grants). During graph compilation, the MemoryGraphDOD 
- * parses these resources to allocate flat, contiguous structures for the hot-loop.
+ * Maps closely to MemoryNodeMetadata in the DOD graph.
  */
 class MemoryGraphNodeResource : public IdeamGraphNodeResource {
     GDCLASS(MemoryGraphNodeResource, IdeamGraphNodeResource)
 
+public:
+    enum GrantDerivationMode {
+        MODE_INDEPENDENT = 0, // Declares unique requirements via a MemoryGrantResource
+        MODE_FORKED = 1       // Aliases a parent node's physical pointers (Selection-Aware)
+    };
+
 private:
+    GrantDerivationMode derivation_mode = MODE_INDEPENDENT;
     godot::Ref<MemoryGrantResource> memory_grant;
     
     // Abstracted away from the loosely-packed dictionary, mapping 1:1 with DOD architecture
@@ -33,6 +38,9 @@ public:
     void set_type_id(uint32_t p_id);
     uint32_t get_type_id() const;
 
+    void set_derivation_mode(int p_mode);
+    int get_derivation_mode() const;
+
     void set_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant);
     godot::Ref<MemoryGrantResource> get_memory_grant() const;
 
@@ -41,3 +49,5 @@ public:
 };
 
 } // namespace ideam::godot_ext
+
+VARIANT_ENUM_CAST(ideam::godot_ext::MemoryGraphNodeResource::GrantDerivationMode);

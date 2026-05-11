@@ -43,11 +43,13 @@ void MetadataTaskGraphNode::_rebuild_dynamic_ui() {
     strategy_dropdown->connect("item_selected", Callable(this, "_on_strategy_selected"));
     type_dropdown->connect("item_selected", Callable(this, "_on_type_selected"));
 
-    // 4. Restore state from DOD Property Dictionary
-    Dictionary props = get_properties();
-    if (props.has("view_id")) view_dropdown->select(static_cast<int>(props["view_id"]));
-    if (props.has("strategy_id")) strategy_dropdown->select(static_cast<int>(props["strategy_id"]));
-    if (props.has("type_id")) type_dropdown->select(static_cast<int>(props["type_id"]));
+    // 4. Restore state from strongly-typed Authoring Resource
+    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        view_dropdown->select(res->get_view_id());
+        strategy_dropdown->select(res->get_strategy_id());
+        type_dropdown->select(res->get_type_id());
+    }
 
     // 5. Run initial guardrail evaluation to prune invalid combos
     _update_matrix_guardrails();
@@ -131,15 +133,27 @@ void MetadataTaskGraphNode::_update_matrix_guardrails() {
 // --- Interaction Routing ---
 
 void MetadataTaskGraphNode::_on_view_selected(int p_index) {
-    _on_custom_param_changed("view_id", p_index);
+    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        res->set_view_id(p_index);
+        emit_property_changed(StringName("view_id"), p_index);
+    }
 }
 
 void MetadataTaskGraphNode::_on_strategy_selected(int p_index) {
-    _on_custom_param_changed("strategy_id", p_index);
+    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        res->set_strategy_id(p_index);
+        emit_property_changed(StringName("strategy_id"), p_index);
+    }
 }
 
 void MetadataTaskGraphNode::_on_type_selected(int p_index) {
-    _on_custom_param_changed("type_id", p_index);
+    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        res->set_type_id(p_index);
+        emit_property_changed(StringName("type_id"), p_index);
+    }
     
     Dictionary matrix = core::NativeTaskRegistry::get_ui_metadata_matrix();
     String logic_str = String::num_int64(get_logic_id());

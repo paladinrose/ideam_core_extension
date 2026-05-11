@@ -57,12 +57,14 @@ void QueryTaskGraphNode::_rebuild_dynamic_ui() {
     strategy_dropdown->connect("item_selected", Callable(this, "_on_strategy_selected"));
     type_dropdown->connect("item_selected", Callable(this, "_on_type_selected"));
 
-    // Restore state from DOD Property Dictionary
-    Dictionary props = get_properties();
-    if (props.has("op_id")) op_dropdown->select(static_cast<int>(props["op_id"]));
-    if (props.has("view_id")) view_dropdown->select(static_cast<int>(props["view_id"]));
-    if (props.has("strategy_id")) strategy_dropdown->select(static_cast<int>(props["strategy_id"]));
-    if (props.has("type_id")) type_dropdown->select(static_cast<int>(props["type_id"]));
+    // Restore state from strongly-typed Authoring Resource
+    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        op_dropdown->select(res->get_op_id());
+        view_dropdown->select(res->get_view_id());
+        strategy_dropdown->select(res->get_strategy_id());
+        type_dropdown->select(res->get_type_id());
+    }
 
     // Run initial guardrail evaluation to prune invalid combos
     _update_matrix_guardrails();
@@ -224,20 +226,36 @@ void QueryTaskGraphNode::_update_matrix_guardrails() {
 // --- Interaction Routing ---
 
 void QueryTaskGraphNode::_on_op_selected(int p_index) {
-    _on_custom_param_changed("op_id", p_index);
+    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        res->set_op_id(p_index);
+        emit_property_changed(StringName("op_id"), p_index);
+    }
     _rebuild_ports();
 }
 
 void QueryTaskGraphNode::_on_view_selected(int p_index) {
-    _on_custom_param_changed("view_id", p_index);
+    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        res->set_view_id(p_index);
+        emit_property_changed(StringName("view_id"), p_index);
+    }
 }
 
 void QueryTaskGraphNode::_on_strategy_selected(int p_index) {
-    _on_custom_param_changed("strategy_id", p_index);
+    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        res->set_strategy_id(p_index);
+        emit_property_changed(StringName("strategy_id"), p_index);
+    }
 }
 
 void QueryTaskGraphNode::_on_type_selected(int p_index) {
-    _on_custom_param_changed("type_id", p_index);
+    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    if (res.is_valid()) {
+        res->set_type_id(p_index);
+        emit_property_changed(StringName("type_id"), p_index);
+    }
 
     Dictionary matrix = core::NativeTaskRegistry::get_ui_query_matrix();
     String logic_str = String::num_int64(get_logic_id());
