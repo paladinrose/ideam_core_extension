@@ -44,7 +44,7 @@ void MetadataTaskGraphNode::_rebuild_dynamic_ui() {
     type_dropdown->connect("item_selected", Callable(this, "_on_type_selected"));
 
     // 4. Restore state from strongly-typed Authoring Resource
-    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    Ref<MetadataTaskResource> res = node_resource;
     if (res.is_valid()) {
         view_dropdown->select(res->get_view_id());
         strategy_dropdown->select(res->get_strategy_id());
@@ -133,7 +133,7 @@ void MetadataTaskGraphNode::_update_matrix_guardrails() {
 // --- Interaction Routing ---
 
 void MetadataTaskGraphNode::_on_view_selected(int p_index) {
-    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    Ref<MetadataTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_view_id(p_index);
         emit_property_changed(StringName("view_id"), p_index);
@@ -141,7 +141,7 @@ void MetadataTaskGraphNode::_on_view_selected(int p_index) {
 }
 
 void MetadataTaskGraphNode::_on_strategy_selected(int p_index) {
-    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    Ref<MetadataTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_strategy_id(p_index);
         emit_property_changed(StringName("strategy_id"), p_index);
@@ -149,7 +149,7 @@ void MetadataTaskGraphNode::_on_strategy_selected(int p_index) {
 }
 
 void MetadataTaskGraphNode::_on_type_selected(int p_index) {
-    Ref<MetadataTaskGraphNodeResource> res = node_resource;
+    Ref<MetadataTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_type_id(p_index);
         emit_property_changed(StringName("type_id"), p_index);

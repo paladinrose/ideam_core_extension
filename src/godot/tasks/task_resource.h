@@ -17,15 +17,15 @@ enum TaskType : uint32_t {
 };
 
 /**
- * @class TaskGraphNodeResource
+ * @class TaskResource
  * @brief The baseline Authoring component for executable graph instructions.
  * * Extends MemoryGraphNodeResource to define scheduling and threading constraints.
  * Specific execution logic (Transform, Query, Metadata) is deferred to derived classes.
  * The Graph Compiler uses this layer to build thread-safe execution queues 
  * (e.g., job system dependency barriers) before fetching the actual task payloads.
  */
-class TaskGraphNodeResource : public MemoryGraphNodeResource {
-    GDCLASS(TaskGraphNodeResource, MemoryGraphNodeResource)
+class TaskResource : public MemoryGraphNodeResource {
+    GDCLASS(TaskResource, MemoryGraphNodeResource)
 
 public:
     // Defines how the runtime DOD task scheduler should dispatch this node.
@@ -55,8 +55,8 @@ protected:
     static void _bind_methods();
 
 public:
-    TaskGraphNodeResource() = default;
-    ~TaskGraphNodeResource() override = default;
+    TaskResource() = default;
+    ~TaskResource() override = default;
 
     // --- Scheduling Configuration ---
     void set_execution_mode(int p_mode);
@@ -84,4 +84,4 @@ public:
 
 // Expose enums to Godot globally
 VARIANT_ENUM_CAST(ideam::godot_ext::TaskType);
-VARIANT_ENUM_CAST(ideam::godot_ext::TaskGraphNodeResource::ExecutionMode);
+VARIANT_ENUM_CAST(ideam::godot_ext::TaskResource::ExecutionMode);

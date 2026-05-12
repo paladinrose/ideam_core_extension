@@ -1,17 +1,17 @@
 #pragma once
 
-#include "task_graph_node_resource.h"
+#include "task_resource.h"
 
 namespace ideam::godot_ext {
 
 /**
- * @class TransformTaskGraphNodeResource
+ * @class TransformTaskResource
  * @brief Strictly typed resource payload for Transform execution nodes.
  * Replaces dictionary allocations with a 12-byte packed struct (view, strategy, type),
  * ensuring fast, predictable cache alignment during execution graph compilation.
  */
-class TransformTaskGraphNodeResource : public TaskGraphNodeResource {
-    GDCLASS(TransformTaskGraphNodeResource, TaskGraphNodeResource)
+class TransformTaskResource : public TaskResource {
+    GDCLASS(TransformTaskResource, TaskResource)
 
 private:
     // Tightly packed 12-byte boundary for O(1) DOD matrix resolution.
@@ -24,8 +24,8 @@ protected:
     static void _bind_methods();
 
 public:
-    TransformTaskGraphNodeResource() = default;
-    ~TransformTaskGraphNodeResource() override = default;
+    TransformTaskResource() = default;
+    ~TransformTaskResource() override = default;
 
     // --- DOD Matrix Configuration ---
     void set_view_id(int p_id);

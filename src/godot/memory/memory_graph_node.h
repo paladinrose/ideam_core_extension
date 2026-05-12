@@ -94,9 +94,14 @@ public:
     /**
      * @brief Binds a BufferLayoutType to a specific visual port slot.
      */
-    void update_memory_port(int p_slot_index, bool p_is_left, core::BufferLayoutType p_layout);
+    // [Memz] Wrap the core enum in godot::BitField to satisfy the Variant int64_t cast
+    void update_memory_port(int p_slot_index, bool p_is_left, godot::BitField<core::BufferLayoutType> p_layout);
 
     virtual void receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names);
 };
 
 } // namespace ideam::godot_ext
+
+VARIANT_BITFIELD_CAST(ideam::core::BufferLayoutType);
+VARIANT_ENUM_CAST(ideam::godot_ext::MemoryGraphNode::LayoutHeaderState);
+VARIANT_ENUM_CAST(ideam::godot_ext::MemoryGraphNode::TelemetryBadgeState);

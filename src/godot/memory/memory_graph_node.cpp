@@ -13,15 +13,35 @@ void MemoryGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("update_telemetry", "inspector"), &MemoryGraphNode::update_telemetry);
     ClassDB::bind_method(D_METHOD("_on_inspect_memory_pressed"), &MemoryGraphNode::_on_inspect_memory_pressed);
     ClassDB::bind_method(D_METHOD("get_port_signature", "port_idx", "is_output"), &MemoryGraphNode::get_port_signature);
-    ClassDB::bind_method(D_METHOD("set_header_state", "state"), &MemoryGraphNode::set_header_state);
-    ClassDB::bind_method(D_METHOD("update_memory_port", "slot_index", "is_left", "layout_type"), &MemoryGraphNode::update_memory_port);
     ClassDB::bind_method(D_METHOD("receive_buffer_names_list", "names"), &MemoryGraphNode::receive_buffer_names_list);
-
+    ClassDB::bind_method(D_METHOD("update_memory_port", "slot_index", "is_left", "layout"), &MemoryGraphNode::update_memory_port);
+    ClassDB::bind_method(D_METHOD("set_header_state", "state"), &MemoryGraphNode::set_header_state);
+    
     ADD_SIGNAL(MethodInfo("inspect_memory_requested", PropertyInfo(Variant::OBJECT, "inspector", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGrantInspector")));
     ADD_SIGNAL(MethodInfo("buffer_names_requested", 
         PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGraphNode"),
         PropertyInfo(Variant::ARRAY, "buffer_ids", PROPERTY_HINT_ARRAY_TYPE, "int")));
+
+    // [Memz] Manually bind external DOD bitflags to int64_t to safely cross the engine boundary.
+    // This keeps src/core/ entirely agnostic of Godot's reflection macros.
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_NONE"), static_cast<int64_t>(core::BufferLayoutType::NONE));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_FLAT"), static_cast<int64_t>(core::BufferLayoutType::FLAT));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_AOS"), static_cast<int64_t>(core::BufferLayoutType::AOS));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_SOA"), static_cast<int64_t>(core::BufferLayoutType::SOA));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_SPARSE_SET"), static_cast<int64_t>(core::BufferLayoutType::SPARSE_SET));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_TILED_SOA"), static_cast<int64_t>(core::BufferLayoutType::TILED_SOA));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_RING"), static_cast<int64_t>(core::BufferLayoutType::RING));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_PAGED"), static_cast<int64_t>(core::BufferLayoutType::PAGED));
     
+    // Expose LayoutHeaderState to GDScript
+    BIND_ENUM_CONSTANT(HEADER_VALID);
+    BIND_ENUM_CONSTANT(HEADER_ERROR);
+
+    // Expose TelemetryBadgeState to GDScript
+    BIND_ENUM_CONSTANT(TELEMETRY_INACTIVE);
+    BIND_ENUM_CONSTANT(TELEMETRY_ACTIVE);
+    BIND_ENUM_CONSTANT(TELEMETRY_DIRTY);
+    BIND_ENUM_CONSTANT(TELEMETRY_ERROR);
 }
 
 MemoryGraphNode::MemoryGraphNode() {
@@ -121,8 +141,10 @@ Ref<Texture2D> MemoryGraphNode::_get_badge_icon_for_telemetry(TelemetryBadgeStat
 
 // --- Tier 2: Public Mutations ---
 
-void MemoryGraphNode::update_memory_port(int p_slot_index, bool p_is_left, core::BufferLayoutType p_layout) {
-    Ref<Texture2D> shape_icon = _get_icon_for_layout(p_layout);
+void MemoryGraphNode::update_memory_port(int p_slot_index, bool p_is_left, godot::BitField<core::BufferLayoutType> p_layout) {
+    // [Memz] Extract the underlying enum class value from the BitField wrapper
+    core::BufferLayoutType layout_val = static_cast<core::BufferLayoutType>(static_cast<int64_t>(p_layout));
+    Ref<Texture2D> shape_icon = _get_icon_for_layout(layout_val);
 
     // Persist existing settings, only overwrite the icon
     bool enable_left  = is_slot_enabled_left(p_slot_index);

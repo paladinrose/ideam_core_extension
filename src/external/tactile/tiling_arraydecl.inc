@@ -181,7 +181,7 @@ static const double default_params_array_06[] = {
 static const double default_params_array_07[] = {
 	0.12239750492, 0.5, 0.225335752741 };
 static const double default_params_array_08[] = {
-	 };
+	0.0 };
 static const double default_params_array_09[] = {
 	0.12239750492, 0.225335752741 };
 static const double default_params_array_10[] = {

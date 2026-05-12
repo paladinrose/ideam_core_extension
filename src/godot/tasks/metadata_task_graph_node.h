@@ -1,7 +1,7 @@
 #pragma once
 
 #include "task_graph_node.h"
-#include "metadata_task_graph_node_resource.h"
+#include "metadata_task_resource.h"
 #include <godot_cpp/classes/option_button.hpp>
 
 namespace ideam::godot_ext {

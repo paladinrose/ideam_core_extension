@@ -13,6 +13,7 @@ void MemoryGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_telemetry_mapping", "map"), &MemoryGraphEdit::set_telemetry_mapping);
     ClassDB::bind_method(D_METHOD("push_telemetry", "core_id", "inspector"), &MemoryGraphEdit::push_telemetry);
     
+    ClassDB::bind_method(D_METHOD("_on_buffer_names_requested", "node", "buffer_ids"), &MemoryGraphEdit::_on_buffer_names_requested);
     ClassDB::bind_method(D_METHOD("_memory_request_connect", "from_node", "from_port", "to_node", "to_port"), &MemoryGraphEdit::_memory_request_connect);
     ClassDB::bind_method(D_METHOD("_on_connection_to_empty", "from_node", "from_port", "release_position"), &MemoryGraphEdit::_on_connection_to_empty);
     ClassDB::bind_method(D_METHOD("_filtered_popup_select", "id"), &MemoryGraphEdit::_filtered_popup_select);
@@ -41,6 +42,37 @@ void MemoryGraphEdit::_notification(int p_what) {
     if (p_what == NOTIFICATION_DRAW) {
         _draw_custom_edges();
     }
+}
+
+void MemoryGraphEdit::_on_buffer_names_requested(godot::Object* p_node, const godot::Array& p_buffer_ids) {
+    MemoryGraphNode* requesting_node = Object::cast_to<MemoryGraphNode>(p_node);
+    if (!requesting_node) return;
+
+    // Cast the base IdeamGraphResource up to our memory-aware blueprint
+    Ref<MemoryGraphResource> mem_blueprint = current_blueprint;
+    if (mem_blueprint.is_null()) return;
+
+    // Retrieve the authoritative DOD Manager Resource
+    Ref<MemoryManagerResource> manager = mem_blueprint->get_memory_manager();
+    if (manager.is_null()) return;
+
+    TypedArray<StringName> names;
+
+    // Route based on payload density
+    if (p_buffer_ids.is_empty()) {
+        names = manager->get_buffer_names();
+    } else {
+        // Unpack the Variant Array into a contiguous stack array for the resource fetcher
+        PackedInt32Array packed_ids;
+        packed_ids.resize(p_buffer_ids.size());
+        for (int i = 0; i < p_buffer_ids.size(); ++i) {
+            packed_ids.set(i, p_buffer_ids[i]);
+        }
+        names = manager->get_selected_buffer_names(packed_ids);
+    }
+
+    // Pass the contiguous string pointers back down to the UI node
+    requesting_node->receive_buffer_names_list(names);
 }
 
 // ==========================================

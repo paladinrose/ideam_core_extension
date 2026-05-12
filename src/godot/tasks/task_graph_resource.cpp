@@ -92,7 +92,7 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
 
     // Fast-path node compilation
     for (int i = 0; i < current_nodes.size(); ++i) {
-        godot::Ref<TaskGraphNodeResource> n = current_nodes[i];
+        godot::Ref<TaskResource> n = current_nodes[i];
         
         // Skip null instances or pruned nodes directly via strongly-typed virtual call
         if (!n.is_valid() || !n->get_is_active()) continue;

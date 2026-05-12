@@ -2,7 +2,7 @@
 
 #include "../memory/memory_graph_node.h"
 #include "../controls/runtime_inspector.h"
-#include "task_graph_node_resource.h"
+#include "task_resource.h"
 #include <godot_cpp/classes/label.hpp>
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
@@ -87,7 +87,7 @@ public:
     /**
      * @brief O(1) typed getter for the underlying Task Resource.
      */
-    godot::Ref<TaskGraphNodeResource> get_task_node_resource() const;
+    godot::Ref<TaskResource> get_task_node_resource() const;
 
     // Direct accessors pulling from the strictly typed Resource (No local state caching)
     uint32_t get_task_type() const;

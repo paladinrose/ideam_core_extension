@@ -53,6 +53,8 @@ protected:
 
     // Internal Helpers
     void _create_popup();
+    virtual IdeamGraphNode* _create_graph_node(const godot::Ref<IdeamGraphNodeResource>& p_node_res);
+    
     virtual godot::TypedArray<godot::String> _get_new_node_types() const;
     virtual void _spawn_node_by_type(int p_type_id);
 

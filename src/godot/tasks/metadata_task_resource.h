@@ -1,17 +1,17 @@
 #pragma once
 
-#include "task_graph_node_resource.h"
+#include "task_resource.h"
 
 namespace ideam::godot_ext {
 
 /**
- * @class MetadataTaskGraphNodeResource
+ * @class MetadataTaskResource
  * @brief Strictly typed resource payload for Metadata execution nodes.
  * Replaces dynamic dictionaries with packed struct members to guarantee 
  * predictable cache line alignment during DOD graph compilation.
  */
-class MetadataTaskGraphNodeResource : public TaskGraphNodeResource {
-    GDCLASS(MetadataTaskGraphNodeResource, TaskGraphNodeResource)
+class MetadataTaskResource : public TaskResource {
+    GDCLASS(MetadataTaskResource, TaskResource)
 
 private:
     // Tightly packed integer states for O(1) DOD matrix resolution.
@@ -24,8 +24,8 @@ protected:
     static void _bind_methods();
 
 public:
-    MetadataTaskGraphNodeResource() = default;
-    ~MetadataTaskGraphNodeResource() override = default;
+    MetadataTaskResource() = default;
+    ~MetadataTaskResource() override = default;
 
     // --- DOD Matrix Configuration ---
     void set_view_id(int p_id);

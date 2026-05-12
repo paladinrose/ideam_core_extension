@@ -36,12 +36,22 @@
 // --- Tasks UI & Editor ---
 #include "godot/tasks/ideam_tasks_plugin.h"
 
-#include "godot/tasks/task_graph_edit.h"
-#include "godot/tasks/task_graph_node.h"
-#include "godot/tasks/task_graph_inspector.h"
 #include "godot/tasks/task_graph_resource.h"
-#include "godot/tasks/task_graph_node_resource.h"
+#include "godot/tasks/task_graph_edit.h"
+#include "godot/tasks/task_graph_inspector.h"
+
+#include "godot/tasks/task_resource.h"
+#include "godot/tasks/task_graph_node.h"
 #include "godot/tasks/task_graph_host.h" 
+
+#include "godot/tasks/query_task_graph_node.h"
+#include "godot/tasks/query_task_resource.h"
+
+#include "godot/tasks/metadata_task_graph_node.h"
+#include "godot/tasks/metadata_task_resource.h"
+
+#include "godot/tasks/transform_task_graph_node.h"
+#include "godot/tasks/transform_task_resource.h"
 
 // Native task registration
 #include "core/tasks/registration/native_task_registry.h"
@@ -123,32 +133,45 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		// Foundational Base Classes - Registered as Abstract to protect constructors
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
+
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNodeResource);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphEdit);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNode);
+
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskResource);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskGraphNode);
+
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
+
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::GameEntity);
 		
-        // Graphs UI
+        // --- Graphs ---
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
 		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphNode);
 		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
 
-		// Memory UI
+		// --- Memory ---
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
 		GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
-		GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphEdit);
-        GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphNode);
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantResource);
 		GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
 
-		// Tasks UI 
+		// --- Tasks ---
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
-		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphNodeResource);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
-        GDREGISTER_CLASS(ideam::godot_ext::TaskGraphNode);
 		
+		GDREGISTER_CLASS(ideam::godot_ext::MetadataTaskResource);
+		GDREGISTER_CLASS(ideam::godot_ext::MetadataTaskGraphNode);
+		
+		GDREGISTER_CLASS(ideam::godot_ext::QueryTaskResource);
+		GDREGISTER_CLASS(ideam::godot_ext::QueryTaskGraphNode);
+
+		GDREGISTER_CLASS(ideam::godot_ext::TransformTaskResource);
+		GDREGISTER_CLASS(ideam::godot_ext::TransformTaskGraphNode);
+
 		// --- Narratives ---
 		GDREGISTER_CLASS(ideam::godot_ext::Narrative);
 		GDREGISTER_CLASS(ideam::godot_ext::Character);

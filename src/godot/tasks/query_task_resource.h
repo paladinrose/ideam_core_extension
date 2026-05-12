@@ -1,17 +1,17 @@
 #pragma once
 
-#include "task_graph_node_resource.h"
+#include "task_resource.h"
 
 namespace ideam::godot_ext {
 
 /**
- * @class QueryTaskGraphNodeResource
+ * @class QueryTaskResource
  * @brief Strictly typed resource payload for Query execution nodes.
  * Replaces dictionary allocations with a 16-byte packed struct (op, view, strategy, type),
  * maximizing L1 cache saturation and avoiding pointer chasing during topological validation.
  */
-class QueryTaskGraphNodeResource : public TaskGraphNodeResource {
-    GDCLASS(QueryTaskGraphNodeResource, TaskGraphNodeResource)
+class QueryTaskResource : public TaskResource {
+    GDCLASS(QueryTaskResource, TaskResource)
 
 private:
     // Tightly packed 16-byte boundary. O(1) fetch during graph compilation.
@@ -24,8 +24,8 @@ protected:
     static void _bind_methods();
 
 public:
-    QueryTaskGraphNodeResource() = default;
-    ~QueryTaskGraphNodeResource() override = default;
+    QueryTaskResource() = default;
+    ~QueryTaskResource() override = default;
 
     // --- DOD Matrix Configuration ---
     void set_op_id(int p_id);

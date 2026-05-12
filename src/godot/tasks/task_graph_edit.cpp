@@ -156,7 +156,7 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     props["type_id"] = 0;
 
     // Direct instantiation of the tightly packed C++ DOD Resource instead of generic maps
-    Ref<TaskGraphNodeResource> new_res;
+    Ref<TaskResource> new_res;
     new_res.instantiate();
     new_res->set_node_name(unique_name);
 

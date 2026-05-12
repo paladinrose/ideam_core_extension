@@ -1,7 +1,7 @@
 #pragma once
 
 #include "task_graph_node.h"
-#include "query_task_graph_node_resource.h"
+#include "query_task_resource.h"
 #include <godot_cpp/classes/option_button.hpp>
 #include <godot_cpp/classes/h_separator.hpp>
 #include <godot_cpp/classes/label.hpp>

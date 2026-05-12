@@ -62,6 +62,7 @@ protected:
     // --- Tier 2: Strict Access Routers ---
     // Safely shadows the base class router to inject Memory-specific validation
     void _memory_request_connect(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
+    void _on_buffer_names_requested(godot::Object* p_node, const godot::Array& p_buffer_ids);
     
     // Validation Rules
     bool _validate_write_collision(const godot::StringName &p_to_node, int p_to_port, core::BufferAccessMode p_incoming_mode);

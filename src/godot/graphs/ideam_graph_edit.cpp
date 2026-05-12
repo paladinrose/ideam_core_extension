@@ -83,6 +83,12 @@ void IdeamGraphEdit::_request_disconnect(const StringName &p_from_node, int p_fr
     current_blueprint->action_remove_edge(p_from_node, p_from_port, p_to_node, p_to_port);
 }
 
+IdeamGraphNode* IdeamGraphEdit::_create_graph_node(const Ref<IdeamGraphNodeResource>& p_node_res) {
+    // Default implementation returns nullptr. 
+    // Derived graph editors must override this to handle their specific concrete types.
+    return nullptr;
+}
+
 void IdeamGraphEdit::_create_popup() {
     if (context_popup) return;
 
@@ -146,6 +152,7 @@ void IdeamGraphEdit::_popup_select(int p_id) {
 }
 
 TypedArray<String> IdeamGraphEdit::_get_new_node_types() const { return TypedArray<String>(); }
+
 void IdeamGraphEdit::_spawn_node_by_type(int p_type_id) {}
 
 void IdeamGraphEdit::_on_node_delete_request(const StringName& p_node_name) {
@@ -206,7 +213,13 @@ void IdeamGraphEdit::_on_blueprint_changed() {
         if (ign) {
             ign->initialize(n_res);
         } else {
-            // Polymorphic spawn handling delegates to derived graphs
+            ign = _create_graph_node(n_res);
+            
+            if (ign) {
+                // Assuming _create_graph_node configures the node name correctly
+                add_child(ign);
+                ign->initialize(n_res);
+            }
         }
     }
 

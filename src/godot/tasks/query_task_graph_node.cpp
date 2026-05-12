@@ -58,7 +58,7 @@ void QueryTaskGraphNode::_rebuild_dynamic_ui() {
     type_dropdown->connect("item_selected", Callable(this, "_on_type_selected"));
 
     // Restore state from strongly-typed Authoring Resource
-    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    Ref<QueryTaskResource> res = node_resource;
     if (res.is_valid()) {
         op_dropdown->select(res->get_op_id());
         view_dropdown->select(res->get_view_id());
@@ -147,8 +147,9 @@ void QueryTaskGraphNode::_rebuild_ports() {
     register_port_signature(port_anchor_index, true, output_traits);
 
     // 5. Apply DOD Shape Iconography
-    update_memory_port(port_anchor_index, true, input_layout);
-    update_memory_port(port_anchor_index, false, output_layout);
+    // [Memz] Explicitly cast the strict enum to int64_t so the BitField constructor accepts it
+    update_memory_port(port_anchor_index, true, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(input_layout)));
+    update_memory_port(port_anchor_index, false, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(output_layout)));
 }
 
 uint64_t QueryTaskGraphNode::_calculate_flat_index() const {
@@ -226,7 +227,7 @@ void QueryTaskGraphNode::_update_matrix_guardrails() {
 // --- Interaction Routing ---
 
 void QueryTaskGraphNode::_on_op_selected(int p_index) {
-    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    Ref<QueryTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_op_id(p_index);
         emit_property_changed(StringName("op_id"), p_index);
@@ -235,7 +236,7 @@ void QueryTaskGraphNode::_on_op_selected(int p_index) {
 }
 
 void QueryTaskGraphNode::_on_view_selected(int p_index) {
-    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    Ref<QueryTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_view_id(p_index);
         emit_property_changed(StringName("view_id"), p_index);
@@ -243,7 +244,7 @@ void QueryTaskGraphNode::_on_view_selected(int p_index) {
 }
 
 void QueryTaskGraphNode::_on_strategy_selected(int p_index) {
-    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    Ref<QueryTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_strategy_id(p_index);
         emit_property_changed(StringName("strategy_id"), p_index);
@@ -251,7 +252,7 @@ void QueryTaskGraphNode::_on_strategy_selected(int p_index) {
 }
 
 void QueryTaskGraphNode::_on_type_selected(int p_index) {
-    Ref<QueryTaskGraphNodeResource> res = node_resource;
+    Ref<QueryTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_type_id(p_index);
         emit_property_changed(StringName("type_id"), p_index);

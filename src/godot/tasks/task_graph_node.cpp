@@ -20,17 +20,17 @@ void TaskGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_custom_param_changed", "param_name", "value"), &TaskGraphNode::_on_custom_param_changed);
 }
 
-Ref<TaskGraphNodeResource> TaskGraphNode::get_task_node_resource() const {
-    return Object::cast_to<TaskGraphNodeResource>(get_node_resource().ptr());
+Ref<TaskResource> TaskGraphNode::get_task_node_resource() const {
+    return Object::cast_to<TaskResource>(get_node_resource().ptr());
 }
 
 uint32_t TaskGraphNode::get_task_type() const {
-    Ref<TaskGraphNodeResource> res = get_task_node_resource();
+    Ref<TaskResource> res = get_task_node_resource();
     return res.is_valid() ? static_cast<uint32_t>(res->get_task_type()) : 0;
 }
 
 uint32_t TaskGraphNode::get_logic_id() const {
-    Ref<TaskGraphNodeResource> res = get_task_node_resource();
+    Ref<TaskResource> res = get_task_node_resource();
     return res.is_valid() ? static_cast<uint32_t>(res->get_task_properties().get("logic_id", 0)) : 0;
 }
 
@@ -41,7 +41,7 @@ StringName TaskGraphNode::get_logic_name() const {
 void TaskGraphNode::_build_ui() {
     MemoryGraphNode::_build_ui(); // Generates ports and base states
 
-    Ref<TaskGraphNodeResource> task_res = get_task_node_resource();
+    Ref<TaskResource> task_res = get_task_node_resource();
     if (task_res.is_null()) return;
 
     // 1. Header Setup
@@ -177,12 +177,12 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
             // update_memory_port() naturally sets icons based on the BufferLayoutType.
             if (override_left) {
                 set_slot_enabled_left(slot, enable_left);
-                if (enable_left) update_memory_port(slot, true, layout_left);
+                if (enable_left) update_memory_port(slot, true, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(layout_left)));
             }
             
             if (override_right) {
                 set_slot_enabled_right(slot, enable_right);
-                if (enable_right) update_memory_port(slot, false, layout_right);
+                if (enable_right) update_memory_port(slot, false, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(layout_right)));
             }
         }
         // Write the mutated dictionary back to the array. 
@@ -194,7 +194,7 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
 void TaskGraphNode::_rebuild_logic_inspector(const Array& p_properties) {
     if (!logic_inspector) return;
     
-    Ref<TaskGraphNodeResource> task_res = get_task_node_resource();
+    Ref<TaskResource> task_res = get_task_node_resource();
     if (task_res.is_null()) return;
 
     Dictionary state = task_res->get_task_properties();

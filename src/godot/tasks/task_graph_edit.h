@@ -2,7 +2,7 @@
 
 #include "../memory/memory_graph_edit.h"
 #include "../../core/tasks/registration/native_task_registry.h"
-#include "task_graph_node_resource.h"
+#include "task_resource.h"
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <vector>
