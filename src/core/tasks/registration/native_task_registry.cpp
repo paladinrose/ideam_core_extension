@@ -9,6 +9,11 @@
 #include "../entry_fill_task.h"
 #include "../sub_graph_task.h"
 
+// --- Godot Editor Bridging (Resources & UI Graph Nodes) ---
+#include "../../../godot/tasks/entry_fill_task_resource.h"
+#include "../../../godot/tasks/sub_graph_task_resource.h"
+#include "../../../godot/tasks/task_graph_node.h"
+
 #include <godot_cpp/variant/utility_functions.hpp>
 
 namespace ideam::core {
@@ -29,9 +34,9 @@ void NativeTaskRegistry::init() {
     TransformTaskRegistry::init();
     MetadataTaskRegistry::init();
     
-    // 3. Register Unique Tasks
-    register_task<EntryFillTask>("EntryFillTask"); 
-    register_task<SubGraphTask>("SubGraphTask");
+    // 3. Register Unique Tasks (Enforced to provide their specific wrapper interfaces)
+    register_task<EntryFillTask, godot_ext::EntryFillTaskResource, godot_ext::TaskGraphNode>("EntryFillTask"); 
+    register_task<SubGraphTask, godot_ext::SubGraphTaskResource, godot_ext::TaskGraphNode>("SubGraphTask");
 }
 
 std::unique_ptr<INativeTask> NativeTaskRegistry::create(const godot::StringName& p_name) {

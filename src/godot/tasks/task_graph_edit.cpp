@@ -1,8 +1,16 @@
 #include "task_graph_edit.h"
 #include "task_graph_resource.h"
+#include "metadata_task_resource.h"
+#include "query_task_resource.h"
+#include "transform_task_resource.h"
+#include "transform_task_graph_node.h"
+#include "query_task_graph_node.h"
+#include "metadata_task_graph_node.h"
+
 #include "../../core/tasks/registration/transform_task_registry.h"
 #include "../../core/tasks/registration/metadata_task_registry.h"
 #include "../../core/tasks/registration/query_task_registry.h"
+
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/classes/popup_menu.hpp>
 #include <godot_cpp/variant/packed_int64_array.hpp>
@@ -155,25 +163,64 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     props["strategy_id"] = 0;
     props["type_id"] = 0;
 
-    // Direct instantiation of the tightly packed C++ DOD Resource instead of generic maps
+    // Declare the base reference, but DO NOT instantiate it yet.
     Ref<TaskResource> new_res;
-    new_res.instantiate();
-    new_res->set_node_name(unique_name);
 
+    // Branch to instantiate the highly specialized, memory-packed resource.
     switch (desc.category) {
-        case CATEGORY_TRANSFORM: new_res->set_task_type(TASK_NATIVE_CPU); break; 
-        case CATEGORY_METADATA:  new_res->set_task_type(TASK_NATIVE_CPU); break;
-        case CATEGORY_QUERY:     
-            new_res->set_task_type(TASK_QUERY_CULLER); 
+        case CATEGORY_TRANSFORM: {
+            Ref<TransformTaskResource> res;
+            res.instantiate();
+            res->set_task_type(TASK_NATIVE_CPU);
+            new_res = res;
+            break;
+        }
+        case CATEGORY_METADATA: {
+            Ref<MetadataTaskResource> res;
+            res.instantiate();
+            res->set_task_type(TASK_NATIVE_CPU);
+            new_res = res;
+            break;
+        }
+        case CATEGORY_QUERY: {
+            Ref<QueryTaskResource> res;
+            res.instantiate();
+            res->set_task_type(TASK_QUERY_CULLER); 
             props["op_id"] = 0; // 0 = CULL, 1 = ADD
+            new_res = res;
             break;
-        case CATEGORY_MANUAL:
-            // STUB: You'll want to map this to whatever your manual task GUI node type is mapped to.
-            new_res->set_task_type(TASK_NATIVE_CPU); 
+        }
+        case CATEGORY_MANUAL: {
+            // Retrieve the UI definitions dictionary from our native registry
+            godot::Dictionary utility_matrix = core::NativeTaskRegistry::get_ui_utility_matrix();
+            
+            if (utility_matrix.has(desc.logic_name)) {
+                godot::Dictionary task_def = utility_matrix[desc.logic_name];
+                godot::StringName resource_class = task_def["resource_class"];
+                
+                // Dynamically allocate exactly what is needed using Godot's ClassDB
+                godot::Object* obj = godot::ClassDB::instantiate(resource_class);
+                TaskResource* tr = godot::Object::cast_to<TaskResource>(obj);
+                
+                if (tr) {
+                    new_res = godot::Ref<TaskResource>(tr);
+                    new_res->set_task_type(TASK_NATIVE_CPU); 
+                } else {
+                    godot::UtilityFunctions::printerr("TaskGraphEdit: Failed to cast instantiated object to TaskResource for ", desc.logic_name);
+                    return;
+                }
+            } else {
+                godot::UtilityFunctions::printerr("TaskGraphEdit: Manual task not found in utility matrix: ", desc.logic_name);
+                return;
+            }
             break;
-        default: break;
+        }
+        default:
+            return; // Safety bailout
     }
 
+    // Apply the configured properties to our safely typed wrapper
+    new_res->set_node_name(unique_name);
     new_res->set_task_properties(props);
 
     // Apply scroll offset compensation
@@ -183,7 +230,62 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     }
     new_res->set_position_offset(spawn_pos);
 
+    // Push to the data blueprint (which should trigger a UI graph sync downstream)
     current_blueprint->action_add_node(new_res);
+}
+
+IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNodeResource>& p_node_res) {
+    Ref<TaskResource> task_res = p_node_res;
+    if (task_res.is_null()) {
+        return nullptr; // Hard bailout: Keeps type constraints rigid
+    }
+
+    IdeamGraphNode* new_node = nullptr;
+    StringName res_class = task_res->get_class();
+
+    // 1. Direct Archetype Matching (Hot Path for primary nodes)
+    // Using Object::cast_to avoids string hashing overhead where possible.
+    if (Object::cast_to<TransformTaskResource>(task_res.ptr())) {
+        new_node = memnew(TransformTaskGraphNode);
+    } 
+    else if (Object::cast_to<QueryTaskResource>(task_res.ptr())) {
+        new_node = memnew(QueryTaskGraphNode);
+    } 
+    else if (Object::cast_to<MetadataTaskResource>(task_res.ptr())) {
+        new_node = memnew(MetadataTaskGraphNode);
+    } 
+    // 2. Dynamic Fallback for Utility / Manual Tasks
+    // If it's not a core struct, we query the utility matrix to find its bound UI class.
+    else {
+        godot::Dictionary utility_matrix = core::NativeTaskRegistry::get_ui_utility_matrix();
+        godot::Array keys = utility_matrix.keys();
+        
+        // Scan the matrix to find the matching resource footprint
+        for (int i = 0; i < keys.size(); ++i) {
+            godot::Dictionary task_def = utility_matrix[keys[i]];
+            if (task_def["resource_class"] == res_class) {
+                godot::StringName node_class = task_def["node_class"];
+                
+                // Allocate the paired UI node dynamically
+                godot::Object* obj = godot::ClassDB::instantiate(node_class);
+                new_node = godot::Object::cast_to<IdeamGraphNode>(obj);
+                break;
+            }
+        }
+    }
+
+    if (new_node) {
+        // Wire up the dynamic UI population for DOD memory buffers.
+        // Because TaskGraphEdit inherits from MemoryGraphEdit, the Callable will
+        // natively resolve to the base class's bound method.
+        new_node->connect("buffer_names_requested", 
+            callable_mp(static_cast<MemoryGraphEdit*>(this), &MemoryGraphEdit::_on_buffer_names_requested));
+    } else {
+        godot::UtilityFunctions::printerr("TaskGraphEdit: Failed to resolve UI GraphNode class for data payload: ", res_class);
+    }
+
+    // Return the newly instantiated node so the IdeamGraphEdit sync loop can position/add it to the tree
+    return new_node;
 }
 
 } // namespace ideam::godot_ext

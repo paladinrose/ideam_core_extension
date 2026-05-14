@@ -46,7 +46,8 @@ protected:
     // Overrides to build our hierarchical popup and instantiate DOD nodes
     virtual godot::TypedArray<godot::String> _get_new_node_types() const override;
     virtual void _spawn_node_by_type(int p_type_id) override;
-
+    virtual IdeamGraphNode* _create_graph_node(const godot::Ref<IdeamGraphNodeResource>& p_node_res) override;
+    
     // Helper: Maps the underlying DOD MemoryStrategy to the structural BufferLayoutType
     bool _strategy_supports_layout(core::MemoryStrategy p_strategy, core::BufferLayoutType p_layout) const;
 

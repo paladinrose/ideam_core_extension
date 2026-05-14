@@ -114,8 +114,8 @@ public:
     // --- Dynamic Creation for Manual Tasks ---
     [[nodiscard]] static std::unique_ptr<INativeTask> create(const godot::StringName& p_name);
 
-    // --- Variadic Registration (Added Args support for EntryFillTask's buffer_id) ---
-    template <typename T_Task, typename... Args>
+    // --- Variadic Registration (Added Resource and GraphNode template constraints) ---
+    template <typename T_Task, typename T_Resource, typename T_Node, typename... Args>
     static void register_task(const godot::StringName& p_name, Args... args) {
         if (!manual_factories) return; 
 
@@ -127,6 +127,10 @@ public:
         // 2. Register UI Presentation Data
         if (ui_utility_matrix) {
             godot::Dictionary task_def;
+            
+            // Storing the static class name references allows for generic dynamic spawning in the editor
+            task_def["resource_class"] = T_Resource::get_class_static();
+            task_def["node_class"] = T_Node::get_class_static();
             
             // Manual tasks (like SubGraphTask) generally handle layout routing internally 
             // or perform structural operations. By omitting the "valid_combinations" key, 
