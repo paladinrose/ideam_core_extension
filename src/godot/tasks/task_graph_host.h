@@ -2,6 +2,7 @@
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/node_path.hpp>
 #include "../../core/memory/memory_manager_dod.h"
 #include "../../core/tasks/task_graph_dod.h"
 #include "../memory/memory_manager_resource.h"
@@ -14,26 +15,42 @@ class TaskGraphHost : public godot::Node {
     GDCLASS(TaskGraphHost, godot::Node)
 
 protected:
+    // --- Inspector Properties ---
+    godot::Ref<TaskGraphResource> graph_resource;
+    bool is_shared = false;
+    godot::NodePath shared_host_path;
+
+    // --- Runtime DOD Backend ---
     std::shared_ptr<core::MemoryManagerDOD> active_manager;
     std::shared_ptr<core::TaskGraphDOD> active_graph;
     godot::HashMap<godot::StringName, core::NodeID> ui_to_dod_map;
 
     static void _bind_methods();
 
+    // Internal routing for the unified setup
+    void _setup_isolated();
+    void _setup_shared();
+
 public:
     TaskGraphHost() = default;
     virtual ~TaskGraphHost() override = default;
 
-    /**
-     * @brief Creates a completely isolated DOD execution environment.
-     * Orchestrates the strict memory handshake before compiling the Graph.
-     */
-    void setup_isolated(const godot::Ref<godot::Resource>& p_manager_res, const godot::Ref<godot::Resource>& p_graph_res);
+    // --- Property Getters/Setters ---
+    void set_graph_resource(const godot::Ref<TaskGraphResource>& p_resource);
+    godot::Ref<TaskGraphResource> get_graph_resource() const;
+
+    void set_is_shared(bool p_shared);
+    bool get_is_shared() const;
+
+    void set_shared_host_path(const godot::NodePath& p_path);
+    godot::NodePath get_shared_host_path() const;
 
     /**
-     * @brief Creates an execution environment that shares memory with another Host.
+     * @brief Consolidated setup method. Routes to Isolated or Shared execution 
+     * based on Inspector configuration. Requires the node to be in the SceneTree 
+     * if operating in Shared mode (to resolve the NodePath).
      */
-    void setup_shared(TaskGraphHost* p_target_host, const godot::Ref<TaskGraphResource>& p_graph_res);
+    void setup();
 
     /**
      * @brief Ticks the active graph. 
@@ -51,5 +68,3 @@ public:
 };
 
 } // namespace ideam::godot_ext
-
- // IDEAM_GODOT_TASK_GRAPH_HOST_H

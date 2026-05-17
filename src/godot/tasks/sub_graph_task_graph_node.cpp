@@ -77,9 +77,9 @@ void SubGraphTaskGraphNode::receive_buffer_names_list(const godot::TypedArray<go
     // --- Fetch Child Graph Entry Wave ---
     Ref<TaskGraphResource> child_res = res->get_child_graph();
     if (child_res.is_valid()) {
-        TypedArray<TypedArray<StringName>> waves = child_res->get_execution_waves();
+        Array waves = child_res->get_execution_waves();
         if (!waves.is_empty()) {
-            available_child_nodes = waves[0];
+            available_child_nodes = Array(waves[0]);
         }
     }
 

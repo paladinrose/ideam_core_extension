@@ -139,6 +139,17 @@ Window* IdeamGraphsPlugin::get_shared_composer_window() {
         singleton->graph_composer_window->set_title("Graph Composer");
         singleton->graph_composer_window->set_min_size(Vector2i(800, 600));
         
+        // --- Window Decoration & Interaction Configurations ---
+        
+        // Mark as transient to link its lifecycle and visibility context to the editor main window
+        singleton->graph_composer_window->set_transient(true);
+        
+        // Disable exclusivity so the user can interact with both the editor and this window simultaneously
+        singleton->graph_composer_window->set_exclusive(false);
+        
+        // Connect the close button event to the plugin's teardown routing
+        singleton->graph_composer_window->connect("close_requested", Callable(singleton, "close_graph_composer"));
+        
         // If we are in the editor, we can parent it to the editor's base control
         if (Engine::get_singleton()->is_editor_hint()) {
             EditorInterface::get_singleton()->get_base_control()->add_child(singleton->graph_composer_window);

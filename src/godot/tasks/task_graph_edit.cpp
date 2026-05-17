@@ -279,7 +279,7 @@ IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNod
         // Because TaskGraphEdit inherits from MemoryGraphEdit, the Callable will
         // natively resolve to the base class's bound method.
         new_node->connect("buffer_names_requested", 
-            callable_mp(static_cast<MemoryGraphEdit*>(this), &MemoryGraphEdit::_on_buffer_names_requested));
+            callable_mp(static_cast<MemoryGraphEdit*>(this), &TaskGraphEdit::_on_buffer_names_requested));
     } else {
         godot::UtilityFunctions::printerr("TaskGraphEdit: Failed to resolve UI GraphNode class for data payload: ", res_class);
     }

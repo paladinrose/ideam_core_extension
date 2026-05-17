@@ -1,5 +1,5 @@
 #include "sub_graph_task_resource.h"
-// #include "task_graph_resource.h" // Ensure this is included in your actual build environment
+#include "task_graph_resource.h"
 #include <godot_cpp/core/class_db.hpp>
 
 namespace ideam::godot_ext {

@@ -151,8 +151,9 @@ godot::TypedArray<godot::StringName> IdeamGraphResource::_get_node_dependencies(
     return dependencies;
 }
 
-godot::TypedArray<godot::TypedArray<godot::StringName>> IdeamGraphResource::get_execution_waves() const {
-    godot::TypedArray<godot::TypedArray<godot::StringName>> execution_waves;
+// Update this signature in both ideam_graph_resource.h and ideam_graph_resource.cpp
+godot::Array IdeamGraphResource::get_execution_waves() const {
+    godot::Array execution_waves; // Changed from TypedArray<TypedArray<StringName>>
     
     if (nodes.is_empty()) return execution_waves;
 
@@ -198,16 +199,17 @@ godot::TypedArray<godot::TypedArray<godot::StringName>> IdeamGraphResource::get_
         
         // --- DOD Mirror: Intra-Wave Priority Sort ---
         std::sort(current_wave.begin(), current_wave.end(), [&node_map](const godot::StringName& a, const godot::StringName& b) {
-            int32_t priority_a = node_map[a]->get_execution_priority(); // <--- Assumes implementation
-            int32_t priority_b = node_map[b]->get_execution_priority(); // <--- Assumes implementation
-            return priority_a > priority_b; // Descending order (Highest executes first)
+            int32_t priority_a = node_map[a]->get_execution_priority();
+            int32_t priority_b = node_map[b]->get_execution_priority();
+            return priority_a > priority_b; // Descending order
         });
 
-        // Pack the sorted C++ vector into the Godot Variant boundary
+        // Pack the sorted C++ vector into a TypedArray boundary for safety on the inside
         godot::TypedArray<godot::StringName> wave_array;
         for (const auto& node_name : current_wave) {
             wave_array.push_back(node_name);
         }
+        // Implicitly casts TypedArray<StringName> to Variant/Array element
         execution_waves.push_back(wave_array);
 
         // Advance the topological front
@@ -221,7 +223,6 @@ godot::TypedArray<godot::TypedArray<godot::StringName>> IdeamGraphResource::get_
             }
         }
         
-        // std::move bypasses array copying, sliding the next pointers straight into the current scope
         current_wave = std::move(next_wave);
     }
 

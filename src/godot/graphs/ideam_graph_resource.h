@@ -71,7 +71,7 @@ public:
      * Returns an array of waves, where each wave is an array of StringNames representing 
      * nodes that can safely execute in parallel.
      */
-    godot::TypedArray<godot::TypedArray<godot::StringName>> get_execution_waves() const;
+    godot::Array get_execution_waves() const;
     
     void set_undo_redo(godot::Object* p_undo_redo) { undo_redo = p_undo_redo; }
     godot::Object* get_undo_redo() const { return undo_redo; }
