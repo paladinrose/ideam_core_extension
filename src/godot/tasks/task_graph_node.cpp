@@ -18,6 +18,7 @@ void TaskGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_logic_name"), &TaskGraphNode::get_logic_name);
     
     ClassDB::bind_method(D_METHOD("_on_custom_param_changed", "param_name", "value"), &TaskGraphNode::_on_custom_param_changed);
+    ClassDB::bind_method(D_METHOD("_on_buffer_option_selected", "index", "prop_name", "btn"), &TaskGraphNode::_on_buffer_option_selected);
 }
 
 Ref<TaskResource> TaskGraphNode::get_task_node_resource() const {
@@ -128,6 +129,15 @@ void TaskGraphNode::_rebuild_dynamic_ui() {
 }
 
 void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_current_type_id) {
+    buffer_option_bindings.clear();
+
+    godot::Ref<TaskResource> task_res = get_task_node_resource();
+    godot::Ref<MemoryGrantResource> grant_res;
+    
+    if (task_res.is_valid()) {
+        grant_res = task_res->get_memory_grant();
+    }
+
     for (int i = 0; i < r_properties.size(); ++i) {
         Dictionary prop = r_properties[i];
 
@@ -160,7 +170,6 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
             _reify_property_schema(sub_schema, p_current_type_id);
             prop["struct_properties"] = sub_schema;
         }
-        
         if (prop.has("port_override")) {
             uint64_t mask = prop["port_override"];
             
@@ -188,6 +197,43 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
         // Write the mutated dictionary back to the array. 
         // (Required because extracting `prop` creates a shallow Variant copy of the dictionary ref)
         r_properties[i] = prop;
+
+        if (static_cast<int>(prop["type"]) == godot::Variant::INT && godot::String(prop["hint_string"]) == "buffer_option") {
+            godot::StringName prop_name = prop["name"];
+            
+            godot::OptionButton* opt_btn = memnew(godot::OptionButton);
+            custom_parameters_container->add_child(opt_btn);
+            
+            BufferOptionBinding binding;
+            binding.property_name = prop_name;
+            binding.button = opt_btn;
+
+            // Extract valid layout dimensions from the Grant Resource
+            if (grant_res.is_valid()) {
+                godot::TypedArray<GrantPartResource> parts = grant_res->get_configured_parts();
+                binding.buffer_ids.resize(parts.size());
+                
+                for (int j = 0; j < parts.size(); ++j) {
+                    godot::Ref<GrantPartResource> part = parts[j];
+                    if (part.is_valid()) {
+                        binding.buffer_ids.set(j, part->get_buffer_id());
+                    }
+                }
+            }
+
+            // Bind the signal with payload injection (prop_name and the button pointer)
+            opt_btn->connect("item_selected", godot::Callable(this, "_on_buffer_option_selected").bind(prop_name, opt_btn));
+
+            buffer_option_bindings.push_back(binding);
+            
+            // Remove the property from the schema so the RuntimeInspector ignores it
+            r_properties.remove_at(i);
+        }   
+    }
+
+    // If we registered any async dropdowns, request the current topological names
+    if (!buffer_option_bindings.empty()) {
+        emit_signal("buffer_names_requested");
     }
 }
 
@@ -236,6 +282,53 @@ void TaskGraphNode::_on_custom_param_changed(const StringName& p_param_name, con
     // 2. Re-evaluate the matrix. 
     // If a View or Strategy dropdown changed, it might invalidate the other selections.
     _update_matrix_guardrails();
+}
+
+void TaskGraphNode::_on_buffer_option_selected(int p_index, godot::StringName p_prop_name, godot::OptionButton* p_btn) {
+    if (!p_btn) return;
+    
+    // The true buffer ID is stored in the OptionButton's item metadata/ID
+    int selected_buffer_id = p_btn->get_item_id(p_index);
+    
+    // Route to GraphEdit to mutate the TaskResource dictionary
+    emit_property_changed(p_prop_name, selected_buffer_id);
+}
+
+void TaskGraphNode::receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names) {
+    // Fulfill any base MemoryGraphNode logic first
+    MemoryGraphNode::receive_buffer_names_list(p_names); 
+
+    // Rapid iteration over cached UI bindings
+    for (const auto& binding : buffer_option_bindings) {
+        godot::OptionButton* btn = binding.button;
+        if (!btn) continue;
+
+        // Cache the currently selected ID to restore it after population
+        int current_selected_id = btn->get_selected_id();
+        
+        btn->clear();
+
+        for (int i = 0; i < binding.buffer_ids.size(); ++i) {
+            int b_id = binding.buffer_ids[i];
+            godot::String b_name = "Unknown Buffer";
+            
+            // Validate the ID against the provided topological name list
+            if (b_id >= 0 && b_id < p_names.size()) {
+                b_name = p_names[b_id];
+            }
+            
+            btn->add_item(b_name, b_id);
+        }
+
+        // Restore selection safely
+        int new_idx = btn->get_item_index(current_selected_id);
+        if (new_idx != -1) {
+            btn->select(new_idx);
+        } else if (btn->get_item_count() > 0) {
+            // Default to index 0 if the previous selection became invalid
+            btn->select(0);
+        }
+    }
 }
 
 } // namespace ideam::godot_ext

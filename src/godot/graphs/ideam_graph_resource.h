@@ -37,6 +37,12 @@ protected:
     // and then push their own specific utility profiles.
     virtual void _append_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const;
 
+    /**
+     * @brief Resolves the incoming dependencies for a given node.
+     * Virtualized so derived architectures (like TaskGraphResource) can filter out 
+     * non-blocking data edges and strictly return structural execution dependencies.
+     */
+    virtual godot::TypedArray<godot::StringName> _get_node_dependencies(const godot::StringName& p_node) const;
 public:
     IdeamGraphResource() = default;
     virtual ~IdeamGraphResource() = default; // Ensure virtual destructor for inheritance
@@ -60,6 +66,13 @@ public:
     void set_volatile_edge_capacity(int p_cap);
     int get_volatile_edge_capacity() const { return volatile_edge_capacity; }
 
+    /**
+     * @brief Performs a Kahn topological sort on the current UI state.
+     * Returns an array of waves, where each wave is an array of StringNames representing 
+     * nodes that can safely execute in parallel.
+     */
+    godot::TypedArray<godot::TypedArray<godot::StringName>> get_execution_waves() const;
+    
     void set_undo_redo(godot::Object* p_undo_redo) { undo_redo = p_undo_redo; }
     godot::Object* get_undo_redo() const { return undo_redo; }
 

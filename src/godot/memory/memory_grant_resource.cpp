@@ -14,6 +14,8 @@ void MemoryGrantResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_configured_parts", "parts"), &MemoryGrantResource::set_configured_parts);
     godot::ClassDB::bind_method(godot::D_METHOD("get_configured_parts"), &MemoryGrantResource::get_configured_parts);
     
+    godot::ClassDB::bind_method(godot::D_METHOD("get_buffer_ids"), &MemoryGrantResource::get_buffer_ids);
+
     // Enforce array typing in the Godot Inspector
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::ARRAY, "configured_parts", godot::PROPERTY_HINT_ARRAY_TYPE, "GrantPartResource"), "set_configured_parts", "get_configured_parts");
 
@@ -38,6 +40,22 @@ void MemoryGrantResource::set_configured_parts(const godot::TypedArray<GrantPart
 
 godot::TypedArray<GrantPartResource> MemoryGrantResource::get_configured_parts() const {
     return configured_parts;
+}
+
+godot::PackedInt32Array MemoryGrantResource::get_buffer_ids() const {
+    godot::PackedInt32Array ids;
+    // Pre-allocate to prevent reallocation during iteration
+    ids.resize(configured_parts.size()); 
+    
+    for (int i = 0; i < configured_parts.size(); ++i) {
+        godot::Ref<GrantPartResource> part = configured_parts[i];
+        if (part.is_valid()) {
+            ids.set(i, part->get_buffer_id());
+        } else {
+            ids.set(i, 0xFFFFFFFF); // Fallback invalid ID
+        }
+    }
+    return ids;
 }
 
 bool MemoryGrantResource::add_part(const godot::Ref<GrantPartResource>& p_part) {

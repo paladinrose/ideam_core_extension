@@ -33,6 +33,9 @@ void IdeamGraphResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_volatile_edge_capacity"), &IdeamGraphResource::get_volatile_edge_capacity);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "volatile_edge_capacity"), "set_volatile_edge_capacity", "get_volatile_edge_capacity");
 
+    godot::ClassDB::bind_method(godot::D_METHOD("_get_node_dependencies", "node"), &IdeamGraphResource::_get_node_dependencies);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_execution_waves"), &IdeamGraphResource::get_execution_waves);
+
     // Execution methods
     ClassDB::bind_method(D_METHOD("_do_add_node", "node"), &IdeamGraphResource::_do_add_node);
     ClassDB::bind_method(D_METHOD("_undo_add_node", "node_name"), &IdeamGraphResource::_undo_add_node);
@@ -131,6 +134,98 @@ void IdeamGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuffe
     edge_profile->set_alignment(ALIGNMENT);
     edge_profile->set_byte_footprint(padded_edge_bytes);
     r_profiles.append(edge_profile);
+}
+
+godot::TypedArray<godot::StringName> IdeamGraphResource::_get_node_dependencies(const godot::StringName& p_node) const {
+    godot::TypedArray<godot::StringName> dependencies;
+    
+    // Base implementation: Any incoming edge is a blocking dependency.
+    for (int i = 0; i < edges.size(); ++i) {
+        godot::Dictionary e = edges[i];
+        if (e.has("to") && e.has("from")) {
+            if (e["to"] == godot::Variant(p_node)) {
+                dependencies.push_back(e["from"]);
+            }
+        }
+    }
+    return dependencies;
+}
+
+godot::TypedArray<godot::TypedArray<godot::StringName>> IdeamGraphResource::get_execution_waves() const {
+    godot::TypedArray<godot::TypedArray<godot::StringName>> execution_waves;
+    
+    if (nodes.is_empty()) return execution_waves;
+
+    // 1. Build rapid-access structures
+    godot::HashMap<godot::StringName, godot::Ref<IdeamGraphNodeResource>> node_map;
+    godot::HashMap<godot::StringName, int> in_degree;
+    godot::HashMap<godot::StringName, std::vector<godot::StringName>> adj_list;
+
+    for (int i = 0; i < nodes.size(); ++i) {
+        godot::Ref<IdeamGraphNodeResource> n = nodes[i];
+        if (n.is_valid() && !n->get_node_name().is_empty()) {
+            godot::StringName name = n->get_node_name();
+            node_map[name] = n;
+            in_degree[name] = 0; 
+            adj_list[name] = std::vector<godot::StringName>();
+        }
+    }
+
+    // 2. Populate dependencies via the virtual hook
+    for (const auto& kv : node_map) {
+        godot::StringName target_node = kv.key;
+        godot::TypedArray<godot::StringName> deps = _get_node_dependencies(target_node);
+        
+        for (int i = 0; i < deps.size(); ++i) {
+            godot::StringName dep_node = deps[i];
+            if (node_map.has(dep_node)) {
+                adj_list[dep_node].push_back(target_node);
+                in_degree[target_node]++;
+            }
+        }
+    }
+
+    // 3. Collect the Entry Wave (In-degree == 0)
+    std::vector<godot::StringName> current_wave;
+    for (const auto& kv : in_degree) {
+        if (kv.value == 0) {
+            current_wave.push_back(kv.key);
+        }
+    }
+
+    // 4. Kahn Wave Processing & Priority Sorting
+    while (!current_wave.empty()) {
+        
+        // --- DOD Mirror: Intra-Wave Priority Sort ---
+        std::sort(current_wave.begin(), current_wave.end(), [&node_map](const godot::StringName& a, const godot::StringName& b) {
+            int32_t priority_a = node_map[a]->get_execution_priority(); // <--- Assumes implementation
+            int32_t priority_b = node_map[b]->get_execution_priority(); // <--- Assumes implementation
+            return priority_a > priority_b; // Descending order (Highest executes first)
+        });
+
+        // Pack the sorted C++ vector into the Godot Variant boundary
+        godot::TypedArray<godot::StringName> wave_array;
+        for (const auto& node_name : current_wave) {
+            wave_array.push_back(node_name);
+        }
+        execution_waves.push_back(wave_array);
+
+        // Advance the topological front
+        std::vector<godot::StringName> next_wave;
+        for (const auto& u : current_wave) {
+            for (const auto& v : adj_list[u]) {
+                in_degree[v]--;
+                if (in_degree[v] == 0) {
+                    next_wave.push_back(v);
+                }
+            }
+        }
+        
+        // std::move bypasses array copying, sliding the next pointers straight into the current scope
+        current_wave = std::move(next_wave);
+    }
+
+    return execution_waves;
 }
 
 // --- Tier 1: Action Routers (Called by UI) ---

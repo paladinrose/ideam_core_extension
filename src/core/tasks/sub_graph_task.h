@@ -33,6 +33,40 @@ private:
 public:
     explicit SubGraphTask(TaskGraphDOD* p_child_graph = nullptr) 
         : child_graph(p_child_graph) {}
+    
+    inline void apply_properties(const godot::Dictionary& p_props) override {
+        // 1. Unbox the compiled graph pointer
+        // Stored as an int64_t to safely bypass Variant's restriction on raw C++ pointers.
+        if (p_props.has("child_graph")) {
+            int64_t raw_ptr = static_cast<int64_t>(p_props["child_graph"]);
+            child_graph = reinterpret_cast<TaskGraphDOD*>(raw_ptr);
+        }
+
+        // 2. Unpack the interleaved memory topography constraints
+        if (p_props.has("grant_mappings")) {
+            godot::PackedInt32Array packed = p_props["grant_mappings"];
+            
+            // Bypass Godot's Variant abstraction layer entirely to read the raw contiguous memory.
+            const int32_t* data = packed.ptr();
+            
+            // Since the array is strictly interleaved [parent_id, child_node_id, ...], 
+            // the true mapping count is exactly half the array size.
+            size_t mapping_count = packed.size() / 2;
+            
+            // Pre-allocate the vector to prevent heap fragmentation and reallocation
+            // during the continuous pushing phase.
+            memory_mappings.clear();
+            memory_mappings.reserve(mapping_count);
+            
+            for (size_t i = 0; i < mapping_count; ++i) {
+                // Compute the flat offsets and cast directly to our strictly typed DOD scalars
+                memory_mappings.push_back({
+                    static_cast<uint32_t>(data[i * 2]), 
+                    static_cast<NodeID>(data[(i * 2) + 1])
+                });
+            }
+        }
+    }
 
     inline void set_child_graph(TaskGraphDOD* p_child_graph) {
         child_graph = p_child_graph;

@@ -25,6 +25,12 @@ private:
     // --- Topological Identity ---
     godot::StringName node_name;
     
+    // --- DOD Execution Directives ---
+    // Maps directly to BuildNodesSoA::execution_priority.
+    // Used to deterministically sort tasks within the same parallel execution wave,
+    // maximizing cache locality and resolving data-contention ties.
+    int32_t execution_priority = 0;
+
     // --- Editor-Only Visual & Metadata ---
     // These properties are serialized for the Godot Editor but are strictly 
     // stripped away and ignored by the DOD Graph Compiler to preserve cache fidelity.
@@ -43,6 +49,10 @@ public:
     // --- Identity ---
     void set_node_name(const godot::StringName& p_name);
     godot::StringName get_node_name() const;
+
+    // --- Execution ---
+    void set_execution_priority(int p_priority);
+    int get_execution_priority() const;
 
     // --- Visuals ---
     void set_position_offset(const godot::Vector2& p_pos);

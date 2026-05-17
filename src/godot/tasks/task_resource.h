@@ -69,7 +69,7 @@ public:
     int get_task_type() const;
 
     void set_task_properties(const godot::Dictionary& p_props);
-    godot::Dictionary get_task_properties() const;
+    virtual godot::Dictionary get_task_properties() const;
 
     // --- DOD Compilation Interface ---
     

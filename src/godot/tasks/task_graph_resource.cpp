@@ -1,4 +1,5 @@
 #include "task_graph_resource.h"
+#include "sub_graph_task_resource.h"
 #include "../../core/tasks/registration/native_task_registry.h"
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <algorithm>
@@ -106,7 +107,42 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
         r_ui_to_dod_map[ui_name] = core_id;
 
         godot::Dictionary props = n->get_task_properties();
-            
+        
+        // --- SUB-GRAPH RECURSIVE COMPILATION ---
+        // If this node is a SubGraph, we must eagerly compile its child topology
+        // and securely pass the raw pointer down to the native Task instance.
+        godot::Ref<SubGraphTaskResource> sub_res = godot::Object::cast_to<SubGraphTaskResource>(n.ptr());
+        if (sub_res.is_valid()) {
+            godot::Ref<TaskGraphResource> child_res = sub_res->get_child_graph();
+            if (child_res.is_valid()) {
+                godot::HashMap<godot::StringName, core::NodeID> child_map;
+                
+                std::shared_ptr<core::TaskGraphDOD> compiled_child = child_res->compile_to_task_graph(p_manager, child_map);
+                task_graph->retain_child_graph(compiled_child);
+                props["child_graph"] = static_cast<int64_t>(reinterpret_cast<uintptr_t>(compiled_child.get()));
+                
+                // --- DOD Identity Translation ---
+                // The Authoring layer safely tracks nodes via StringName. 
+                // We crush them down to strict NodeIDs here for the execution struct.
+                godot::PackedInt32Array compiled_mappings;
+                godot::Dictionary authoring_mappings = sub_res->get_grant_mappings();
+                godot::Array keys = authoring_mappings.keys();
+                
+                for (int m = 0; m < keys.size(); ++m) {
+                    int parent_buffer_id = keys[m];
+                    godot::StringName child_name = authoring_mappings[parent_buffer_id];
+                    
+                    if (child_map.has(child_name)) {
+                        compiled_mappings.push_back(parent_buffer_id);
+                        compiled_mappings.push_back(child_map[child_name]);
+                    } else {
+                        godot::UtilityFunctions::printerr("TaskGraph Compiler: Mapped child node '", child_name, "' not found in compiled sub-graph!");
+                    }
+                }
+                props["grant_mappings"] = compiled_mappings;
+            }
+        }
+
         switch (type_dod) {
             case core::TaskTypeDOD::NATIVE_CPU: {
                 if (props.has("native_class")) {

@@ -10,6 +10,13 @@
 
 namespace ideam::godot_ext {
 
+    // --- Fast layout struct for tracking OptionButtons awaiting async names ---
+struct BufferOptionBinding {
+    godot::StringName property_name;
+    godot::OptionButton* button = nullptr;
+    godot::PackedInt32Array buffer_ids;
+};
+
 /**
  * @class TaskGraphNode
  * @brief The base execution UI node. Provides the dynamic UI lifecycle, 
@@ -32,6 +39,12 @@ private:
 
     // Internal Helpers for Theme mapping
     godot::Ref<godot::Texture2D> _get_badge_icon_for_workspace(TransientWorkspaceState p_state) const;
+
+    // Contiguous cache of UI bindings for rapid async population
+    std::vector<BufferOptionBinding> buffer_option_bindings;
+
+    // Callable target for when the OptionButton selection changes
+    void _on_buffer_option_selected(int p_index, godot::StringName p_prop_name, godot::OptionButton* p_btn);
 
 protected:
     // The dedicated container for dynamic Tier 3 parameters (matrices, logic thresholds)
@@ -96,6 +109,9 @@ public:
 
     // External interface to flag heap allocation statuses (e.g., from the compiler or telemetry)
     void set_workspace_state(TransientWorkspaceState p_state);
+
+    virtual void receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names) override;
+
 };
 
 } // namespace ideam::godot_ext

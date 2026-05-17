@@ -579,6 +579,7 @@ void TaskGraphDOD::clear() {
     transient_bytes_meta.clear();
     baked_connections.clear();
     owned_native_tasks.clear(); // Important: Cleans up instantiated tasks
+    child_graphs.clear();
     MemoryGraphDOD::clear();
 }
 

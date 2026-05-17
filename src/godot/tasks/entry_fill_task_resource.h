@@ -30,6 +30,8 @@ public:
     // --- Entry Configuration ---
     void set_target_buffer_id(int p_id);
     int get_target_buffer_id() const;
+
+    godot::Dictionary get_task_properties() const override;
 };
 
 } // namespace ideam::godot_ext

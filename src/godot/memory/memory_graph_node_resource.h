@@ -21,13 +21,14 @@ public:
     };
 
 private:
-    GrantDerivationMode derivation_mode = MODE_INDEPENDENT;
-    godot::Ref<MemoryGrantResource> memory_grant;
     
     // Abstracted away from the loosely-packed dictionary, mapping 1:1 with DOD architecture
     uint32_t type_id = 0; 
 
 protected:
+    GrantDerivationMode derivation_mode = MODE_INDEPENDENT;
+    godot::Ref<MemoryGrantResource> memory_grant;
+
     static void _bind_methods();
 
 public:

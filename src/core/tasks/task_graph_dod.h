@@ -88,6 +88,8 @@ protected:
     std::vector<TaskGraphCommandPOD> tier1_meta;
     std::vector<TaskSelectionCommandPOD> tier2_meta;
 
+    std::vector<std::shared_ptr<TaskGraphDOD>> child_graphs;
+
     // --- Internal Execution Pipeline ---
     void _bake_port_connections();
     void _clean_selections(NodeID p_id, void* p_workspace);
@@ -111,6 +113,10 @@ public:
     explicit TaskGraphDOD(MemoryManagerDOD* p_manager);
     virtual ~TaskGraphDOD() override = default;
 
+    inline void retain_child_graph(std::shared_ptr<TaskGraphDOD> p_child) {
+        child_graphs.push_back(p_child);
+    }
+    
     // --- Configuration ---
     NodeID add_task_node(TaskTypeDOD p_type);
     

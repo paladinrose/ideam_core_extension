@@ -22,7 +22,7 @@ protected:
 
     // Virtual pipeline override to inject MemoryGraph-specific utility footprints
     virtual void _append_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const override;
-
+godot::Ref<MemoryGraphNodeResource> _get_node_by_name(const godot::StringName& p_name) const;
 public:
     MemoryGraphResource() = default;
     virtual ~MemoryGraphResource() override = default;

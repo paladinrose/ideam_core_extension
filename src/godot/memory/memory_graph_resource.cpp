@@ -64,34 +64,75 @@ void MemoryGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuff
     r_profiles.append(registry_profile);
 }
 
+godot::Ref<MemoryGraphNodeResource> MemoryGraphResource::_get_node_by_name(const godot::StringName& p_name) const {
+    godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> current_nodes = get_nodes();
+    for (int i = 0; i < current_nodes.size(); ++i) {
+        godot::Ref<MemoryGraphNodeResource> n = current_nodes[i];
+        if (n.is_valid() && n->get_node_name() == p_name) {
+            return n;
+        }
+    }
+    return godot::Ref<MemoryGraphNodeResource>();
+}
+
+// Update the compilation method
 std::shared_ptr<core::MemoryGraphDOD> MemoryGraphResource::compile_to_memory_graph(
     core::MemoryManagerDOD* p_manager, 
     godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const 
 {
-    // 1. Instantiate the specialized MemoryGraphDOD
     auto memory_graph = std::make_shared<core::MemoryGraphDOD>(p_manager);
     
-    // The base get_nodes() now returns a strongly-typed Array of IdeamGraphNodeResource references
     godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> current_nodes = get_nodes();
     godot::TypedArray<godot::Dictionary> current_edges = get_edges();
 
     memory_graph->reserve(current_nodes.size(), current_edges.size());
     r_ui_to_dod_map.clear();
 
-    // 2. Compile Nodes (Fast Path via Direct Resource Pointers)
+    // 2. Compile Nodes & Push DOD Requirements
     for (int i = 0; i < current_nodes.size(); ++i) {
         godot::Ref<MemoryGraphNodeResource> n = current_nodes[i];
         if (!n.is_valid()) continue;
 
         godot::StringName ui_name = n->get_node_name();
-        if (ui_name.is_empty()) continue; // Skip uninitialized identity
+        if (ui_name.is_empty()) continue; 
 
-        // Retrieve native POD values straight from the VTable, no Dictionary map-hashing
         core::NodeID core_id = memory_graph->add_node(n->get_type_id());
         r_ui_to_dod_map[ui_name] = core_id;
+
+        // --- DOD Handshake: Independent Grants ---
+        if (n->get_derivation_mode() == MemoryGraphNodeResource::MODE_INDEPENDENT) {
+            godot::Ref<MemoryGrantResource> grant_res = n->get_memory_grant();
+            if (grant_res.is_valid()) {
+                godot::TypedArray<GrantPartResource> ui_parts = grant_res->get_configured_parts();
+                
+                // Stack-allocate a fast vector for the staging push
+                std::vector<core::GrantPartPOD> dod_parts;
+                dod_parts.reserve(ui_parts.size());
+                
+                for (int p = 0; p < ui_parts.size(); ++p) {
+                    godot::Ref<GrantPartResource> part_res = ui_parts[p];
+                    if (part_res.is_valid()) {
+                        core::GrantPartPOD pod_part{};
+                        pod_part.buffer_id = part_res->get_buffer_id();
+                        pod_part.element_stride = part_res->get_element_stride();
+                        // Assuming 0=READ, 1=WRITE maps to your internal enums
+                        pod_part.access_mode = static_cast<core::BufferAccessMode>(part_res->get_access_mode());
+                        
+                        if (part_res->get_is_contiguous()) {
+                            pod_part.selection.mode = core::SelectionMode::RANGE;
+                        }
+                        dod_parts.push_back(pod_part);
+                    }
+                }
+                
+                if (!dod_parts.empty()) {
+                    memory_graph->set_node_requirements(core_id, dod_parts);
+                }
+            }
+        }
     }
 
-    // 3. Compile Edges (Remains Dict-based until Edge serialization is similarly refactored)
+    // 3. Compile Edges & Enforce Fork Dependencies
     for (int i = 0; i < current_edges.size(); ++i) {
         godot::Dictionary e = current_edges[i];
         if (!e.has("from") || !e.has("to")) continue;
@@ -103,10 +144,18 @@ std::shared_ptr<core::MemoryGraphDOD> MemoryGraphResource::compile_to_memory_gra
             core::NodeID from_id = r_ui_to_dod_map[from_name];
             core::NodeID to_id = r_ui_to_dod_map[to_name];
 
-            uint32_t from_port = e.has("from_port") ? static_cast<uint32_t>(e["from_port"]) : 0;
-            uint32_t to_port = e.has("to_port") ? static_cast<uint32_t>(e["to_port"]) : 0;
+            uint32_t from_port = e.has("from_port") ? static_cast<uint32_t>(static_cast<int64_t>(e["from_port"])) : 0;
+            uint32_t to_port = e.has("to_port") ? static_cast<uint32_t>(static_cast<int64_t>(e["to_port"])) : 0;
 
             memory_graph->connect_nodes(from_id, from_port, to_id, to_port);
+
+            // --- DOD Handshake: Forked Grants ---
+            // If the target node is flagged to inherit memory pointers, we issue the fork 
+            // strictly along the compiled topological edge.
+            godot::Ref<MemoryGraphNodeResource> to_res = _get_node_by_name(to_name);
+            if (to_res.is_valid() && to_res->get_derivation_mode() == MemoryGraphNodeResource::MODE_FORKED) {
+                memory_graph->fork_grant(from_id, to_id);
+            }
         }
     }
 

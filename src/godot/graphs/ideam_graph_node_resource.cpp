@@ -10,6 +10,12 @@ void IdeamGraphNodeResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_node_name"), &IdeamGraphNodeResource::get_node_name);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING_NAME, "node_name"), "set_node_name", "get_node_name");
 
+    // --- DOD Execution Group ---
+    ADD_GROUP("Execution Directives", "");
+    godot::ClassDB::bind_method(godot::D_METHOD("set_execution_priority", "priority"), &IdeamGraphNodeResource::set_execution_priority);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_execution_priority"), &IdeamGraphNodeResource::get_execution_priority);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "execution_priority"), "set_execution_priority", "get_execution_priority");
+
     // --- Editor Visuals Group ---
     // Grouping these in the Inspector keeps the UI clean and cognitively separates 
     // visual properties from compilation properties.
@@ -42,6 +48,10 @@ void IdeamGraphNodeResource::_bind_methods() {
 // --- Identity ---
 void IdeamGraphNodeResource::set_node_name(const godot::StringName& p_name) { node_name = p_name; }
 godot::StringName IdeamGraphNodeResource::get_node_name() const { return node_name; }
+
+// --- Execution ---
+void IdeamGraphNodeResource::set_execution_priority(int p_priority) { execution_priority = static_cast<int32_t>(p_priority); }
+int IdeamGraphNodeResource::get_execution_priority() const { return static_cast<int>(execution_priority); }
 
 // --- Visuals ---
 void IdeamGraphNodeResource::set_position_offset(const godot::Vector2& p_pos) { position_offset = p_pos; }

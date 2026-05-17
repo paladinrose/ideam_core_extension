@@ -43,6 +43,11 @@ public:
     void set_configured_parts(const godot::TypedArray<GrantPartResource>& p_parts);
     godot::TypedArray<GrantPartResource> get_configured_parts() const;
 
+    /**
+     * @brief Extracts a flat array of all currently configured Buffer IDs.
+     */
+    godot::PackedInt32Array get_buffer_ids() const;
+    
     // Setup-time helper to enforce hardware boundaries
     bool add_part(const godot::Ref<GrantPartResource>& p_part);
     void remove_part(int p_index);
