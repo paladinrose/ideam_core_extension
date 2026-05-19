@@ -3,6 +3,7 @@
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/classes/tab_container.hpp>
 #include <godot_cpp/classes/control.hpp>
+#include <godot_cpp/classes/window.hpp>
 #include <vector>
 
 #include "ideam_graph_edit.h"
@@ -33,6 +34,9 @@ protected:
     static void _bind_methods();
     void _notification(int p_what);
 
+    // Spawns a window dynamically if executing outside of the Godot Editor
+    static godot::Window* create_runtime_composer_window();
+
 public:
     GraphComposer();
     ~GraphComposer();
@@ -47,5 +51,3 @@ public:
 };
 
 } // namespace ideam::godot_ext
-
- // IDEAM_GRAPH_COMPOSER_H

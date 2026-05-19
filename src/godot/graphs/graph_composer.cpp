@@ -2,7 +2,8 @@
 #include "ideam_graphs_plugin.h"
 
 #include <godot_cpp/core/class_db.hpp>
-#include <godot_cpp/classes/editor_interface.hpp>
+#include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
 // Bring Godot types into scope locally for the implementation file
@@ -17,6 +18,7 @@ void GraphComposer::_bind_methods() {
 }
 
 GraphComposer::GraphComposer() {
+    // Initialize as a generic, expandable container
     set_anchors_preset(PRESET_FULL_RECT);
     set_h_size_flags(SIZE_EXPAND_FILL);
     set_v_size_flags(SIZE_EXPAND_FILL);
@@ -98,44 +100,87 @@ void GraphComposer::close_graph(IdeamGraphEdit* p_graph_edit) {
 
 // --- Static Entry Points (Routing Layer) ---
 
+Window* GraphComposer::create_runtime_composer_window() {
+    Window* runtime_window = memnew(Window);
+    runtime_window->set_title("Runtime Graph Composer");
+    runtime_window->set_min_size(Vector2i(800, 600));
+    runtime_window->set_transient(false);
+    
+    // In runtime, closing the window destroys it to free memory
+    runtime_window->connect("close_requested", Callable(runtime_window, "queue_free"));
+
+    // Anchor it to the main SceneTree root 
+    SceneTree* tree = Object::cast_to<SceneTree>(Engine::get_singleton()->get_main_loop());
+    if (tree && tree->get_root()) {
+        tree->get_root()->add_child(runtime_window);
+    } else {
+        UtilityFunctions::printerr("GraphComposer: Cannot attach runtime window, no SceneTree root found.");
+    }
+
+    return runtime_window;
+}
+
 void GraphComposer::edit_ideam_graph(IdeamGraphEdit* p_graph_edit, Control* p_owner) {
     GraphComposer* target_composer = nullptr;
 
     if (p_owner) {
-        // Attempt to locate an existing GraphComposer on the explicitly provided owner
+        // Linear scan of explicit parent
         for (int i = 0; i < p_owner->get_child_count(); ++i) {
             target_composer = Object::cast_to<GraphComposer>(p_owner->get_child(i));
             if (target_composer) break;
         }
 
-        // Allocate and attach if none exists in the local context
         if (!target_composer) {
             target_composer = memnew(GraphComposer);
             p_owner->add_child(target_composer);
         }
     } else {
-        // Fallback to the Plugin's shared window via the static provider
-        Window* shared_window = IdeamGraphsPlugin::get_shared_composer_window();
-        if (shared_window) {
-            for (int i = 0; i < shared_window->get_child_count(); ++i) {
-                target_composer = Object::cast_to<GraphComposer>(shared_window->get_child(i));
+        // Environment-aware Window routing
+        Window* target_window = nullptr;
+
+        if (Engine::get_singleton()->is_editor_hint()) {
+            target_window = IdeamGraphsPlugin::get_shared_composer_window();
+        } else {
+            // Find existing runtime window to avoid spamming multiple popups
+            SceneTree* tree = Object::cast_to<SceneTree>(Engine::get_singleton()->get_main_loop());
+            if (tree && tree->get_root()) {
+                for (int i = 0; i < tree->get_root()->get_child_count(); ++i) {
+                    Window* w = Object::cast_to<Window>(tree->get_root()->get_child(i));
+                    if (w && w->get_title() == "Runtime Graph Composer") {
+                        target_window = w;
+                        break;
+                    }
+                }
+            }
+            
+            // Spawn if none found
+            if (!target_window) {
+                target_window = create_runtime_composer_window();
+            }
+        }
+
+        if (target_window) {
+            // Check if the window already has our Composer child
+            for (int i = 0; i < target_window->get_child_count(); ++i) {
+                target_composer = Object::cast_to<GraphComposer>(target_window->get_child(i));
                 if (target_composer) break;
             }
 
             if (!target_composer) {
                 target_composer = memnew(GraphComposer);
-                shared_window->add_child(target_composer);
+                target_window->add_child(target_composer);
             }
             
-            shared_window->popup(); // Ensure visibility of the shared context
+            // Pop the window to the front
+            target_window->popup_centered(); 
         }
     }
 
-    // Execute the tightly packed instance method
+    // Execute the instantiation request
     if (target_composer) {
         target_composer->open_graph(p_graph_edit);
     } else {
-        // Safe disposal if routing completely fails
+        // Abort safely
         p_graph_edit->queue_free();
     }
 }
@@ -149,10 +194,26 @@ void GraphComposer::close_ideam_graph(IdeamGraphEdit* p_graph_edit, Control* p_o
             if (target_composer) break;
         }
     } else {
-        Window* shared_window = IdeamGraphsPlugin::get_shared_composer_window();
-        if (shared_window) {
-            for (int i = 0; i < shared_window->get_child_count(); ++i) {
-                target_composer = Object::cast_to<GraphComposer>(shared_window->get_child(i));
+        Window* target_window = nullptr;
+        
+        if (Engine::get_singleton()->is_editor_hint()) {
+            target_window = IdeamGraphsPlugin::get_shared_composer_window();
+        } else {
+            SceneTree* tree = Object::cast_to<SceneTree>(Engine::get_singleton()->get_main_loop());
+            if (tree && tree->get_root()) {
+                for (int i = 0; i < tree->get_root()->get_child_count(); ++i) {
+                    Window* w = Object::cast_to<Window>(tree->get_root()->get_child(i));
+                    if (w && w->get_title() == "Runtime Graph Composer") {
+                        target_window = w;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (target_window) {
+            for (int i = 0; i < target_window->get_child_count(); ++i) {
+                target_composer = Object::cast_to<GraphComposer>(target_window->get_child(i));
                 if (target_composer) break;
             }
         }

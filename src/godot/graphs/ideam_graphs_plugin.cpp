@@ -5,11 +5,6 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/classes/editor_undo_redo_manager.hpp>
-#include <godot_cpp/classes/resource_loader.hpp>
-#include <godot_cpp/classes/scene_tree.hpp>
-#include <godot_cpp/classes/viewport.hpp>
-#include <godot_cpp/variant/utility_functions.hpp>
-#include <godot_cpp/classes/v_box_container.hpp>
 
 // Bring Godot types into scope locally for the implementation file
 using namespace godot;
@@ -19,8 +14,7 @@ namespace ideam::godot_ext {
 IdeamGraphsPlugin *IdeamGraphsPlugin::singleton = nullptr;
 
 void IdeamGraphsPlugin::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("open_graph_composer"), &IdeamGraphsPlugin::open_graph_composer);
-    ClassDB::bind_method(D_METHOD("close_graph_composer"), &IdeamGraphsPlugin::close_graph_composer);
+    ClassDB::bind_method(D_METHOD("_on_composer_window_closed"), &IdeamGraphsPlugin::_on_composer_window_closed);
 }
 
 IdeamGraphsPlugin::IdeamGraphsPlugin() {
@@ -49,75 +43,20 @@ void IdeamGraphsPlugin::_enter_tree() {
 
 void IdeamGraphsPlugin::_exit_tree() {
     remove_inspector_plugin(graph_editor);
-    close_graph_composer();
+    
+    // Cleanup the editor window if it's still alive
+    if (graph_composer_window) {
+        graph_composer_window->queue_free();
+        graph_composer_window = nullptr;
+    }
 
     // Handshake: Remove plugin from active roster
     set_plugin_active("IdeamGraphs", false);
 }
 
-void IdeamGraphsPlugin::open_graph_composer() {
-    if (graph_composer_window) {
-        graph_composer_window->grab_focus();
-        return;
-    }
-
-    Window *top = EditorInterface::get_singleton()->get_editor_main_screen()->get_window();
-    if (!top) return;
-
-    graph_composer_window = memnew(Window);
-    graph_composer_window->set_title("Ideam Graph Composer");
-    graph_composer_window->connect("close_requested", Callable(this, "close_graph_composer"));
-
-    Vector2i min_size(800, 600);
-    graph_composer_window->set_min_size(min_size);
-
-    ScrollContainer *scroll = memnew(ScrollContainer);
-    scroll->set_anchors_preset(Control::PRESET_FULL_RECT);
-    graph_composer_window->add_child(scroll);
-
-    Ref<PackedScene> composer_scene = ResourceLoader::get_singleton()->load(String(GRAPH_COMPOSER_SCENE_PATH.data()));
-    if (composer_scene.is_valid()) {
-        graph_composer = Object::cast_to<GraphComposer>(composer_scene->instantiate());
-        if (graph_composer) {
-            scroll->add_child(graph_composer);
-            // Calling GDScript/Dynamic methods via call
-            graph_composer->call("build_graph_composer");
-        }
-    }
-
-    top->add_child(graph_composer_window);
-    graph_composer_window->popup_exclusive_centered(top, min_size);
-}
-
-void IdeamGraphsPlugin::close_graph_composer() {
-    if (graph_composer && graph_composer->has_method("close_tool")) {
-        graph_composer->call("close_tool");
-    }
-
+void IdeamGraphsPlugin::_on_composer_window_closed() {
     if (graph_composer_window) {
         graph_composer_window->hide();
-        graph_composer_window->queue_free();
-        graph_composer_window = nullptr;
-        graph_composer = nullptr;
-    }
-}
-
-void IdeamGraphsPlugin::edit_ideam_graph(Object *p_graph, const Callable &p_graph_close) {
-    if (!graph_composer_window) {
-        open_graph_composer();
-    }
-    
-    if (graph_composer) {
-        // Safely cast the generic Object* to your specific GraphEdit node
-        IdeamGraphEdit* editor_node = Object::cast_to<IdeamGraphEdit>(p_graph);
-        
-        if (editor_node) {
-            // Direct C++ method call. Lightning fast, compile-time safe.
-            graph_composer->open_graph(editor_node);
-            
-            // NOTE: You will need to handle the p_graph_close Callable connection
-            // directly inside IdeamGraphEdit or GraphComposer now!
-        }
     }
 }
 
@@ -147,8 +86,8 @@ Window* IdeamGraphsPlugin::get_shared_composer_window() {
         // Disable exclusivity so the user can interact with both the editor and this window simultaneously
         singleton->graph_composer_window->set_exclusive(false);
         
-        // Connect the close button event to the plugin's teardown routing
-        singleton->graph_composer_window->connect("close_requested", Callable(singleton, "close_graph_composer"));
+        // Connect the close button event to the plugin's hide routing
+        singleton->graph_composer_window->connect("close_requested", Callable(singleton, "_on_composer_window_closed"));
         
         // If we are in the editor, we can parent it to the editor's base control
         if (Engine::get_singleton()->is_editor_hint()) {

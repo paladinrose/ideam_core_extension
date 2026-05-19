@@ -53,6 +53,12 @@
 #include "godot/tasks/transform_task_graph_node.h"
 #include "godot/tasks/transform_task_resource.h"
 
+#include "godot/tasks/sub_graph_task_graph_node.h"
+#include "godot/tasks/sub_graph_task_resource.h"
+
+#include "godot/tasks/entry_fill_task_graph_node.h"
+#include "godot/tasks/entry_fill_task_resource.h"
+
 // Native task registration
 #include "core/tasks/registration/native_task_registry.h"
 
@@ -130,28 +136,20 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	// ========================================================================
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		
-		// Foundational Base Classes - Registered as Abstract to protect constructors
+        // --- Graphs ---
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphEdit);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNode);
 
+		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
+
+		// --- Memory ---
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNodeResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphEdit);
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNode);
 
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskResource);
-        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskGraphNode);
-
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
-
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::GameEntity);
-		
-        // --- Graphs ---
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphEdit);
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphNode);
-		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
-
-		// --- Memory ---
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
 		GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
@@ -159,6 +157,9 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
 
 		// --- Tasks ---
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskResource);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskGraphNode);
+
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
 		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
@@ -172,7 +173,15 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::TransformTaskResource);
 		GDREGISTER_CLASS(ideam::godot_ext::TransformTaskGraphNode);
 
+		GDREGISTER_CLASS(ideam::godot_ext::SubGraphTaskResource);
+		GDREGISTER_CLASS(ideam::godot_ext::SubGraphTaskGraphNode);
+
+		GDREGISTER_CLASS(ideam::godot_ext::EntryFillTaskResource);
+		GDREGISTER_CLASS(ideam::godot_ext::EntryFillTaskGraphNode);
+
 		// --- Narratives ---
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
+
 		GDREGISTER_CLASS(ideam::godot_ext::Narrative);
 		GDREGISTER_CLASS(ideam::godot_ext::Character);
 		GDREGISTER_CLASS(ideam::godot_ext::Location);
@@ -189,8 +198,10 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::Plot_Event);
 
 		// --- Games ---
-		GDREGISTER_CLASS(ideam::godot_ext::Game);
+		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::GameEntity);
+		
 		GDREGISTER_CLASS(ideam::godot_ext::GameHub);
+		GDREGISTER_CLASS(ideam::godot_ext::Game);
 		GDREGISTER_CLASS(ideam::godot_ext::GamePlayer);
 		GDREGISTER_CLASS(ideam::godot_ext::GamePlayerProfile);
 		GDREGISTER_CLASS(ideam::godot_ext::GamePlayerManager);
