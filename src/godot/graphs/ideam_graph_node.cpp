@@ -44,25 +44,23 @@ void IdeamGraphNode::_ready() {
 }
 
 void IdeamGraphNode::_notification(int p_what) {
-    if (p_what == NOTIFICATION_DRAW) {
-        Ref<StyleBox> style;
+    if (p_what == NOTIFICATION_THEME_CHANGED) {
+        _update_theme_properties();
 
-        if (is_error_state) {
-            style = get_theme_stylebox("node_frame_error");
-        } else if (is_locked_state) {
-            style = get_theme_stylebox("node_frame_locked");
-        } else if (is_context_hovered) {
-            style = get_theme_stylebox("node_frame_context_hover");
-        } else if (is_selected()) {
-            style = get_theme_stylebox("node_frame_selected");
-        } else {
-            style = get_theme_stylebox("node_frame_default");
-        }
-
-        if (style.is_valid()) {
-            draw_style_box(style, Rect2(Point2(0, 0), get_size()));
-        }
     }
+}
+
+void IdeamGraphNode::_update_theme_properties() {
+    // Force refresh all registered left port states
+    for (const auto& pair : left_port_states) {
+        update_port_state(pair.first, true, pair.second);
+    }
+    // Force refresh all registered right port states
+    for (const auto& pair : right_port_states) {
+        update_port_state(pair.first, false, pair.second);
+    }
+    
+    queue_redraw();
 }
 
 void IdeamGraphNode::_gui_input(const Ref<InputEvent> &p_event) {
@@ -95,6 +93,8 @@ void IdeamGraphNode::initialize(const Ref<IdeamGraphNodeResource>& p_node_res) {
     }
 
     _build_ui();
+
+    _update_theme_properties();
 }
 
 bool IdeamGraphNode::get_locked() const {
@@ -142,6 +142,18 @@ void IdeamGraphNode::select_context_menu_option(int p_option_id) {
 void IdeamGraphNode::set_locked(bool p_locked) {
     if (is_locked_state == p_locked) return;
     is_locked_state = p_locked;
+
+    if (is_locked_state) {
+        // Retrieve the "panel_locked" StyleBox from the node's theme
+        Ref<StyleBox> locked_sb = get_theme_stylebox("panel_locked", "GraphNode");
+        
+        // Apply it to the "panel" theme item
+        add_theme_stylebox_override("panel", locked_sb);
+    } else {
+        // Clear the override to revert to the default "panel" StyleBox
+        remove_theme_stylebox_override("panel");
+    }
+    
     _set_controls_disabled(this, is_locked_state);
     queue_redraw();
 }
@@ -176,10 +188,10 @@ void IdeamGraphNode::_set_controls_disabled(Node* p_node, bool p_disabled) {
 
 Color IdeamGraphNode::_get_color_for_port_state(PortState p_state) const {
     switch(p_state) {
-        case PORT_EMPTY:     return get_theme_color("port_empty_color");
-        case PORT_CONNECTED: return get_theme_color("port_connected_color");
-        case PORT_LOCKED:    return get_theme_color("port_locked_color");
-        case PORT_ERROR:     return get_theme_color("port_error_color");
+        case PORT_EMPTY:     return get_theme_color("port_empty_color", "GraphNode");
+        case PORT_CONNECTED: return get_theme_color("port_connected_color", "GraphNode");
+        case PORT_LOCKED:    return get_theme_color("port_locked_color", "GraphNode");
+        case PORT_ERROR:     return get_theme_color("port_error_color", "GraphNode");
         default:             return Color(1, 1, 1, 1);
     }
 }

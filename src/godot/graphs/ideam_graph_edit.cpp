@@ -41,6 +41,30 @@ void IdeamGraphEdit::_ready() {
     }
 }
 
+void IdeamGraphEdit::_notification(int p_what) {
+    switch (p_what) {
+        case NOTIFICATION_THEME_CHANGED: {
+            _update_theme_properties();
+        } break;
+    }
+}
+
+void IdeamGraphEdit::_create_popup() {
+    if (context_popup) return;
+
+    context_popup = memnew(PopupMenu);
+    add_child(context_popup);
+
+    // Call the styling forwarder immediately upon creation
+    _update_theme_properties();
+
+    context_popup->connect("id_pressed", Callable(this, "_popup_select"));
+}
+
+void IdeamGraphEdit::_update_theme_properties() {
+    
+}
+
 void IdeamGraphEdit::set_blueprint(const Ref<IdeamGraphResource>& p_blueprint) {
     if (current_blueprint == p_blueprint) return;
 
@@ -87,21 +111,6 @@ IdeamGraphNode* IdeamGraphEdit::_create_graph_node(const Ref<IdeamGraphNodeResou
     // Default implementation returns nullptr. 
     // Derived graph editors must override this to handle their specific concrete types.
     return nullptr;
-}
-
-void IdeamGraphEdit::_create_popup() {
-    if (context_popup) return;
-
-    context_popup = memnew(PopupMenu);
-    add_child(context_popup);
-
-    Ref<StyleBox> panel_style = get_theme_stylebox("popup_menu_panel");
-    if (panel_style.is_valid()) context_popup->add_theme_stylebox_override("panel", panel_style);
-    
-    Ref<StyleBox> hover_style = get_theme_stylebox("popup_menu_hover");
-    if (hover_style.is_valid()) context_popup->add_theme_stylebox_override("hover", hover_style);
-
-    context_popup->connect("id_pressed", Callable(this, "_popup_select"));
 }
 
 void IdeamGraphEdit::_show_popup(const Vector2 &p_at) {

@@ -10,6 +10,9 @@ using namespace godot;
 namespace ideam::godot_ext {
 
 void TransformTaskGraphNode::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_transform_task_resource"), &TransformTaskGraphNode::get_transform_task_resource);
+    ClassDB::bind_method(D_METHOD("get_logic_id"), &TransformTaskGraphNode::get_logic_id);
+
     ClassDB::bind_method(D_METHOD("_on_view_selected", "index"), &TransformTaskGraphNode::_on_view_selected);
     ClassDB::bind_method(D_METHOD("_on_strategy_selected", "index"), &TransformTaskGraphNode::_on_strategy_selected);
     ClassDB::bind_method(D_METHOD("_on_type_selected", "index"), &TransformTaskGraphNode::_on_type_selected);
@@ -127,10 +130,19 @@ void TransformTaskGraphNode::_update_matrix_guardrails() {
     }
 }
 
+godot::Ref<TransformTaskResource> TransformTaskGraphNode::get_transform_task_resource() const {
+     return godot::Object::cast_to<TransformTaskResource>(get_task_node_resource().ptr());
+}
+
+uint32_t TransformTaskGraphNode::get_logic_id() const {
+    godot::Ref<TransformTaskResource> res = get_transform_task_resource();
+    return res.is_valid() ? res->get_logic_id() : 0;
+}
+
 // --- Interaction Routing ---
 
 void TransformTaskGraphNode::_on_view_selected(int p_index) {
-    Ref<TransformTaskResource> res = node_resource;
+    godot::Ref<TransformTaskResource> res = node_resource;
     if (res.is_valid()) {
         res->set_view_id(p_index);
         emit_property_changed(StringName("view_id"), p_index);

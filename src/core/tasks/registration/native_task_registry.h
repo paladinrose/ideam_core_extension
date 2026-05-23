@@ -5,6 +5,9 @@
 #include "../../memory/memory_buffer_pod.h" // For BufferLayoutType
 #include "../../memory/views/view_traits.h"       // For ViewStrategies and ViewCapability
 
+#include "../../../godot/tasks/task_resource.h" 
+#include "../../../godot/tasks/task_graph_node.h" 
+
 // --- Centralized Enums & Traits (Required by Sub-Registries) ---
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
@@ -96,6 +99,10 @@ template <> struct NativeMemoryTraits<MemoryTypes::COLOR> { using ConcreteType =
 template <> struct NativeMemoryTraits<MemoryTypes::CUSTOM> { using ConcreteType = void*; static constexpr DataType DataFlag = DataType::CUSTOM; };
 
 
+struct TaskUIFactories {
+    std::function<godot::Ref<godot_ext::TaskResource>()> resource_factory;
+    std::function<godot_ext::TaskGraphNode*()> node_factory;
+};
 
 using NativeTaskFactory = std::function<std::unique_ptr<INativeTask>()>;
 
@@ -103,8 +110,12 @@ class NativeTaskRegistry {
 private:
     // Only retains tasks that require dynamic/hashed lookups (e.g., manual overrides or entry tasks)
     static godot::HashMap<godot::StringName, NativeTaskFactory>* manual_factories;
+    
     // The structural manifest for Godot UI
     static godot::Dictionary* ui_utility_matrix;
+
+    // Add a fast C++ map for instantiation
+    static godot::HashMap<godot::StringName, TaskUIFactories>* ui_factories;
 
 public:
     // --- Lifecycle Management ---
@@ -113,6 +124,8 @@ public:
 
     // --- Dynamic Creation for Manual Tasks ---
     [[nodiscard]] static std::unique_ptr<INativeTask> create(const godot::StringName& p_name);
+
+    static godot::HashMap<godot::StringName, TaskUIFactories>* get_ui_factories() { return ui_factories; }
 
     // --- Variadic Registration (Added Resource and GraphNode template constraints) ---
     template <typename T_Task, typename T_Resource, typename T_Node, typename... Args>
@@ -138,6 +151,20 @@ public:
             // hardware-layout filter and should always be available in the Utility menu.
             
             (*ui_utility_matrix)[p_name] = task_def;
+        }
+
+        // Capture type-safe instantiation closures
+        if (ui_factories) {
+            (*ui_factories)[p_name] = {
+                []() -> godot::Ref<godot_ext::TaskResource> {
+                    godot::Ref<T_Resource> res;
+                    res.instantiate(); // Safely calls memnew() and sets initial ref count to 1
+                    return res;
+                },
+                []() -> godot_ext::TaskGraphNode* {
+                    return memnew(T_Node); // Direct heap allocation, no reflection overhead
+                }
+            };
         }
     }
     

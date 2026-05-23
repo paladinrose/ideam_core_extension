@@ -10,6 +10,9 @@ using namespace godot;
 namespace ideam::godot_ext {
 
 void QueryTaskGraphNode::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_query_task_resource"), &QueryTaskGraphNode::get_query_task_resource);
+    ClassDB::bind_method(D_METHOD("get_logic_id"), &QueryTaskGraphNode::get_logic_id);
+
     ClassDB::bind_method(D_METHOD("_on_op_selected", "index"), &QueryTaskGraphNode::_on_op_selected);
     ClassDB::bind_method(D_METHOD("_on_view_selected", "index"), &QueryTaskGraphNode::_on_view_selected);
     ClassDB::bind_method(D_METHOD("_on_strategy_selected", "index"), &QueryTaskGraphNode::_on_strategy_selected);
@@ -224,6 +227,16 @@ void QueryTaskGraphNode::_update_matrix_guardrails() {
     }
 }
 
+
+godot::Ref<QueryTaskResource> QueryTaskGraphNode::get_query_task_resource() const {
+     return godot::Object::cast_to<QueryTaskResource>(get_task_node_resource().ptr());
+}
+
+uint32_t QueryTaskGraphNode::get_logic_id() const {
+    godot::Ref<QueryTaskResource> res = get_query_task_resource();
+    return res.is_valid() ? res->get_logic_id() : 0;
+}
+
 // --- Interaction Routing ---
 
 void QueryTaskGraphNode::_on_op_selected(int p_index) {
@@ -259,7 +272,7 @@ void QueryTaskGraphNode::_on_type_selected(int p_index) {
     }
 
     Dictionary matrix = core::NativeTaskRegistry::get_ui_query_matrix();
-    String logic_str = String::num_int64(get_logic_id());
+    String logic_str = String::num_int64(p_index);
     
     if (matrix.has(logic_str)) {
         Dictionary logic_def = matrix[logic_str];

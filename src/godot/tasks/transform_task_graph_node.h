@@ -40,6 +40,10 @@ protected:
 public:
     TransformTaskGraphNode();
     virtual ~TransformTaskGraphNode() override = default;
+
+    godot::Ref<TransformTaskResource> get_transform_task_resource() const;
+    
+    uint32_t get_logic_id() const;
 };
 
 } // namespace ideam::godot_ext

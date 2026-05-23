@@ -8,6 +8,9 @@
 #include "godot/editor/ideam_editor_plugin.h"
 #include "godot/editor/ideam_editor_inspector_plugin.h"
 
+// --- Controls ---
+#include "godot/controls/runtime_inspector.h"
+
 // --- Graph UI & Editor ---
 #include "godot/graphs/ideam_graphs_plugin.h"
 
@@ -17,6 +20,7 @@
 #include "godot/graphs/ideam_graph_node.h"
 #include "godot/graphs/ideam_graph_inspector.h"
 #include "godot/graphs/graph_composer.h"
+#include "godot/graphs/theme_registry.h"
 
 // --- Memory UI & Editor ---
 #include "godot/memory/ideam_memory_plugin.h"
@@ -136,6 +140,9 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 	// ========================================================================
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
 		
+		// --- Controls ---
+		GDREGISTER_CLASS(ideam::godot_ext::RuntimeInspector);
+		
         // --- Graphs ---
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
@@ -143,7 +150,8 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNode);
 
 		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
-
+		GDREGISTER_CLASS(ideam::godot_ext::ThemeRegistry);
+	
 		// --- Memory ---
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNodeResource);

@@ -35,6 +35,36 @@ void TaskGraphEdit::_ready() {
     // directly into the parent's native _popup_select.
 }
 
+void TaskGraphEdit::_notification(int p_what) {
+    // Bubble up to MemoryGraphEdit first
+    MemoryGraphEdit::_notification(p_what);
+
+    switch (p_what) {
+        case NOTIFICATION_THEME_CHANGED: {
+            _update_theme_properties();
+        } break;
+    }
+}
+
+void TaskGraphEdit::_update_theme_properties() {
+    // 1. Core parent theme configuration (handles context_popup)
+    MemoryGraphEdit::_update_theme_properties();
+
+    // 2. Propagate styles down to any currently active submenu layers
+    if (context_popup) {
+        Ref<StyleBox> panel_style = get_theme_stylebox("popup_menu_panel", "PopupMenu");
+        Ref<StyleBox> hover_style = get_theme_stylebox("popup_menu_hover", "PopupMenu");
+
+        for (int i = 0; i < context_popup->get_child_count(); ++i) {
+            PopupMenu* sub = Object::cast_to<PopupMenu>(context_popup->get_child(i));
+            if (sub) {
+                if (panel_style.is_valid()) sub->add_theme_stylebox_override("panel", panel_style);
+                if (hover_style.is_valid()) sub->add_theme_stylebox_override("hover", hover_style);
+            }
+        }
+    }
+}
+
 bool TaskGraphEdit::_strategy_supports_layout(core::MemoryStrategy p_strategy, core::BufferLayoutType p_layout) const {
     // Exact mapping between structural memory layouts and safe execution strategies.
     // Prevents cache-thrashing tasks from attempting to process fragmented layouts.
@@ -58,7 +88,6 @@ bool TaskGraphEdit::_strategy_supports_layout(core::MemoryStrategy p_strategy, c
 }
 
 TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
-    // We cast away const to modify our internal linear cache and inject sub-menus into the parent's popup.
     auto* mutable_this = const_cast<TaskGraphEdit*>(this);
     mutable_this->spawn_options_cache.clear();
 
@@ -72,14 +101,20 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
         }
     }
 
-    // Helper to generate and bind sub-menus
+    // Helper to generate, style, and bind sub-menus instantly
     auto create_submenu = [&](const String& p_name) -> PopupMenu* {
         PopupMenu* sub = memnew(PopupMenu);
         sub->set_name(p_name);
         mutable_this->context_popup->add_child(sub);
         mutable_this->context_popup->add_submenu_node_item(p_name, sub);
         
-        // Route selections dynamically back up to _spawn_node_by_type via the parent
+        // INSTANT THEME PROPAGATION: 
+        // Ensure manual styling is set up immediately at the moment of creation
+        Ref<StyleBox> panel_style = mutable_this->get_theme_stylebox("popup_menu_panel", "PopupMenu");
+        Ref<StyleBox> hover_style = mutable_this->get_theme_stylebox("popup_menu_hover", "PopupMenu");
+        if (panel_style.is_valid()) sub->add_theme_stylebox_override("panel", panel_style);
+        if (hover_style.is_valid()) sub->add_theme_stylebox_override("hover", hover_style);
+
         sub->connect("id_pressed", Callable(mutable_this, "_popup_select"));
         return sub;
     };
@@ -99,7 +134,6 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
         for (int i = 0; i < keys.size(); ++i) {
             String logic_str = keys[i];
             
-            // UINT32_MAX avoids parsing collisions for utility tasks.
             uint32_t logic_id = (p_category == CATEGORY_MANUAL) ? UINT32_MAX : static_cast<uint32_t>(logic_str.to_int());
             Dictionary logic_def = p_matrix[keys[i]];
             
@@ -128,11 +162,9 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
             SpawnDescriptor desc;
             desc.category = p_category;
             desc.logic_id = logic_id;
-            desc.logic_name = StringName(logic_str);
+            desc.task_name = StringName(logic_str);
             mutable_this->spawn_options_cache.push_back(desc);
             
-            // Assuming your DOD dictionaries hold a "name" property for standard matrix tasks.
-            // If they don't, this safely falls back to printing the logic_str.
             String display_name = (p_category == CATEGORY_MANUAL) ? logic_str : String(logic_def.get("name", logic_str));
             p_submenu->add_item(display_name, current_global_id);
             current_global_id++;
@@ -144,8 +176,6 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
     process_matrix(core::NativeTaskRegistry::get_ui_query_matrix(), CATEGORY_QUERY, query_menu);
     process_matrix(core::NativeTaskRegistry::get_ui_utility_matrix(), CATEGORY_MANUAL, utility_menu);
 
-    // Return empty array. We manually constructed the hierarchy, so we don't want the 
-    // base class to append any generic flat strings to the root popup menu.
     return TypedArray<String>();
 }
 
@@ -156,13 +186,6 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     const SpawnDescriptor& desc = spawn_options_cache[p_type_id];
     StringName unique_name = String("TaskNode_") + String::num_int64(UtilityFunctions::randi());
 
-    Dictionary props;
-    props["logic_id"] = desc.logic_id;
-    props["logic_name"] = desc.logic_name;
-    props["view_id"] = 0;
-    props["strategy_id"] = 0;
-    props["type_id"] = 0;
-
     // Declare the base reference, but DO NOT instantiate it yet.
     Ref<TaskResource> new_res;
 
@@ -172,6 +195,7 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
             Ref<TransformTaskResource> res;
             res.instantiate();
             res->set_task_type(TASK_NATIVE_CPU);
+            res->set_logic_id(desc.logic_id); 
             new_res = res;
             break;
         }
@@ -179,38 +203,27 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
             Ref<MetadataTaskResource> res;
             res.instantiate();
             res->set_task_type(TASK_NATIVE_CPU);
+            res->set_logic_id(desc.logic_id);
             new_res = res;
             break;
         }
         case CATEGORY_QUERY: {
             Ref<QueryTaskResource> res;
             res.instantiate();
-            res->set_task_type(TASK_QUERY_CULLER); 
-            props["op_id"] = 0; // 0 = CULL, 1 = ADD
+            res->set_task_type(TASK_QUERY_CULLER);
+            res->set_logic_id(desc.logic_id);
             new_res = res;
             break;
         }
         case CATEGORY_MANUAL: {
-            // Retrieve the UI definitions dictionary from our native registry
-            godot::Dictionary utility_matrix = core::NativeTaskRegistry::get_ui_utility_matrix();
-            
-            if (utility_matrix.has(desc.logic_name)) {
-                godot::Dictionary task_def = utility_matrix[desc.logic_name];
-                godot::StringName resource_class = task_def["resource_class"];
-                
-                // Dynamically allocate exactly what is needed using Godot's ClassDB
-                godot::Object* obj = godot::ClassDB::instantiate(resource_class);
-                TaskResource* tr = godot::Object::cast_to<TaskResource>(obj);
-                
-                if (tr) {
-                    new_res = godot::Ref<TaskResource>(tr);
-                    new_res->set_task_type(TASK_NATIVE_CPU); 
-                } else {
-                    godot::UtilityFunctions::printerr("TaskGraphEdit: Failed to cast instantiated object to TaskResource for ", desc.logic_name);
-                    return;
-                }
+            auto* factories = core::NativeTaskRegistry::get_ui_factories();
+        
+            if (factories && factories->has(desc.task_name)) {
+                // Deterministic, O(1) instantiation. No casting required.
+                new_res = (*factories)[desc.task_name].resource_factory();
+                new_res->set_task_type(TASK_NATIVE_CPU);
             } else {
-                godot::UtilityFunctions::printerr("TaskGraphEdit: Manual task not found in utility matrix: ", desc.logic_name);
+                godot::UtilityFunctions::printerr("TaskGraphEdit: Manual task factory not found for ", desc.task_name);
                 return;
             }
             break;
@@ -221,7 +234,7 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
 
     // Apply the configured properties to our safely typed wrapper
     new_res->set_node_name(unique_name);
-    new_res->set_task_properties(props);
+    new_res->set_task_name(desc.task_name);
 
     // Apply scroll offset compensation
     Vector2 spawn_pos = popup_position;
@@ -257,20 +270,11 @@ IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNod
     // 2. Dynamic Fallback for Utility / Manual Tasks
     // If it's not a core struct, we query the utility matrix to find its bound UI class.
     else {
-        godot::Dictionary utility_matrix = core::NativeTaskRegistry::get_ui_utility_matrix();
-        godot::Array keys = utility_matrix.keys();
-        
-        // Scan the matrix to find the matching resource footprint
-        for (int i = 0; i < keys.size(); ++i) {
-            godot::Dictionary task_def = utility_matrix[keys[i]];
-            if (task_def["resource_class"] == res_class) {
-                godot::StringName node_class = task_def["node_class"];
-                
-                // Allocate the paired UI node dynamically
-                godot::Object* obj = godot::ClassDB::instantiate(node_class);
-                new_node = godot::Object::cast_to<IdeamGraphNode>(obj);
-                break;
-            }
+
+        godot::StringName task_name = task_res->get_task_name();
+        auto* factories = core::NativeTaskRegistry::get_ui_factories();
+        if (factories && factories->has(task_name)) {
+            new_node = (*factories)[task_name].node_factory();
         }
     }
 
@@ -278,6 +282,7 @@ IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNod
         // Wire up the dynamic UI population for DOD memory buffers.
         // Because TaskGraphEdit inherits from MemoryGraphEdit, the Callable will
         // natively resolve to the base class's bound method.
+       
         new_node->connect("buffer_names_requested", 
             callable_mp(static_cast<MemoryGraphEdit*>(this), &TaskGraphEdit::_on_buffer_names_requested));
     } else {

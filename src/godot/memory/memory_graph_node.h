@@ -67,7 +67,7 @@ protected:
     
     // Intercept draw to render headers and telemetry directly over the node
     void _notification(int p_what);
-
+    virtual void _update_theme_properties() override;
     void _on_inspect_memory_pressed();
 
 public:

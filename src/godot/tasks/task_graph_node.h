@@ -60,6 +60,8 @@ protected:
     // Intercepts draw calls to add Transient Workspace telemetry alongside memory headers
     void _notification(int p_what);
 
+    virtual void _update_theme_properties() override;
+    
     // --- Tier 3 Lifecycle & Matrix Overrides (To be implemented by Sub-Nodes) ---
     
     /**
@@ -104,8 +106,8 @@ public:
 
     // Direct accessors pulling from the strictly typed Resource (No local state caching)
     uint32_t get_task_type() const;
-    uint32_t get_logic_id() const;
-    godot::StringName get_logic_name() const;
+    
+    godot::StringName get_task_name() const;
 
     // External interface to flag heap allocation statuses (e.g., from the compiler or telemetry)
     void set_workspace_state(TransientWorkspaceState p_state);

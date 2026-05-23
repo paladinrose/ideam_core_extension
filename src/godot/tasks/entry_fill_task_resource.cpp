@@ -27,6 +27,7 @@ godot::Dictionary EntryFillTaskResource::get_task_properties() const {
     
     // Explicit 64-bit cast to align with Variant::INT expectations,
     // avoiding unintended sign-extension anomalies from the 32-bit unsigned source.
+    props["task_name"] = "EntryFillTask";
     props["target_buffer_id"] = static_cast<int64_t>(target_buffer_id);
     
     return props;

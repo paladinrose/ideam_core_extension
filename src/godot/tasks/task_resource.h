@@ -50,7 +50,8 @@ private:
     
     // Fallback associative map reserved purely for dynamic Native Component initialization.
     godot::Dictionary task_properties; 
-
+    godot::StringName task_name;
+   
 protected:
     static void _bind_methods();
 
@@ -67,6 +68,9 @@ public:
 
     void set_task_type(int p_type);
     int get_task_type() const;
+
+    void set_task_name(const godot::StringName& p_name);
+    godot::StringName get_task_name() const;
 
     void set_task_properties(const godot::Dictionary& p_props);
     virtual godot::Dictionary get_task_properties() const;

@@ -19,6 +19,7 @@ class QueryTaskGraphNode : public TaskGraphNode {
 
 private:
     // UI Matrix Controls
+    
     godot::OptionButton* op_dropdown = nullptr;
     godot::OptionButton* view_dropdown = nullptr;
     godot::OptionButton* strategy_dropdown = nullptr;
@@ -47,6 +48,10 @@ protected:
 public:
     QueryTaskGraphNode();
     virtual ~QueryTaskGraphNode() override = default;
+
+    godot::Ref<QueryTaskResource> get_query_task_resource() const;
+    
+    uint32_t get_logic_id() const;
 };
 
 } // namespace ideam::godot_ext

@@ -47,13 +47,11 @@ private:
 
 protected:
     static void _bind_methods();
-    void _notification(int p_what);
+    virtual void _notification(int p_what) override;
+    virtual void _update_theme_properties() override;
 
-    void _create_filtered_popup();
     void _on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position);
-    void _show_filtered_popup(const godot::Vector2 &p_at, uint32_t p_filter_mask);
-    void _filtered_popup_select(int p_id);
-
+    
     virtual godot::TypedArray<godot::String> _get_filtered_node_types(uint32_t p_filter_mask) const;
 
     // Incorporate strongly-typed node spawning locally

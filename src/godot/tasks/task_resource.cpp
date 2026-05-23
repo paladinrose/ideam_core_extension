@@ -27,6 +27,10 @@ void TaskResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_task_type"), &TaskResource::get_task_type);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "task_type", godot::PROPERTY_HINT_ENUM, "Godot Reflection,Native CPU,Compute GPU,Query Culler"), "set_task_type", "get_task_type");
 
+    godot::ClassDB::bind_method(godot::D_METHOD("set_task_name", "name"), &TaskResource::set_task_name);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_task_name"), &TaskResource::get_task_name);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING_NAME, "task_name"), "set_task_name", "get_task_name");  
+    
     godot::ClassDB::bind_method(godot::D_METHOD("set_task_properties", "props"), &TaskResource::set_task_properties);
     godot::ClassDB::bind_method(godot::D_METHOD("get_task_properties"), &TaskResource::get_task_properties);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::DICTIONARY, "task_properties"), "set_task_properties", "get_task_properties");
@@ -54,12 +58,22 @@ void TaskResource::set_task_type(int p_type) {
     task_type = static_cast<TaskType>(p_type);
 }
 
+void TaskResource::set_task_name(const godot::StringName& p_name) {
+    task_name = p_name;
+}
+
+godot::StringName TaskResource::get_task_name() const {
+    return task_name;
+}
+
+
 int TaskResource::get_task_type() const {
     return static_cast<int>(task_type);
 }
 
 void TaskResource::set_task_properties(const godot::Dictionary& p_props) {
-    task_properties = p_props;
+    godot::UtilityFunctions::print("SETTING PROPS: ", p_props);
+    task_properties = p_props.duplicate(); 
 }
 
 godot::Dictionary TaskResource::get_task_properties() const {

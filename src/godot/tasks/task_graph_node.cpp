@@ -14,8 +14,7 @@ TaskGraphNode::TaskGraphNode() {
 void TaskGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_task_node_resource"), &TaskGraphNode::get_task_node_resource);
     ClassDB::bind_method(D_METHOD("get_task_type"), &TaskGraphNode::get_task_type);
-    ClassDB::bind_method(D_METHOD("get_logic_id"), &TaskGraphNode::get_logic_id);
-    ClassDB::bind_method(D_METHOD("get_logic_name"), &TaskGraphNode::get_logic_name);
+    ClassDB::bind_method(D_METHOD("get_task_name"), &TaskGraphNode::get_task_name);
     
     ClassDB::bind_method(D_METHOD("_on_custom_param_changed", "param_name", "value"), &TaskGraphNode::_on_custom_param_changed);
     ClassDB::bind_method(D_METHOD("_on_buffer_option_selected", "index", "prop_name", "btn"), &TaskGraphNode::_on_buffer_option_selected);
@@ -30,13 +29,9 @@ uint32_t TaskGraphNode::get_task_type() const {
     return res.is_valid() ? static_cast<uint32_t>(res->get_task_type()) : 0;
 }
 
-uint32_t TaskGraphNode::get_logic_id() const {
+StringName TaskGraphNode::get_task_name() const {
     Ref<TaskResource> res = get_task_node_resource();
-    return res.is_valid() ? static_cast<uint32_t>(res->get_task_properties().get("logic_id", 0)) : 0;
-}
-
-StringName TaskGraphNode::get_logic_name() const {
-    return StringName();
+    return res.is_valid() ? res->get_task_name() : StringName();
 }
 
 void TaskGraphNode::_build_ui() {
@@ -47,19 +42,7 @@ void TaskGraphNode::_build_ui() {
 
     // 1. Header Setup
     task_type_label = memnew(Label);
-    
-    // Display the specific logic name rather than the generic Task Type
-    String label_text = String("Logic: ") + get_logic_name();
-    
-    // Tint the node to visually separate Culler/Transform/Godot domains directly from the strongly-typed enum
-    switch (task_res->get_task_type()) {
-        case TASK_GODOT_REFLECTION: set_self_modulate(Color(0.5f, 0.5f, 1.0f)); break; // Blue
-        case TASK_NATIVE_CPU:       set_self_modulate(Color(1.0f, 0.5f, 0.5f)); break; // Red
-        case TASK_COMPUTE_GPU:      set_self_modulate(Color(0.8f, 0.3f, 0.8f)); break; // Purple
-        case TASK_QUERY_CULLER:     set_self_modulate(Color(0.3f, 0.8f, 0.3f)); break; // Green
-        default: break;
-    }
-    
+    String label_text = String("Logic: ") + get_task_name();
     task_type_label->set_text(label_text);
     add_child(task_type_label);
 
@@ -76,11 +59,18 @@ void TaskGraphNode::_build_ui() {
     // Route the inspector's mutations up to the graph resource
     logic_inspector->connect("property_changed", Callable(this, "_on_custom_param_changed"));
 
-    // Sub-nodes override this to populate their specific OptionButtons/SpinBoxes
     _rebuild_dynamic_ui();
+
+    // Trigger theme definitions immediately following generation pass
+    _update_theme_properties();
 }
 
 void TaskGraphNode::_notification(int p_what) {
+    if (p_what == NOTIFICATION_THEME_CHANGED) {
+        _update_theme_properties();
+        return;
+    }
+
     // CRITICAL: Call parent to ensure Layout Headers and Memory Telemetry badges are drawn
     MemoryGraphNode::_notification(p_what);
 
@@ -88,19 +78,52 @@ void TaskGraphNode::_notification(int p_what) {
         if (workspace_state != WORKSPACE_HIDDEN) {
             Ref<Texture2D> badge_icon = _get_badge_icon_for_workspace(workspace_state);
             if (badge_icon.is_valid()) {
-                // Draw in the top-left corner (Inset slightly from the frame)
-                // This keeps it opposite to the Tier 2 Memory Telemetry badge on the right
                 Vector2 badge_pos = Vector2(10, 5);
-                draw_texture(badge_icon, badge_pos);
+                Color badge_color = get_theme_color(workspace_state == WORKSPACE_ACTIVE ? "transient_active_color" : "transient_error_color", "GraphNode");
+                draw_texture(badge_icon, badge_pos, badge_color);
             }
         }
     }
 }
 
+void TaskGraphNode::_update_theme_properties() {
+    // 1. Cascade down through structural parent layers (updates slots and metrics)
+    MemoryGraphNode::_update_theme_properties();
+
+    Ref<TaskResource> task_res = get_task_node_resource();
+    StringName type_context = "GraphNode";
+
+    // 2. Centralized color assignment pulling directly from active theme tokens
+    if (task_res.is_valid()) {
+        Color type_tint = Color(1, 1, 1, 1);
+        switch (task_res->get_task_type()) {
+            case TASK_GODOT_REFLECTION: type_tint = get_theme_color("task_color_reflection", type_context); break;
+            case TASK_NATIVE_CPU:       type_tint = get_theme_color("task_color_native_cpu", type_context); break;
+            case TASK_COMPUTE_GPU:      type_tint = get_theme_color("task_color_compute_gpu", type_context); break;
+            case TASK_QUERY_CULLER:     type_tint = get_theme_color("task_color_query_culler", type_context); break;
+            default:                    type_tint = get_theme_color("task_color_default", type_context); break;
+        }
+        set_self_modulate(type_tint);
+    }
+
+    // 3. Propagate theme updates down to any dynamically instantiated buttons
+    for (const auto& binding : buffer_option_bindings) {
+        if (binding.button) {
+            // If you have specific styles for dropdown inputs, apply them here.
+            // Otherwise, they will naturally look up their custom Theme values from the control tree.
+            binding.button->queue_redraw();
+        }
+    }
+
+    queue_redraw();
+}
+
 Ref<Texture2D> TaskGraphNode::_get_badge_icon_for_workspace(TransientWorkspaceState p_state) const {
+    StringName type_context = "GraphNode";
+
     switch (p_state) {
-        case WORKSPACE_ACTIVE: return get_theme_icon("badge_transient_active");
-        case WORKSPACE_ERROR:  return get_theme_icon("badge_transient_error");
+        case WORKSPACE_ACTIVE: return get_theme_icon("badge_transient_active", type_context);
+        case WORKSPACE_ERROR:  return get_theme_icon("badge_transient_error", type_context);
         case WORKSPACE_HIDDEN: 
         default:               return Ref<Texture2D>();
     }
@@ -250,6 +273,7 @@ void TaskGraphNode::_rebuild_logic_inspector(const Array& p_properties) {
     uint32_t current_type_id = 0; // Default fallback
     
     if (state.has("type_id")) {
+        //current_type_id = task_res->get_type_id();
         current_type_id = static_cast<uint32_t>(state["type_id"]);
         resolved_t = static_cast<Variant::Type>(current_type_id);
     }

@@ -11,6 +11,9 @@ using namespace godot;
 namespace ideam::godot_ext {
 
 void MetadataTaskGraphNode::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("get_metadata_task_resource"), &MetadataTaskGraphNode::get_metadata_task_resource);
+    ClassDB::bind_method(D_METHOD("get_logic_id"), &MetadataTaskGraphNode::get_logic_id);
+
     ClassDB::bind_method(D_METHOD("_on_view_selected", "index"), &MetadataTaskGraphNode::_on_view_selected);
     ClassDB::bind_method(D_METHOD("_on_strategy_selected", "index"), &MetadataTaskGraphNode::_on_strategy_selected);
     ClassDB::bind_method(D_METHOD("_on_type_selected", "index"), &MetadataTaskGraphNode::_on_type_selected);
@@ -128,6 +131,16 @@ void MetadataTaskGraphNode::_update_matrix_guardrails() {
     } else {
         set_error_state(false);
     }
+}
+
+
+Ref<MetadataTaskResource> MetadataTaskGraphNode::get_metadata_task_resource() const {
+     return Object::cast_to<MetadataTaskResource>(get_task_node_resource().ptr());
+}
+
+uint32_t MetadataTaskGraphNode::get_logic_id() const {
+    Ref<MetadataTaskResource> res = get_metadata_task_resource();
+    return res.is_valid() ? res->get_logic_id() : 0;
 }
 
 // --- Interaction Routing ---

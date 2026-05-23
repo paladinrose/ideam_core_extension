@@ -16,7 +16,6 @@ void MemoryGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_buffer_names_requested", "node", "buffer_ids"), &MemoryGraphEdit::_on_buffer_names_requested);
     ClassDB::bind_method(D_METHOD("_memory_request_connect", "from_node", "from_port", "to_node", "to_port"), &MemoryGraphEdit::_memory_request_connect);
     ClassDB::bind_method(D_METHOD("_on_connection_to_empty", "from_node", "from_port", "release_position"), &MemoryGraphEdit::_on_connection_to_empty);
-    ClassDB::bind_method(D_METHOD("_filtered_popup_select", "id"), &MemoryGraphEdit::_filtered_popup_select);
 }
 
 MemoryGraphEdit::MemoryGraphEdit() {
@@ -34,14 +33,43 @@ void MemoryGraphEdit::_ready() {
     }
     connect("connection_request", Callable(this, "_memory_request_connect"));
 
-    _create_filtered_popup();
     connect("connection_to_empty", Callable(this, "_on_connection_to_empty"));
 }
 
 void MemoryGraphEdit::_notification(int p_what) {
-    if (p_what == NOTIFICATION_DRAW) {
-        _draw_custom_edges();
+    // Forward structural notifications to the parent class first
+    IdeamGraphEdit::_notification(p_what);
+
+    switch (p_what) {
+        case NOTIFICATION_THEME_CHANGED: {
+            _update_theme_properties();
+        } break;
+        case NOTIFICATION_DRAW: {
+            _draw_custom_edges();
+        } break;
     }
+}
+
+void MemoryGraphEdit::_update_theme_properties() {
+    // 1. Invoke the base implementation to configure context_popup
+    IdeamGraphEdit::_update_theme_properties();
+
+    // 2. Synchronize our specialized sub-popup with the current PopupMenu style profiles
+    if (filtered_popup) {
+        Ref<StyleBox> panel_style = get_theme_stylebox("popup_menu_panel", "PopupMenu");
+        if (panel_style.is_valid()) {
+            filtered_popup->add_theme_stylebox_override("panel", panel_style);
+        }
+        
+        Ref<StyleBox> hover_style = get_theme_stylebox("popup_menu_hover", "PopupMenu");
+        if (hover_style.is_valid()) {
+            filtered_popup->add_theme_stylebox_override("hover", hover_style);
+        }
+    }
+
+    // 3. Clear layouts and force structural edge redraws
+    _refresh_edge_cache();
+    queue_redraw();
 }
 
 void MemoryGraphEdit::_on_buffer_names_requested(godot::Object* p_node, const godot::Array& p_buffer_ids) {
@@ -249,9 +277,13 @@ void MemoryGraphEdit::_draw_custom_edges() {
         if (meta.is_error) {
             // Error Flag at Midpoint
             Vector2 mid = _evaluate_bezier(from_pos, p1, p2, to_pos, 0.5f);
-            draw_circle(mid, 12.0f * zoom, Color(0.9f, 0.1f, 0.1f, 1.0f));
-            Ref<Font> f = get_theme_font("title_font");
-            if (f.is_valid()) draw_string(f, mid + Vector2(-4 * zoom, 4 * zoom), "!", HORIZONTAL_ALIGNMENT_CENTER, -1, 14 * zoom, Color(1,1,1,1));
+            Color error_color = get_theme_color("error_indicator_color", "GraphEdit");
+            int error_radius = get_theme_constant("error_indicator_radius", "GraphEdit");
+            draw_circle(mid, error_radius * zoom, error_color);
+            Ref<Font> f = get_theme_font("title_font", "GraphEdit");
+            int f_size = get_theme_constant("error_text_size", "GraphEdit");
+            Color error_text_color = get_theme_color("error_text_color", "GraphEdit");
+            if (f.is_valid()) draw_string(f, mid + Vector2(-4 * zoom, 4 * zoom), "!", HORIZONTAL_ALIGNMENT_CENTER, -1, f_size * zoom, error_text_color);
             
         } else if (meta.access_mode == core::BufferAccessMode::WRITE) {
             // Dashed-Red Line
@@ -261,7 +293,9 @@ void MemoryGraphEdit::_draw_custom_edges() {
                 float t = static_cast<float>(s) / segments;
                 Vector2 next_pt = _evaluate_bezier(from_pos, p1, p2, to_pos, t);
                 if (s % 2 != 0) { // Dash skip
-                    draw_line(last_pt, next_pt, Color(0.9f, 0.2f, 0.2f, 0.8f), 3.0f * zoom, true);
+                    Color line_color = get_theme_color("write_edge_color", "GraphEdit");
+                    int line_width = get_theme_constant("write_edge_thickness", "GraphEdit");
+                    draw_line(last_pt, next_pt, line_color, line_width * zoom, true);
                 }
                 last_pt = next_pt;
             }
@@ -272,7 +306,9 @@ void MemoryGraphEdit::_draw_custom_edges() {
             for (int s = 1; s <= segments; ++s) {
                 float t = static_cast<float>(s) / segments;
                 Vector2 pt = _evaluate_bezier(from_pos, p1, p2, to_pos, t);
-                draw_circle(pt, 3.0f * zoom, Color(1.0f, 0.8f, 0.1f, 0.9f));
+                int pt_radius = get_theme_constant("atomic_edge_dot_radius", "GraphEdit");
+                Color atomic_color = get_theme_color("atomic_edge_color", "GraphEdit");
+                draw_circle(pt, pt_radius * zoom, atomic_color);
             }
         }
     }
@@ -331,11 +367,8 @@ void MemoryGraphEdit::_spawn_node_by_type(int p_type_id) {
 }
 
 
-// ... Filtered Context Menus ...
-void MemoryGraphEdit::_create_filtered_popup() {}
 void MemoryGraphEdit::_on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position) {}
-void MemoryGraphEdit::_show_filtered_popup(const godot::Vector2 &p_at, uint32_t p_filter_mask) {}
-void MemoryGraphEdit::_filtered_popup_select(int p_id) {}
+
 TypedArray<String> MemoryGraphEdit::_get_filtered_node_types(uint32_t p_filter_mask) const { return TypedArray<String>(); }
 
 } // namespace ideam::godot_ext

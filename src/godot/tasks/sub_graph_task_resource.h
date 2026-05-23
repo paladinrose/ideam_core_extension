@@ -31,8 +31,8 @@ protected:
     static void _bind_methods();
 
 public:
-    SubGraphTaskResource() = default;
-    ~SubGraphTaskResource() override = default;
+    SubGraphTaskResource();
+    ~SubGraphTaskResource() override;
 
     // --- Graph Aliasing Configuration ---
     void set_child_graph(const godot::Ref<TaskGraphResource>& p_graph);

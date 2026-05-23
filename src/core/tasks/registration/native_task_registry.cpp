@@ -23,11 +23,16 @@ namespace ideam::core {
 godot::HashMap<godot::StringName, NativeTaskFactory>* NativeTaskRegistry::manual_factories = nullptr;
 godot::Dictionary* NativeTaskRegistry::ui_utility_matrix = nullptr;
 
+godot::HashMap<godot::StringName, TaskUIFactories>* NativeTaskRegistry::ui_factories = nullptr;
+
 void NativeTaskRegistry::init() {
     // 1. Initialize self
     if (!manual_factories) {
-        manual_factories = new godot::HashMap<godot::StringName, NativeTaskFactory>();
-        ui_utility_matrix = new godot::Dictionary();
+        manual_factories = memnew((godot::HashMap<godot::StringName, NativeTaskFactory>));
+        ui_utility_matrix = memnew(godot::Dictionary);
+    
+        // Allocate the new factories map
+        ui_factories = memnew((godot::HashMap<godot::StringName, TaskUIFactories>));
     }
 
     // 2. Delegate O(1) Matrix Initializations
@@ -59,12 +64,18 @@ void NativeTaskRegistry::cleanup() {
 
     // 2. Self Cleanup
     if (manual_factories) {
-        delete manual_factories; 
+        memdelete(manual_factories);
         manual_factories = nullptr;
     }
     if (ui_utility_matrix) {
-        delete ui_utility_matrix;
+        memdelete(ui_utility_matrix);
         ui_utility_matrix = nullptr;
+    }
+    
+    // Safely delete the new factories map
+    if (ui_factories) {
+        memdelete(ui_factories);
+        ui_factories = nullptr;
     }
 }
 

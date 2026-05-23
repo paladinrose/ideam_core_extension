@@ -33,7 +33,7 @@ protected:
     struct SpawnDescriptor {
         TaskCategory category;
         uint32_t logic_id;
-        godot::StringName logic_name;
+        godot::StringName task_name;
     };
     std::vector<SpawnDescriptor> spawn_options_cache;
 
@@ -42,6 +42,8 @@ protected:
     uint32_t active_filter_mask = 0; 
 
     static void _bind_methods();
+    virtual void _notification(int p_what) override;
+    virtual void _update_theme_properties() override;
 
     // Overrides to build our hierarchical popup and instantiate DOD nodes
     virtual godot::TypedArray<godot::String> _get_new_node_types() const override;

@@ -60,8 +60,6 @@ protected:
 
     static void _bind_methods();
 
-    void _notification(int p_what);
-
     // Internal helper to route context menus
     void _emit_context_request();
 
@@ -70,6 +68,9 @@ protected:
      * Called automatically at the end of initialize().
      */
     virtual void _build_ui();
+    virtual void _update_theme_properties();
+    
+    void _notification(int p_what);
 
     /**
      * @brief Helper for derived nodes to notify the parent GraphEdit that a property was changed by the user.
@@ -82,7 +83,7 @@ public:
 
     void _ready() override;
     void _gui_input(const godot::Ref<godot::InputEvent> &p_event) override;
-
+    
     // --- State Synchronization ---
     /**
      * @brief Initializes or updates the node's visual state directly from the strong Resource type.

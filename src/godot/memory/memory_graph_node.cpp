@@ -67,19 +67,26 @@ void MemoryGraphNode::_build_ui() {
 }
 
 void MemoryGraphNode::_notification(int p_what) {
+    IdeamGraphNode::_notification(p_what); // Ensure base notifications are processed
+
+    if (p_what == NOTIFICATION_THEME_CHANGED) {
+        _update_theme_properties();
+        return;
+    }
+
     if (p_what == NOTIFICATION_DRAW) {
         // 1. Draw Layout Header States (Visualizing allocation integrity)
         Ref<StyleBox> header_style;
         if (header_state == HEADER_ERROR) {
-            header_style = get_theme_stylebox("layout_header_error");
+            header_style = get_theme_stylebox("layout_header_error", "GraphNode");
         } else if (header_state == HEADER_VALID) {
-            header_style = get_theme_stylebox("layout_header_valid");
+            header_style = get_theme_stylebox("layout_header_valid", "GraphNode");
         }
 
         if (header_style.is_valid()) {
             // Estimate title bar area. Godot 4 GraphNodes have a dedicated titlebar HBox.
             // We draw over the top ~30 pixels to tint the allocation header.
-            float title_height = 30.0f; 
+            float title_height = get_theme_constant("title_height", "GraphNode"); 
             draw_style_box(header_style, Rect2(Point2(0, 0), Size2(get_size().width, title_height)));
         }
 
@@ -93,8 +100,8 @@ void MemoryGraphNode::_notification(int p_what) {
 
         // 3. Draw Telemetry Text directly onto the node canvas if Active/Dirty
         if (latest_grant_snapshot.is_valid() && (telemetry_state == TELEMETRY_ACTIVE || telemetry_state == TELEMETRY_DIRTY)) {
-            Ref<Font> font = get_theme_font("title_font");
-            int font_size = get_theme_font_size("title_font_size") - 2; // Slightly smaller than title
+            Ref<Font> font = get_theme_font("title_font", "GraphNode");
+            int font_size = get_theme_font_size("title_font_size", "GraphNode") - 2; // Slightly smaller than title
             
             if (font.is_valid() && latest_grant_snapshot->get_part_count() > 0) {
                 // For simplicity on the canvas, we visualize the telemetry of the primary/first part.
@@ -106,10 +113,31 @@ void MemoryGraphNode::_notification(int p_what) {
                 
                 // Draw text near the bottom of the node
                 Vector2 text_pos = Vector2(10, get_size().height - 15);
-                draw_string(font, text_pos, telemetry_str, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, get_theme_color("font_color"));
+                draw_string(font, text_pos, telemetry_str, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, get_theme_color("title_font_color", "GraphNode"));
             }
         }
     }
+}
+
+void MemoryGraphNode::_update_theme_properties() {
+    // 1. Let the parent node refresh standard port configurations
+    IdeamGraphNode::_update_theme_properties();
+
+    // 2. Safely sample state modifications from the theme instead of using hardcoded color modulations
+    StringName type_context = "GraphNode";
+    Color modulation_tint = Color(1, 1, 1, 1);
+
+    switch (telemetry_state) {
+        case TELEMETRY_ERROR:   modulation_tint = get_theme_color("telemetry_color_error", type_context); break;
+        case TELEMETRY_DIRTY:   modulation_tint = get_theme_color("telemetry_color_dirty", type_context); break;
+        case TELEMETRY_ACTIVE:  modulation_tint = get_theme_color("telemetry_color_active", type_context); break;
+        case TELEMETRY_INACTIVE:
+        default:                modulation_tint = get_theme_color("telemetry_color_inactive", type_context); break;
+    }
+    set_self_modulate(modulation_tint);
+
+    // 3. Force canvas refresh
+    queue_redraw();
 }
 
 // --- Theme Mapping Helpers ---
@@ -117,25 +145,25 @@ void MemoryGraphNode::_notification(int p_what) {
 Ref<Texture2D> MemoryGraphNode::_get_icon_for_layout(core::BufferLayoutType p_layout) const {
     // Map structural memory layout directly to port shapes
     if (static_cast<uint16_t>(p_layout) & static_cast<uint16_t>(core::BufferLayoutType::FLAT | core::BufferLayoutType::AOS | core::BufferLayoutType::SOA)) {
-        return get_theme_icon("port_shape_contiguous");
+        return get_theme_icon("port_shape_contiguous", "GraphNode");
     } 
     else if (static_cast<uint16_t>(p_layout) & static_cast<uint16_t>(core::BufferLayoutType::SPARSE_SET | core::BufferLayoutType::TILED_SOA)) {
-        return get_theme_icon("port_shape_fragmented");
+        return get_theme_icon("port_shape_fragmented", "GraphNode");
     }
     else if (static_cast<uint16_t>(p_layout) & static_cast<uint16_t>(core::BufferLayoutType::RING | core::BufferLayoutType::PAGED)) {
-        return get_theme_icon("port_shape_virtual");
+        return get_theme_icon("port_shape_virtual", "GraphNode");
     }
     
-    return get_theme_icon("port_shape_error");
+    return get_theme_icon("port_shape_error", "GraphNode");
 }
 
 Ref<Texture2D> MemoryGraphNode::_get_badge_icon_for_telemetry(TelemetryBadgeState p_state) const {
     switch (p_state) {
-        case TELEMETRY_ACTIVE:   return get_theme_icon("telemetry_badge_active");
-        case TELEMETRY_DIRTY:    return get_theme_icon("telemetry_badge_dirty");
-        case TELEMETRY_ERROR:    return get_theme_icon("telemetry_badge_error");
+        case TELEMETRY_ACTIVE:   return get_theme_icon("telemetry_badge_active", "GraphNode");
+        case TELEMETRY_DIRTY:    return get_theme_icon("telemetry_badge_dirty", "GraphNode");
+        case TELEMETRY_ERROR:    return get_theme_icon("telemetry_badge_error", "GraphNode");
         case TELEMETRY_INACTIVE: 
-        default:                 return get_theme_icon("telemetry_badge_inactive");
+        default:                 return get_theme_icon("telemetry_badge_inactive", "GraphNode");
     }
 }
 
@@ -177,34 +205,30 @@ void MemoryGraphNode::update_telemetry(const Ref<MemoryGrantInspector>& p_inspec
             telemetry_state = TELEMETRY_ERROR;
             inspect_memory_btn->set_disabled(true);
             inspect_memory_btn->set_text("Grant Error (Dangling Pointer)");
-            set_self_modulate(Color(1.0f, 0.5f, 0.5f)); 
         } 
         else if (latest_grant_snapshot->is_dirty()) {
             telemetry_state = TELEMETRY_DIRTY;
             inspect_memory_btn->set_disabled(false);
             inspect_memory_btn->set_text("Inspect Grant (Stale Data)");
-            set_self_modulate(Color(1.0f, 0.9f, 0.5f)); 
         }
         else if (latest_grant_snapshot->is_active()) {
             telemetry_state = TELEMETRY_ACTIVE;
             inspect_memory_btn->set_disabled(false);
             inspect_memory_btn->set_text(String("Inspect Grant (") + String::num_int64(latest_grant_snapshot->get_part_count()) + " parts)");
-            set_self_modulate(Color(0.8f, 1.0f, 0.8f)); 
         } 
         else {
             telemetry_state = TELEMETRY_INACTIVE;
             inspect_memory_btn->set_disabled(true);
             inspect_memory_btn->set_text("Grant Inactive");
-            set_self_modulate(Color(1.0f, 1.0f, 1.0f));
         }
     } else {
         telemetry_state = TELEMETRY_INACTIVE;
         inspect_memory_btn->set_disabled(true);
         inspect_memory_btn->set_text("No Memory Grant");
-        set_self_modulate(Color(1.0f, 1.0f, 1.0f));
     }
 
-    queue_redraw();
+    // Rely on centralized update properties to shift node tracking colors smoothly
+    _update_theme_properties();
 }
 
 void MemoryGraphNode::_on_inspect_memory_pressed() {

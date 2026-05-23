@@ -40,6 +40,10 @@ protected:
 public:
     MetadataTaskGraphNode();
     virtual ~MetadataTaskGraphNode() override = default;
+
+    godot::Ref<MetadataTaskResource> get_metadata_task_resource() const;
+    
+    uint32_t get_logic_id() const;
 };
 
 } // namespace ideam::godot_ext

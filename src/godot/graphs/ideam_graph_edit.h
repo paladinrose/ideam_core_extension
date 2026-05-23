@@ -36,6 +36,8 @@ protected:
 
     static void _bind_methods();
 
+    virtual void _notification(int p_what);
+    virtual void _update_theme_properties();
     void _on_node_property_changed(const godot::StringName& p_node_name, const godot::StringName& p_property_name, const godot::Variant& p_new_value);
     void _on_node_delete_request(const godot::StringName& p_node_name);
 

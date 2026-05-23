@@ -4,6 +4,9 @@
 
 namespace ideam::godot_ext {
 
+SubGraphTaskResource::SubGraphTaskResource() = default; 
+SubGraphTaskResource::~SubGraphTaskResource() = default;
+
 void SubGraphTaskResource::_bind_methods() {
     // Grouping UI properties for hierarchical topology logic
     ADD_GROUP("Sub-Graph Constraints", "");
