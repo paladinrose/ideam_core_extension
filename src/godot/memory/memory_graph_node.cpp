@@ -1,8 +1,16 @@
 #include "memory_graph_node.h"
+#include "memory_graph_node_resource.h"
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/classes/theme.hpp>
 #include <godot_cpp/classes/font.hpp>
+#include <godot_cpp/classes/h_box_container.hpp>
+
+#include <godot_cpp/classes/style_box.hpp>
+#include <godot_cpp/classes/style_box_texture.hpp>
+#include <godot_cpp/classes/style_box_line.hpp>
+#include <godot_cpp/classes/style_box_flat.hpp>
 
 using namespace godot;
 
@@ -17,11 +25,17 @@ void MemoryGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("update_memory_port", "slot_index", "is_left", "layout"), &MemoryGraphNode::update_memory_port);
     ClassDB::bind_method(D_METHOD("set_header_state", "state"), &MemoryGraphNode::set_header_state);
     
+    ClassDB::bind_method(D_METHOD("receive_memory_grant", "grant"), &MemoryGraphNode::receive_memory_grant);
+    ClassDB::bind_method(D_METHOD("_on_request_grant_pressed"), &MemoryGraphNode::_on_request_grant_pressed);
+
     ADD_SIGNAL(MethodInfo("inspect_memory_requested", PropertyInfo(Variant::OBJECT, "inspector", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGrantInspector")));
     ADD_SIGNAL(MethodInfo("buffer_names_requested", 
         PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGraphNode"),
         PropertyInfo(Variant::ARRAY, "buffer_ids", PROPERTY_HINT_ARRAY_TYPE, "int")));
 
+    // New Signal definition
+    ADD_SIGNAL(MethodInfo("memory_grant_requested", 
+        PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGraphNode")));
     // [Memz] Manually bind external DOD bitflags to int64_t to safely cross the engine boundary.
     // This keeps src/core/ entirely agnostic of Godot's reflection macros.
     ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_NONE"), static_cast<int64_t>(core::BufferLayoutType::NONE));
@@ -55,49 +69,11 @@ void MemoryGraphNode::receive_buffer_names_list(const godot::TypedArray<godot::S
     
 }
 
-void MemoryGraphNode::_build_ui() {
-    IdeamGraphNode::_build_ui(); // Call base setup
-
-    // Pre-create the telemetry button, but keep it hidden until runtime data arrives
-    inspect_memory_btn = memnew(Button);
-    inspect_memory_btn->set_text("No Memory Grant");
-    inspect_memory_btn->set_disabled(true);
-    inspect_memory_btn->connect("pressed", Callable(this, "_on_inspect_memory_pressed"));
-    add_child(inspect_memory_btn);
-}
-
 void MemoryGraphNode::_notification(int p_what) {
     IdeamGraphNode::_notification(p_what); // Ensure base notifications are processed
 
-    if (p_what == NOTIFICATION_THEME_CHANGED) {
-        _update_theme_properties();
-        return;
-    }
-
     if (p_what == NOTIFICATION_DRAW) {
-        // 1. Draw Layout Header States (Visualizing allocation integrity)
-        Ref<StyleBox> header_style;
-        if (header_state == HEADER_ERROR) {
-            header_style = get_theme_stylebox("layout_header_error", "GraphNode");
-        } else if (header_state == HEADER_VALID) {
-            header_style = get_theme_stylebox("layout_header_valid", "GraphNode");
-        }
-
-        if (header_style.is_valid()) {
-            // Estimate title bar area. Godot 4 GraphNodes have a dedicated titlebar HBox.
-            // We draw over the top ~30 pixels to tint the allocation header.
-            float title_height = get_theme_constant("title_height", "GraphNode"); 
-            draw_style_box(header_style, Rect2(Point2(0, 0), Size2(get_size().width, title_height)));
-        }
-
-        // 2. Draw Telemetry Overlay (Badge Icon)
-        Ref<Texture2D> badge_icon = _get_badge_icon_for_telemetry(telemetry_state);
-        if (badge_icon.is_valid()) {
-            // Draw in the top-right corner, inset slightly
-            Vector2 badge_pos = Vector2(get_size().width - badge_icon->get_width() - 10, 5);
-            draw_texture(badge_icon, badge_pos);
-        }
-
+        
         // 3. Draw Telemetry Text directly onto the node canvas if Active/Dirty
         if (latest_grant_snapshot.is_valid() && (telemetry_state == TELEMETRY_ACTIVE || telemetry_state == TELEMETRY_DIRTY)) {
             Ref<Font> font = get_theme_font("title_font", "GraphNode");
@@ -119,25 +95,148 @@ void MemoryGraphNode::_notification(int p_what) {
     }
 }
 
+void MemoryGraphNode::_build_ui() {
+    IdeamGraphNode::_build_ui(); // Call base setup
+
+    telemetry_badge = memnew(godot::TextureRect);
+    telemetry_badge->set_name("TelemetryBadge");
+    add_badge(telemetry_badge);
+    
+    // Establish the container horizontal layout
+    memory_controls_hb = memnew(HBoxContainer);
+    add_child(memory_controls_hb);
+
+    // Pre-create the telemetry button (Refactored to live inside our HBox)
+    inspect_memory_btn = memnew(Button);
+    inspect_memory_btn->set_text("No Memory Grant");
+    inspect_memory_btn->set_disabled(true);
+    inspect_memory_btn->set_h_size_flags(SIZE_EXPAND_FILL); // Fill out space gracefully
+    inspect_memory_btn->connect("pressed", Callable(this, "_on_inspect_memory_pressed"));
+    memory_controls_hb->add_child(inspect_memory_btn);
+
+    // New Grant Requestor Button
+    request_grant_btn = memnew(Button);
+    request_grant_btn->set_text("+"); // Keep it compact for the node row layout
+    request_grant_btn->set_tooltip_text("Request New Memory Grant from Manager");
+    request_grant_btn->connect("pressed", Callable(this, "_on_request_grant_pressed"));
+    memory_controls_hb->add_child(request_grant_btn);
+}
+
+void MemoryGraphNode::_on_request_grant_pressed() {
+    emit_signal("memory_grant_requested", this);
+}
+
+void MemoryGraphNode::receive_connection_info(const godot::Dictionary& p_info) {
+    IdeamGraphNode::receive_connection_info(p_info);
+    
+    bool has_connections = false;
+    
+    if (p_info.has("inputs")) {
+        godot::TypedArray<godot::Dictionary> inputs = p_info["inputs"];
+        if (inputs.size() > 0) has_connections = true;
+    }
+    
+    if (p_info.has("outputs")) {
+        godot::TypedArray<godot::Dictionary> outputs = p_info["outputs"];
+        if (outputs.size() > 0) has_connections = true;
+    }
+    
+    if (request_grant_btn) {
+        request_grant_btn->set_disabled(has_connections);
+    }
+}
+
+// Update receive_memory_grant:
+void MemoryGraphNode::receive_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
+    Ref<MemoryGraphNodeResource> res = get_memory_node_resource();
+    if (res.is_valid()) {
+        res->set_memory_grant(p_grant);
+        
+        if (p_grant.is_valid()) {
+            inspect_memory_btn->set_disabled(false);
+
+            godot::TypedArray<GrantPartResource> parts = p_grant->get_configured_parts();
+            for (int i = 0; i < parts.size(); ++i) {
+                godot::Ref<GrantPartResource> part = parts[i];
+                if (part.is_valid()) {
+                    // Extract core enum from the newly saved int mapping
+                    auto layout_val = static_cast<core::BufferLayoutType>(part->get_buffer_type());
+                    godot::BitField<core::BufferLayoutType> bf_layout(static_cast<int64_t>(layout_val));
+                    
+                    // Enable both left and right as matched pairs, assigning the specific shape icon
+                    set_slot_enabled_left(i, true);
+                    set_slot_enabled_right(i, true);
+                    update_memory_port(i, true, bf_layout);
+                    update_memory_port(i, false, bf_layout);
+                }
+            }
+        } else {
+            inspect_memory_btn->set_disabled(true);
+        }
+
+        if (res->get_derivation_mode() == MemoryGraphNodeResource::MODE_INDEPENDENT) {
+            // ... [Keep existing linter loop integration logic] ...
+        }
+    }
+}
+
 void MemoryGraphNode::_update_theme_properties() {
-    // 1. Let the parent node refresh standard port configurations
     IdeamGraphNode::_update_theme_properties();
 
-    // 2. Safely sample state modifications from the theme instead of using hardcoded color modulations
-    StringName type_context = "GraphNode";
-    Color modulation_tint = Color(1, 1, 1, 1);
+    godot::StringName type_context = "GraphNode";
 
-    switch (telemetry_state) {
-        case TELEMETRY_ERROR:   modulation_tint = get_theme_color("telemetry_color_error", type_context); break;
-        case TELEMETRY_DIRTY:   modulation_tint = get_theme_color("telemetry_color_dirty", type_context); break;
-        case TELEMETRY_ACTIVE:  modulation_tint = get_theme_color("telemetry_color_active", type_context); break;
-        case TELEMETRY_INACTIVE:
-        default:                modulation_tint = get_theme_color("telemetry_color_inactive", type_context); break;
+    // 1. Direct Titlebar Overrides
+    godot::StringName title_style_name = (header_state == HEADER_ERROR) ? "layout_header_error" : "layout_header_valid";
+    godot::Ref<godot::StyleBox> tb_style = get_theme_stylebox(title_style_name, type_context);
+    if (tb_style.is_valid()) {
+        add_theme_stylebox_override("titlebar", tb_style);
+        add_theme_stylebox_override("titlebar_selected", tb_style);
     }
-    set_self_modulate(modulation_tint);
 
-    // 3. Force canvas refresh
-    queue_redraw();
+    // 2. Modulate Color via Stylebox (Replacing set_self_modulate)
+    godot::Color modulation_tint = godot::Color(1, 1, 1, 1);
+    switch (telemetry_state) {
+        case TELEMETRY_ERROR:   modulation_tint = get_theme_color("telemetry_error_color", type_context); break;
+        case TELEMETRY_DIRTY:   modulation_tint = get_theme_color("telemetry_dirty_color", type_context); break;
+        case TELEMETRY_ACTIVE:  modulation_tint = get_theme_color("telemetry_active_color", type_context); break;
+        case TELEMETRY_INACTIVE:
+        default:                modulation_tint = get_theme_color("telemetry_inactive_color", type_context); break;
+    }
+
+    // 3. Safely duplicate the panel so we don't mutate the global theme, then apply color
+    if (!get_locked()) {
+        godot::Color modulation_tint = godot::Color(1, 1, 1, 1);
+        switch (telemetry_state) {
+            case TELEMETRY_ERROR:   modulation_tint = get_theme_color("telemetry_error_color", type_context); break;
+            case TELEMETRY_DIRTY:   modulation_tint = get_theme_color("telemetry_dirty_color", type_context); break;
+            case TELEMETRY_ACTIVE:  modulation_tint = get_theme_color("telemetry_active_color", type_context); break;
+            case TELEMETRY_INACTIVE:
+            default:                modulation_tint = get_theme_color("telemetry_inactive_color", type_context); break;
+        }
+
+        godot::Ref<godot::StyleBox> panel_sb = get_theme_stylebox("panel", type_context);
+        if (panel_sb.is_valid()) {
+            godot::Ref<godot::StyleBox> tinted_panel = panel_sb->duplicate();
+            
+            if (godot::StyleBoxFlat* flat = godot::Object::cast_to<godot::StyleBoxFlat>(tinted_panel.ptr())) {
+                flat->set_bg_color(modulation_tint);
+            } 
+            else if (godot::StyleBoxTexture* tex = godot::Object::cast_to<godot::StyleBoxTexture>(tinted_panel.ptr())) {
+                tex->set_modulate(modulation_tint);
+            } 
+            else if (godot::StyleBoxLine* line = godot::Object::cast_to<godot::StyleBoxLine>(tinted_panel.ptr())) {
+                line->set_color(modulation_tint);
+            }
+
+            add_theme_stylebox_override("panel", tinted_panel);
+        }
+    }
+
+    // 4. Update Badge
+    if (telemetry_badge) {
+        telemetry_badge->set_texture(_get_telemetry_badge_icon(telemetry_state));
+    }
+
 }
 
 // --- Theme Mapping Helpers ---
@@ -157,7 +256,7 @@ Ref<Texture2D> MemoryGraphNode::_get_icon_for_layout(core::BufferLayoutType p_la
     return get_theme_icon("port_shape_error", "GraphNode");
 }
 
-Ref<Texture2D> MemoryGraphNode::_get_badge_icon_for_telemetry(TelemetryBadgeState p_state) const {
+Ref<Texture2D> MemoryGraphNode::_get_telemetry_badge_icon(TelemetryBadgeState p_state) const {
     switch (p_state) {
         case TELEMETRY_ACTIVE:   return get_theme_icon("telemetry_badge_active", "GraphNode");
         case TELEMETRY_DIRTY:    return get_theme_icon("telemetry_badge_dirty", "GraphNode");
@@ -167,10 +266,10 @@ Ref<Texture2D> MemoryGraphNode::_get_badge_icon_for_telemetry(TelemetryBadgeStat
     }
 }
 
-// --- Tier 2: Public Mutations ---
+// --- Public Mutations ---
 
 void MemoryGraphNode::update_memory_port(int p_slot_index, bool p_is_left, godot::BitField<core::BufferLayoutType> p_layout) {
-    // [Memz] Extract the underlying enum class value from the BitField wrapper
+    // Extract the underlying enum class value from the BitField wrapper
     core::BufferLayoutType layout_val = static_cast<core::BufferLayoutType>(static_cast<int64_t>(p_layout));
     Ref<Texture2D> shape_icon = _get_icon_for_layout(layout_val);
 
@@ -194,7 +293,7 @@ void MemoryGraphNode::update_memory_port(int p_slot_index, bool p_is_left, godot
 void MemoryGraphNode::set_header_state(LayoutHeaderState p_state) {
     if (header_state == p_state) return;
     header_state = p_state;
-    queue_redraw();
+    notification(NOTIFICATION_THEME_CHANGED); 
 }
 
 void MemoryGraphNode::update_telemetry(const Ref<MemoryGrantInspector>& p_inspector) {
@@ -228,7 +327,7 @@ void MemoryGraphNode::update_telemetry(const Ref<MemoryGrantInspector>& p_inspec
     }
 
     // Rely on centralized update properties to shift node tracking colors smoothly
-    _update_theme_properties();
+    notification(NOTIFICATION_THEME_CHANGED);
 }
 
 void MemoryGraphNode::_on_inspect_memory_pressed() {

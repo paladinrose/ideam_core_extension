@@ -5,6 +5,7 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
+#include <godot_cpp/classes/resource_saver.hpp>
 #include <godot_cpp/classes/theme.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
@@ -21,6 +22,7 @@ void GraphComposer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_theme_selected", "index"), &GraphComposer::_on_theme_selected);
     ClassDB::bind_method(D_METHOD("_on_load_theme_pressed"), &GraphComposer::_on_load_theme_pressed);
     ClassDB::bind_method(D_METHOD("_on_theme_file_selected", "path"), &GraphComposer::_on_theme_file_selected);
+    ClassDB::bind_method(D_METHOD("_on_save_pressed"), &GraphComposer::_on_save_pressed);
 }
 
 GraphComposer::GraphComposer() {
@@ -43,6 +45,10 @@ GraphComposer::GraphComposer() {
     load_theme_btn->set_text("Load Theme");
     header_bar->add_child(load_theme_btn);
 
+    save_btn = memnew(Button);
+    save_btn->set_text("Save Graph");
+    header_bar->add_child(save_btn);
+
     tab_container = memnew(TabContainer);
     tab_container->set_h_size_flags(SIZE_EXPAND_FILL);
     tab_container->set_v_size_flags(SIZE_EXPAND_FILL);
@@ -61,6 +67,7 @@ GraphComposer::GraphComposer() {
     tab_container->connect("tab_changed", Callable(this, "_on_tab_changed"));
     theme_selector->connect("item_selected", Callable(this, "_on_theme_selected"));
     load_theme_btn->connect("pressed", Callable(this, "_on_load_theme_pressed"));
+    save_btn->connect("pressed", Callable(this, "_on_save_pressed"));
     theme_file_dialog->connect("file_selected", Callable(this, "_on_theme_file_selected"));
 
     // Populate initial state
@@ -149,6 +156,55 @@ void GraphComposer::_on_theme_file_selected(const String& p_path) {
     _on_theme_selected(new_index);
 }
 
+void GraphComposer::_on_save_pressed() {
+    int current_tab = tab_container->get_current_tab();
+    if (current_tab < 0) return;
+
+    // Find the current active session
+    IdeamGraphEdit* active_edit = nullptr;
+    const IdeamGraphResource* resource_key = nullptr;
+
+    for (const auto& session : active_sessions) {
+        if (session.tab_index == current_tab) {
+            active_edit = session.editor_node;
+            resource_key = session.resource_key;
+            break;
+        }
+    }
+
+    if (!active_edit) return;
+
+    Ref<IdeamGraphResource> blueprint = active_edit->get_blueprint();
+    if (blueprint.is_null()) return;
+
+    // --- CONTEXT SENSITIVE ROUTING LAYER ---
+    if (Engine::get_singleton()->is_editor_hint()) {
+        // Editor Context: Use native ResourceSaver
+        String res_path = blueprint->get_path();
+        
+        if (res_path.is_empty() || res_path.contains("::")) {
+            // Edge-case handling: Resource was created anonymously or as a transient sub-resource
+            UtilityFunctions::printerr("GraphComposer: Cannot save. Graph resource doesn't have a valid standalone path (res://...)");
+            return;
+        }
+
+        Error err = ResourceSaver::get_singleton()->save(blueprint, res_path);
+        if (err == OK) {
+            UtilityFunctions::print("GraphComposer: Successfully saved graph resource to ", res_path);
+        } else {
+            UtilityFunctions::printerr("GraphComposer: Failed to save graph resource. Error code: ", err);
+        }
+    } else {
+        // Runtime Context: Delegate behavior to the game application layer
+        UtilityFunctions::print("GraphComposer: Standalone runtime detected. Routing to runtime storage pipeline.");
+        
+        // Custom Hook: You can emit a custom signal here that your game code listens to,
+        // or check if a dedicated script hook is bound to handle JSON/binary serialization.
+        if (has_signal("runtime_save_requested")) {
+            emit_signal("runtime_save_requested", active_edit);
+        }
+    }
+}
 // --- Original Operations ---
 
 void GraphComposer::open_graph(IdeamGraphEdit* p_graph_edit) {

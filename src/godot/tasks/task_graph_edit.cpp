@@ -282,9 +282,10 @@ IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNod
         // Wire up the dynamic UI population for DOD memory buffers.
         // Because TaskGraphEdit inherits from MemoryGraphEdit, the Callable will
         // natively resolve to the base class's bound method.
-       
-        new_node->connect("buffer_names_requested", 
-            callable_mp(static_cast<MemoryGraphEdit*>(this), &TaskGraphEdit::_on_buffer_names_requested));
+        
+        new_node->connect("memory_grant_requested", godot::Callable(this, "_on_node_memory_grant_requested"));
+        new_node->connect("buffer_names_requested", godot::Callable(this, "_on_buffer_names_requested"));
+        new_node->connect("connections_requested", godot::Callable(this, "_on_node_connections_requested"));
     } else {
         godot::UtilityFunctions::printerr("TaskGraphEdit: Failed to resolve UI GraphNode class for data payload: ", res_class);
     }

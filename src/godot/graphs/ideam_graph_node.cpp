@@ -4,6 +4,8 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/control.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
+#include <godot_cpp/classes/h_box_container.hpp>
+#include <godot_cpp/classes/button.hpp>
 
 using namespace godot;
 
@@ -19,6 +21,7 @@ void IdeamGraphNode::_bind_methods() {
     ADD_SIGNAL(MethodInfo("context_clicked", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "IdeamGraphNode"), PropertyInfo(Variant::VECTOR2, "at")));
     ADD_SIGNAL(MethodInfo("property_changed", PropertyInfo(Variant::STRING_NAME, "blueprint_id"), PropertyInfo(Variant::STRING_NAME, "property_name"), PropertyInfo(Variant::NIL, "new_value")));
     ADD_SIGNAL(MethodInfo("delete_request", PropertyInfo(Variant::STRING_NAME, "blueprint_id")));
+    ADD_SIGNAL(MethodInfo("connections_requested", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "IdeamGraphNode")));
 
     ClassDB::bind_method(D_METHOD("initialize", "node_res"), &IdeamGraphNode::initialize);
     ClassDB::bind_method(D_METHOD("get_node_resource"), &IdeamGraphNode::get_node_resource);
@@ -33,6 +36,9 @@ void IdeamGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_context_hover", "hovered"), &IdeamGraphNode::set_context_hover);
     ClassDB::bind_method(D_METHOD("get_context_hover"), &IdeamGraphNode::get_context_hover);
 
+    ClassDB::bind_method(D_METHOD("receive_connection_info", "info"), &IdeamGraphNode::receive_connection_info);
+    ClassDB::bind_method(D_METHOD("request_connections"), &IdeamGraphNode::request_connections);
+
     // Register as Godot Properties
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "locked"), "set_locked", "get_locked");
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "error_state"), "set_error_state", "get_error_state");
@@ -45,7 +51,14 @@ void IdeamGraphNode::_ready() {
 
 void IdeamGraphNode::_notification(int p_what) {
     if (p_what == NOTIFICATION_THEME_CHANGED) {
-        _update_theme_properties();
+        if (is_updating_theme) return;
+
+        is_updating_theme = true;
+        
+        _update_theme_properties(); // Triggers the virtual cascade
+        queue_redraw();
+        
+        is_updating_theme = false;
 
     }
 }
@@ -60,7 +73,13 @@ void IdeamGraphNode::_update_theme_properties() {
         update_port_state(pair.first, false, pair.second);
     }
     
-    queue_redraw();
+    if (is_locked_state) {
+        Ref<StyleBox> locked_sb = get_theme_stylebox("panel_locked", "GraphNode");
+        add_theme_stylebox_override("panel", locked_sb);
+    } else {
+        remove_theme_stylebox_override("panel");
+    }
+
 }
 
 void IdeamGraphNode::_gui_input(const Ref<InputEvent> &p_event) {
@@ -87,14 +106,9 @@ void IdeamGraphNode::initialize(const Ref<IdeamGraphNodeResource>& p_node_res) {
     if (node_resource.is_valid()) {
         set_name(node_resource->get_node_name());
         set_position_offset(node_resource->get_position_offset());
-        
-        // Color Application from the visual Editor Metadata
-        set_self_modulate(node_resource->get_node_color());
     }
 
     _build_ui();
-
-    _update_theme_properties();
 }
 
 bool IdeamGraphNode::get_locked() const {
@@ -114,8 +128,28 @@ StringName IdeamGraphNode::get_blueprint_id() const {
 }
 
 void IdeamGraphNode::_build_ui() {
-    // Intended to be overridden by polymorphic graph nodes (MemoryGraphNode, TaskGraphNode) 
-    // downcasting node_resource to their specific resource types.
+    // Floating badge container
+    badge_container = memnew(godot::HBoxContainer);
+    badge_container->set_name("BadgeContainer");
+    
+    // Attempt to slot directly into the GraphNode's native titlebar
+    godot::HBoxContainer* titlebar = get_titlebar_hbox();
+    if (titlebar) {
+        titlebar->add_child(badge_container);
+    } else {
+        add_child(badge_container); // Fallback
+    }
+
+    // Lock/Unlock Button
+    lock_btn = memnew(godot::Button);
+    lock_btn->set_name("LockToggleBtn");
+    lock_btn->set_flat(true);
+    
+    // Initialize icon based on current state
+    lock_btn->set_button_icon(get_theme_icon(is_locked_state ? "node_locked" : "node_unlocked", "GraphNode"));
+    lock_btn->connect("pressed", godot::Callable(this, "_on_lock_toggled"));
+    add_child(lock_btn);
+
 }
 
 void IdeamGraphNode::emit_property_changed(const StringName& p_property_name, const Variant& p_new_value) {
@@ -138,36 +172,62 @@ void IdeamGraphNode::select_context_menu_option(int p_option_id) {
     }
 }
 
-// DOD Interaction Control
+void IdeamGraphNode::_on_lock_toggled() {
+    set_locked(!is_locked_state);
+}
+
 void IdeamGraphNode::set_locked(bool p_locked) {
     if (is_locked_state == p_locked) return;
     is_locked_state = p_locked;
 
-    if (is_locked_state) {
-        // Retrieve the "panel_locked" StyleBox from the node's theme
-        Ref<StyleBox> locked_sb = get_theme_stylebox("panel_locked", "GraphNode");
-        
-        // Apply it to the "panel" theme item
-        add_theme_stylebox_override("panel", locked_sb);
-    } else {
-        // Clear the override to revert to the default "panel" StyleBox
-        remove_theme_stylebox_override("panel");
+    if (lock_btn) {
+        lock_btn->set_button_icon(get_theme_icon(is_locked_state ? "node_locked" : "node_unlocked", "GraphNode"));
     }
     
     _set_controls_disabled(this, is_locked_state);
-    queue_redraw();
+    
+    // Explicitly notify Godot to trigger our circuit-broken pipeline
+    notification(NOTIFICATION_THEME_CHANGED); 
 }
 
 void IdeamGraphNode::set_error_state(bool p_error) {
     if (is_error_state == p_error) return;
     is_error_state = p_error;
-    queue_redraw();
+    notification(NOTIFICATION_THEME_CHANGED); 
 }
 
 void IdeamGraphNode::set_context_hover(bool p_hovered) {
     if (is_context_hovered == p_hovered) return;
     is_context_hovered = p_hovered;
-    queue_redraw();
+    notification(NOTIFICATION_THEME_CHANGED);
+}
+
+// --- Badge Management ---
+void IdeamGraphNode::add_badge(godot::Control* badge) {
+    if (badge_container && badge->get_parent() != badge_container) {
+        badge_container->add_child(badge);
+    }
+}
+
+void IdeamGraphNode::remove_badge(godot::Control* badge) {
+    if (badge_container && badge->get_parent() == badge_container) {
+        badge_container->remove_child(badge);
+    }
+}
+
+void IdeamGraphNode::clear_badges() {
+    if (!badge_container) return;
+    for (int i = 0; i < badge_container->get_child_count(); ++i) {
+        badge_container->get_child(i)->queue_free();
+    }
+}
+
+void IdeamGraphNode::request_connections() {
+    emit_signal("connections_requested", this);
+}
+
+void IdeamGraphNode::receive_connection_info(const godot::Dictionary& p_info) {
+    // Base implementation. Virtual, to be overridden by MemoryGraphNode.
 }
 
 void IdeamGraphNode::_set_controls_disabled(Node* p_node, bool p_disabled) {

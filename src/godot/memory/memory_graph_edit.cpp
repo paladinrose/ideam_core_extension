@@ -16,6 +16,9 @@ void MemoryGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_buffer_names_requested", "node", "buffer_ids"), &MemoryGraphEdit::_on_buffer_names_requested);
     ClassDB::bind_method(D_METHOD("_memory_request_connect", "from_node", "from_port", "to_node", "to_port"), &MemoryGraphEdit::_memory_request_connect);
     ClassDB::bind_method(D_METHOD("_on_connection_to_empty", "from_node", "from_port", "release_position"), &MemoryGraphEdit::_on_connection_to_empty);
+    ClassDB::bind_method(D_METHOD("_on_node_memory_grant_requested", "node"), &MemoryGraphEdit::_on_node_memory_grant_requested);
+    ClassDB::bind_method(D_METHOD("grant_request_window_payload_submitted", "node_name", "buffer_ids"), &MemoryGraphEdit::_on_grant_window_payload_submitted);
+    
 }
 
 MemoryGraphEdit::MemoryGraphEdit() {
@@ -33,7 +36,11 @@ void MemoryGraphEdit::_ready() {
     }
     connect("connection_request", Callable(this, "_memory_request_connect"));
 
+    if (is_connected("connection_to_empty", Callable(this, "_on_connection_to_empty"))) {
+        disconnect("connection_to_empty", Callable(this, "_on_connection_to_empty"));
+    }
     connect("connection_to_empty", Callable(this, "_on_connection_to_empty"));
+
 }
 
 void MemoryGraphEdit::_notification(int p_what) {
@@ -156,6 +163,9 @@ void MemoryGraphEdit::_memory_request_connect(const StringName &p_from_node, int
     edge["access_mode"] = static_cast<int>(incoming_mode);
 
     current_blueprint->action_add_edge(edge);
+    
+    if (from_ign) _on_node_connections_requested(from_ign);
+    if (to_ign) _on_node_connections_requested(to_ign);
     
     _refresh_edge_cache();
     queue_redraw();
@@ -363,11 +373,128 @@ void MemoryGraphEdit::_spawn_node_by_type(int p_type_id) {
     String unique_name = "MemoryNode_" + String::num_int64(UtilityFunctions::randi() % 10000);
     new_mem_res->set_node_name(unique_name);
     
+
+    // --- AUTOMATED PROPAGATION FLOW ---
+    // Check if we originated out of a click-drag sequence from a valid existing node
+    if (!drag_source_node.is_empty()) {
+        Node* parent_node = get_node_or_null(NodePath(drag_source_node));
+        MemoryGraphNode* parent_ui = Object::cast_to<MemoryGraphNode>(parent_node);
+        
+        if (parent_ui) {
+            Ref<MemoryGraphNodeResource> parent_res = parent_ui->get_memory_node_resource();
+            if (parent_res.is_valid()) {
+                
+                // Inheriting sequence setup: Flip child mode to FORKED to shadow parent allocation space
+                new_mem_res->set_derivation_mode(MemoryGraphNodeResource::MODE_FORKED);
+                
+                // Propagate the actual asset configuration reference downward
+                if (parent_res->get_memory_grant().is_valid()) {
+                    new_mem_res->set_memory_grant(parent_res->get_memory_grant());
+                }
+                
+                // Automatically establish the connecting data edge inside the blueprint context
+                Dictionary edge;
+                edge["from"] = drag_source_node;
+                edge["from_port"] = drag_source_port;
+                edge["to"] = unique_name;
+                edge["to_port"] = 0; // Assume first input port by default on target
+                edge["access_mode"] = static_cast<int>(core::BufferAccessMode::READ); // Safe fallback default
+                
+                current_blueprint->action_add_node(new_mem_res);
+                current_blueprint->action_add_edge(edge);
+                
+                // Reset tracking markers
+                drag_source_node = StringName();
+                drag_source_port = -1;
+                
+                _refresh_edge_cache();
+                queue_redraw();
+                return;
+            }
+        }
+    }
+
+    // Default standalone fallback instantiation pathway
     current_blueprint->action_add_node(new_mem_res);
+    
+    // Reset tracking context flags safely
+    drag_source_node = StringName();
+    drag_source_port = -1;
+}
+
+void MemoryGraphEdit::_on_node_memory_grant_requested(godot::Object* p_node) {
+    MemoryGraphNode* requesting_node = Object::cast_to<MemoryGraphNode>(p_node);
+    if (!requesting_node) return;
+
+    Ref<MemoryGraphResource> mem_blueprint = current_blueprint;
+    if (mem_blueprint.is_null()) return;
+
+    Ref<MemoryManagerResource> manager = mem_blueprint->get_memory_manager();
+    if (manager.is_null()) return;
+
+    // 1. Lazy-initialize the cached window instance if it doesn't exist yet
+    if (!grant_request_window) {
+        grant_request_window = memnew(GrantRequestWindow);
+        add_child(grant_request_window);
+        
+        // Connect the window's submission back to our orchestrator method
+        grant_request_window->connect("grant_payload_submitted", Callable(this, "_on_grant_window_payload_submitted"));
+    }
+
+    // 2. Extract authoritative string name lists from our schemas
+    TypedArray<StringName> names = manager->get_buffer_names();
+
+    // 3. Clear out old entries and map the window to our current requesting node context
+    // We pass the requesting node's unique UI name so we can re-find it upon submission callback.
+    grant_request_window->clear_and_popup(requesting_node->get_name(), names);
+}
+
+// The target callback that catches the data payload when the user clicks "Request Grant"
+void MemoryGraphEdit::_on_grant_window_payload_submitted(const StringName& p_node_name, const PackedInt32Array& p_buffer_ids) {
+    Node* target_node = get_node_or_null(NodePath(p_node_name));
+    MemoryGraphNode* memory_node = Object::cast_to<MemoryGraphNode>(target_node);
+    if (!memory_node) return;
+
+    Ref<MemoryGraphResource> mem_blueprint = current_blueprint;
+    if (mem_blueprint.is_null()) return;
+
+    Ref<MemoryManagerResource> manager = mem_blueprint->get_memory_manager();
+    if (manager.is_null()) return;
+
+    // 1. Submit the payload array to our factory method
+    Ref<MemoryGrantResource> compiled_grant = manager->request_emulated_grant(p_buffer_ids);
+
+    // 2. Evaluate the result token
+    if (compiled_grant.is_valid()) {
+        // Apply the newly authenticated configuration layout directly to the node resource
+        memory_node->receive_memory_grant(compiled_grant);
+        
+        // Trigger a visual refresh of the canvas element
+        memory_node->queue_redraw();
+        
+        UtilityFunctions::print_rich("[color=green]Successfully applied valid MemoryGrantResource to node " + String(p_node_name) + "![/color]");
+    } else {
+        // Handle validation rejection gracefully in the UI
+        memory_node->set_header_state(MemoryGraphNode::HEADER_ERROR);
+        memory_node->queue_redraw();
+        
+        UtilityFunctions::print_rich("[color=red]Failed to assign Grant to node " + String(p_node_name) + ": Validation Constraint Violation.[/color]");
+    }
+}
+
+void MemoryGraphEdit::_on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position) {
+    // Cache the dragging source context immediately before showing the type context popup menu
+    drag_source_node = p_from_node;
+    drag_source_port = p_from_port;
+    
+    // Cache screen coordinates for placement calculations
+    popup_position = p_release_position; 
+    
+    // Call down to your existing base implementation popup system (e.g., filtered_popup->popup())
+    // For now, it stays empty awaiting your menu structure.
 }
 
 
-void MemoryGraphEdit::_on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position) {}
 
 TypedArray<String> MemoryGraphEdit::_get_filtered_node_types(uint32_t p_filter_mask) const { return TypedArray<String>(); }
 

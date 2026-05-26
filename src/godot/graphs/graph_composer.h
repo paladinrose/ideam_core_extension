@@ -23,6 +23,7 @@ private:
     godot::HBoxContainer* header_bar = nullptr;
     godot::OptionButton* theme_selector = nullptr;
     godot::Button* load_theme_btn = nullptr;
+    godot::Button* save_btn = nullptr;
     godot::TabContainer* tab_container = nullptr;
     godot::FileDialog* theme_file_dialog = nullptr;
 
@@ -57,7 +58,8 @@ public:
     void _on_theme_selected(int p_index);
     void _on_load_theme_pressed();
     void _on_theme_file_selected(const godot::String& p_path);
-
+    void _on_save_pressed();
+    
     // Instance-level operations
     void open_graph(IdeamGraphEdit* p_graph_edit);
     void close_graph(IdeamGraphEdit* p_graph_edit);

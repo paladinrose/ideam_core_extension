@@ -1,8 +1,11 @@
 #include "memory_manager_resource.h"
 #include "../../core/memory/memory_common.h"
 #include "../../core/memory/selection_utils.h" // Needed for core::SelectionMode if it's declared there
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/os.hpp>
+#include <map>
+#include <vector>
 
 namespace ideam::godot_ext {
 
@@ -34,6 +37,12 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_projected_footprint_string"), &MemoryManagerResource::get_projected_footprint_string);
     ClassDB::bind_method(D_METHOD("buffer_contains_id", "buffer_id", "entity_id"), &MemoryManagerResource::buffer_contains_id);
     ClassDB::bind_method(D_METHOD("get_dense_index", "buffer_id", "entity_id"), &MemoryManagerResource::get_dense_index);
+    
+    ClassDB::bind_method(D_METHOD("request_emulated_grant", "buffer_ids"), &MemoryManagerResource::request_emulated_grant);
+    ClassDB::bind_method(D_METHOD("release_emulated_grant", "grant"), &MemoryManagerResource::release_emulated_grant);
+    ClassDB::bind_method(D_METHOD("clear_all_emulated_grants"), &MemoryManagerResource::clear_all_emulated_grants);
+    ClassDB::bind_method(D_METHOD("recalculate_emulated_grants"), &MemoryManagerResource::recalculate_emulated_grants);
+    ClassDB::bind_method(D_METHOD("get_active_emulated_grants"), &MemoryManagerResource::get_active_emulated_grants);
 }
 
 godot::TypedArray<godot::StringName> MemoryManagerResource::get_buffer_names() const {
@@ -222,6 +231,224 @@ bool MemoryManagerResource::buffer_contains_id(int p_buffer_id, int p_entity_id)
 int MemoryManagerResource::get_dense_index(int p_buffer_id, int p_entity_id) const {
     if (!backend_manager) return -1;
     return backend_manager->get_dense_index(static_cast<uint32_t>(p_buffer_id), static_cast<uint32_t>(p_entity_id));
+}
+
+godot::Ref<MemoryGrantResource> MemoryManagerResource::request_emulated_grant(const godot::PackedInt32Array& p_buffer_ids) {
+    using namespace godot;
+
+    // 1. Instantiate the new parent MemoryGrantResource container
+    Ref<MemoryGrantResource> new_grant;
+    new_grant.instantiate();
+
+    // Set a default descriptive tracking name for debugging/UI purposes
+    new_grant->set_grant_name(String("Grant_") + String::num_int64(active_emulated_grants.size()));
+
+    // 2. Build out the constituent GrantPartResource objects from the incoming array
+    TypedArray<GrantPartResource> configured_parts;
+    
+    for (int i = 0; i < p_buffer_ids.size(); ++i) {
+        int32_t target_buffer_id = p_buffer_ids[i];
+        
+        Ref<GrantPartResource> part_res;
+        part_res.instantiate();
+        
+        // Populate the base configuration properties
+        part_res->set_buffer_id(target_buffer_id);
+        part_res->set_element_stride(0); // Default placeholder; will be finalized by schema verification
+        part_res->set_access_mode(0);     // Default fallback to READ mode
+        part_res->set_is_contiguous(true); 
+        
+        if (target_buffer_id >= 0 && target_buffer_id < buffer_schemas.size()) {
+            Ref<MemoryBufferResource> schema = buffer_schemas[target_buffer_id];
+            if (schema.is_valid()) {
+                part_res->set_buffer_type(schema->get_layout_type());
+            }
+        }
+
+        configured_parts.push_back(part_res);
+    }
+
+    // Assign the generated array of parts directly into our new grant resource
+    new_grant->set_configured_parts(configured_parts);
+
+    // 3. Register our fresh grant into the global manager tracking pool
+    active_emulated_grants.push_back(new_grant);
+
+    // 4. Run the authoritative validation linter loop
+    // This populates any "Unassigned Claims", "Out of Bounds", or "Race Condition Collisions".
+    recalculate_emulated_grants();
+
+    // 5. Contextual Context Evaluation
+    // Check if the linter appended any errors to our newly minted grant during validation.
+    if (!new_grant->is_emulated_valid()) { 
+        UtilityFunctions::print_rich("[color=yellow]Memory Warning: Requested emulated grant failed linting validations.[/color]");
+        
+        // If it failed systemic validation rules, remove it from our active simulation tracking pool
+        int tracking_idx = active_emulated_grants.find(new_grant);
+        if (tracking_idx != -1) {
+            active_emulated_grants.remove_at(tracking_idx);
+        }
+        
+        // Return a null pointer to signal compilation/configuration failure to the UI orchestrator
+        return Ref<MemoryGrantResource>();
+    }
+
+    // Success! Return the fully established, validated configuration token
+    return new_grant;
+}
+
+void MemoryManagerResource::release_emulated_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
+    if (!p_grant.is_valid()) return;
+    
+    int index = active_emulated_grants.find(p_grant);
+    if (index != -1) {
+        active_emulated_grants.remove_at(index);
+    }
+    recalculate_emulated_grants();
+}
+
+void MemoryManagerResource::clear_all_emulated_grants() {
+    active_emulated_grants.clear();
+    recalculate_emulated_grants();
+}
+
+void MemoryManagerResource::recalculate_emulated_grants() {
+    using namespace godot;
+
+    // 1. Reset State across the entire dependency pool
+    for (int i = 0; i < active_emulated_grants.size(); ++i) {
+        Ref<MemoryGrantResource> grant = active_emulated_grants[i];
+        if (grant.is_valid()) {
+            grant->clear_emulation_state();
+        }
+    }
+
+    // Structural structures needed to parse conflicts
+    // Map tracking: Buffer ID -> Vector of structs tracking [Grant Object, Access Mode flag, Part Index]
+    struct AccessorTrace {
+        Ref<MemoryGrantResource> grant;
+        int access_mode;
+        int part_index;
+    };
+    std::map<uint32_t, std::vector<AccessorTrace>> structural_access_map;
+
+    // 2. Pass 1: Local Integrity Linter (Examine constraints internal to each grant context)
+    for (int i = 0; i < active_emulated_grants.size(); ++i) {
+        Ref<MemoryGrantResource> grant = active_emulated_grants[i];
+        if (!grant.is_valid()) continue;
+
+        String name_ctx = grant->get_grant_name().is_empty() ? String("Grant ") + String::num_int64(i) : String("'") + grant->get_grant_name() + String("'");
+        TypedArray<GrantPartResource> parts = grant->get_configured_parts();
+
+        // Rule A: Enforce hard compiled bounds based on structural sizing configurations
+        if (parts.size() > grant->get_capacity_mode()) {
+            grant->add_emulation_error(
+                String("Capacity Overflow: Layout contains ") + String::num_int64(parts.size()) + 
+                " parts, but capacity mode limits allocations to exactly " + String::num_int64(grant->get_capacity_mode()) + " slots."
+            );
+        }
+
+        // Evaluate child configurations
+        for (int j = 0; j < parts.size(); ++j) {
+            Ref<GrantPartResource> part = parts[j];
+            if (!part.is_valid()) {
+                grant->add_emulation_error(String("Null Reference Error: Configuration part element at index [") + String::num_int64(j) + "] is uninstantiated.");
+                continue;
+            }
+
+            uint32_t target_id = part->get_buffer_id();
+
+            // Rule B: Enforce structural existence bounds
+            if (target_id == 0xFFFFFFFF) {
+                grant->add_emulation_error(String("Unassigned Claim: Configuration part [") + String::num_int64(j) + "] has no assigned target Buffer ID.");
+                continue;
+            }
+
+            // Verify if ID resolves to an active definition template inside schemas
+            if (target_id >= static_cast<uint32_t>(buffer_schemas.size())) {
+                grant->add_emulation_error(
+                    String("Out of Bounds Reference: Part [") + String::num_int64(j) + 
+                    "] points to Buffer ID " + String::num_int64(target_id) + 
+                    ", but the manager only defines " + String::num_int64(buffer_schemas.size()) + " total schemas."
+                );
+                continue;
+            }
+
+            Ref<MemoryBufferResource> matching_schema = buffer_schemas[target_id];
+            if (matching_schema.is_valid()) {
+                // Synchronize the setup data strings automatically for easier graph node debugging
+                part->set_target_buffer_name(matching_schema->get_buffer_name());
+                
+                // Rule C: Column metadata validations (Only if buffer acts as a columnar structure layout like SoA)
+                int64_t layout_type = matching_schema->get_layout_type(); 
+                if (layout_type == 2 /* core::BufferLayoutType::SOA */ || layout_type == 3 /* core::BufferLayoutType::SPARSE_SET */) {
+                    TypedArray<Dictionary> cols = matching_schema->get_columns();
+                    uint32_t col_id = part->get_column_id();
+                    bool col_found = false;
+                    
+                    for (int c = 0; c < cols.size(); ++c) {
+                        Dictionary d = cols[c];
+                        uint32_t actual_cid = d.has("id") ? static_cast<uint32_t>(d["id"]) : static_cast<uint32_t>(c);
+                        if (actual_cid == col_id) {
+                            col_found = true;
+                            if (d.has("name")) {
+                                part->set_target_column_name(d["name"]);
+                            }
+                            break;
+                        }
+                    }
+                    if (!col_found) {
+                        grant->add_emulation_error(
+                            String("Invalid Column Claim: Part [") + String::num_int64(j) + 
+                            "] targets Column ID " + String::num_int64(col_id) + 
+                            " within Buffer '" + matching_schema->get_buffer_name() + "', which does not exist."
+                        );
+                    }
+                }
+            }
+
+            // Cache data vectors to perform full multi-grant concurrency checks next
+            structural_access_map[target_id].push_back({ grant, part->get_access_mode(), j });
+        }
+    }
+
+    // 3. Pass 2: Concurrent Graph Dependency Linter (Global cross-grant analysis)
+    // Emulates memory_manager_dod's lock-free CAS validation engine rules
+    for (auto const& [buffer_id, traces] : structural_access_map) {
+        if (traces.size() <= 1) continue; // Single consumer allocations cannot conflict
+
+        int write_count = 0;
+        int read_count = 0;
+
+        for (auto const& trace : traces) {
+            if (trace.access_mode == 1) { // WRITE Access mode
+                write_count++;
+            } else {                      // READ Access mode
+                read_count++;
+            }
+        }
+
+        // Core Constraint Violation Rule: Exclusive Write Authority
+        // High-performance thread workers will experience race conditions if a buffer 
+        // has a writer shared with any other concurrent operations.
+        if (write_count > 0) {
+            Ref<MemoryBufferResource> schema = buffer_schemas[buffer_id];
+            String b_name = schema.is_valid() ? 
+                static_cast<String>(schema->get_buffer_name()) : 
+                String("ID ") + String::num_int64(buffer_id);
+
+            for (auto const& trace : traces) {
+                String mode_str = (trace.access_mode == 1) ? "WRITE" : "READ";
+                
+                trace.grant->add_emulation_error(
+                    String("Race Condition Collision: Part [") + String::num_int64(trace.part_index) + 
+                    "] requests " + mode_str + " authorization on Buffer '" + b_name + 
+                    "'. This fails validation because concurrent constraints dictate total system access contains (" + 
+                    String::num_int64(write_count) + " Writers, " + String::num_int64(read_count) + " Readers)."
+                );
+            }
+        }
+    }
 }
 
 } // namespace ideam::godot_ext

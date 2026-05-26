@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/classes/texture_rect.hpp>
 
 namespace ideam::godot_ext {
 
@@ -52,7 +53,9 @@ protected:
     
     // Dedicated, persistent inspector for logic-specific properties
     RuntimeInspector* logic_inspector = nullptr;
-
+    godot::TextureRect* task_type_badge = nullptr;
+    godot::TextureRect* workspace_badge = nullptr;
+    
     static void _bind_methods();
     
     virtual void _build_ui() override;

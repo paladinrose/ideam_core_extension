@@ -40,12 +40,15 @@ protected:
     virtual void _update_theme_properties();
     void _on_node_property_changed(const godot::StringName& p_node_name, const godot::StringName& p_property_name, const godot::Variant& p_new_value);
     void _on_node_delete_request(const godot::StringName& p_node_name);
-
+    void _on_node_connections_requested(godot::Object* p_node);
+    
     // UI Signal Handlers
     void _request_connect(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
     void _request_disconnect(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
     void _show_popup(const godot::Vector2 &p_at);
     void _popup_select(int p_id);
+    void _frame_attached(const godot::StringName& p_element, const godot::StringName& p_frame);
+    void _frame_detached(const godot::StringName& p_element, const godot::StringName& p_frame);
     
     // Triggered when the user finishes dragging a node
     void _on_end_node_move();

@@ -10,6 +10,7 @@
 #include "../../core/graphs/ideam_graph_dod.h"
 #include "../memory/memory_manager_resource.h" // Needed for the dependency handshake
 #include "ideam_graph_node_resource.h" // Needed for typed array node definitions
+#include "ideam_graph_group_resource.h"
 
 namespace ideam::godot_ext {
 
@@ -19,7 +20,8 @@ class IdeamGraphResource : public godot::Resource {
 private:
     godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> nodes;
     godot::TypedArray<godot::Dictionary> edges;
-    
+    godot::TypedArray<godot::Ref<IdeamGraphGroupResource>> groups;
+
     // --- DOD Structural Parameters ---
     godot::Ref<MemoryManagerResource> memory_manager;
     bool is_volatile_at_runtime = false;
@@ -57,6 +59,9 @@ public:
     void set_edges(const godot::TypedArray<godot::Dictionary>& p_edges);
     godot::TypedArray<godot::Dictionary> get_edges() const { return edges; }
 
+    void set_groups(const godot::TypedArray<godot::Ref<IdeamGraphGroupResource>>& p_groups);
+    godot::TypedArray<godot::Ref<IdeamGraphGroupResource>> get_groups() const { return groups; }
+
     void set_is_volatile(bool p_volatile);
     bool get_is_volatile() const { return is_volatile_at_runtime; }
 
@@ -86,6 +91,11 @@ public:
     void action_add_edge(const godot::Dictionary& p_edge_data);
     void action_remove_edge(const godot::StringName& p_from, int p_from_port, const godot::StringName& p_to, int p_to_port);
 
+    void action_create_group(const godot::Ref<IdeamGraphGroupResource>& p_group);
+    void action_remove_group(const godot::StringName& p_group_name);
+    void action_attach_to_group(const godot::StringName& p_group_name, const godot::StringName& p_node_name);
+    void action_detach_from_group(const godot::StringName& p_group_name, const godot::StringName& p_node_name);
+    
     // --- Tier 2: Direct Execution (The "Do" / "Undo" Targets) ---
     void _do_add_node(const godot::Ref<IdeamGraphNodeResource>& p_node);
     void _undo_add_node(const godot::StringName& p_node_name);

@@ -8,6 +8,9 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/color.hpp>
+#include <godot_cpp/classes/button.hpp>
+#include <godot_cpp/classes/h_box_container.hpp>
+
 #include <map>
 
 #include "ideam_graph_node_resource.h"
@@ -47,10 +50,16 @@ protected:
     bool is_locked_state = false;
     bool is_error_state = false;
     bool is_context_hovered = false;
-
+    bool is_updating_theme = false;
+    
     // Internal trackers for logical port access control
     std::map<int, PortState> left_port_states;
     std::map<int, PortState> right_port_states;
+
+    godot::HBoxContainer* badge_container = nullptr;
+    godot::Button* lock_btn = nullptr;
+
+    void _on_lock_toggled();
 
     // Helper to recursively disable internal UI controls when locked
     void _set_controls_disabled(godot::Node* p_node, bool p_disabled);
@@ -106,9 +115,16 @@ public:
     void set_context_hover(bool p_hovered);
     bool get_context_hover() const;
 
+    void add_badge(godot::Control* badge);
+    void remove_badge(godot::Control* badge);
+    void clear_badges();
+
     // --- Strict Port Access Control ---
     void update_port_state(int p_slot_index, bool p_is_left, PortState p_state);
 
+    virtual void receive_connection_info(const godot::Dictionary& p_info);
+    void request_connections();
+    
     // --- Context Menu Hooks ---
     // Child classes (e.g., TransformTaskNode) override these to populate specific right-click options.
     virtual godot::TypedArray<godot::String> get_context_menu_options() const;

@@ -14,12 +14,15 @@ void IdeamGraphResource::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("set_nodes", "nodes"), &IdeamGraphResource::set_nodes);
     ClassDB::bind_method(D_METHOD("get_nodes"), &IdeamGraphResource::get_nodes);
-    // Explicitly enforce the type constraint in the Godot inspector.
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "nodes", PROPERTY_HINT_ARRAY_TYPE, "IdeamGraphNodeResource", PROPERTY_USAGE_STORAGE), "set_nodes", "get_nodes");
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "nodes", PROPERTY_HINT_ARRAY_TYPE, "IdeamGraphNodeResource"), "set_nodes", "get_nodes");
     
     ClassDB::bind_method(D_METHOD("set_edges", "edges"), &IdeamGraphResource::set_edges);
     ClassDB::bind_method(D_METHOD("get_edges"), &IdeamGraphResource::get_edges);
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "edges", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_edges", "get_edges");
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "edges", PROPERTY_HINT_NONE, ""), "set_edges", "get_edges");
+
+    ClassDB::bind_method(D_METHOD("set_groups", "groups"), &IdeamGraphResource::set_groups);
+    ClassDB::bind_method(D_METHOD("get_groups"), &IdeamGraphResource::get_groups);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "groups", PROPERTY_HINT_ARRAY_TYPE, "IdeamGraphGroupResource"), "set_groups", "get_groups");
 
     ClassDB::bind_method(D_METHOD("set_is_volatile", "is_volatile"), &IdeamGraphResource::set_is_volatile);
     ClassDB::bind_method(D_METHOD("get_is_volatile"), &IdeamGraphResource::get_is_volatile);
@@ -61,6 +64,11 @@ void IdeamGraphResource::set_edges(const godot::TypedArray<godot::Dictionary>& p
     edges = p_edges; 
     update_managed_profiles();
     emit_changed(); 
+}
+
+void IdeamGraphResource::set_groups(const godot::TypedArray<godot::Ref<IdeamGraphGroupResource>>& p_groups) {
+    groups = p_groups;
+    emit_changed();
 }
 
 void IdeamGraphResource::set_is_volatile(bool p_volatile) { 
@@ -256,11 +264,61 @@ void IdeamGraphResource::action_remove_edge(const godot::StringName& p_from, int
     }
 }
 
+void IdeamGraphResource::action_create_group(const godot::Ref<IdeamGraphGroupResource>& p_group) {
+    if (p_group.is_valid()) {
+        groups.append(p_group);
+        emit_changed();
+    }
+}
+
+void IdeamGraphResource::action_remove_group(const godot::StringName& p_group_name) {
+    for (int i = 0; i < groups.size(); ++i) {
+        godot::Ref<IdeamGraphGroupResource> g = groups[i];
+        if (g.is_valid() && g->get_group_name() == p_group_name) {
+            groups.remove_at(i);
+            emit_changed();
+            break;
+        }
+    }
+}
+
+void IdeamGraphResource::action_attach_to_group(const godot::StringName& p_group_name, const godot::StringName& p_node_name) {
+    for (int i = 0; i < groups.size(); ++i) {
+        godot::Ref<IdeamGraphGroupResource> g = groups[i];
+        if (g.is_valid() && g->get_group_name() == p_group_name) {
+            godot::TypedArray<godot::StringName> g_nodes = g->get_nodes();
+            if (!g_nodes.has(p_node_name)) {
+                g_nodes.append(p_node_name);
+                g->set_nodes(g_nodes);
+                emit_changed();
+            }
+            break;
+        }
+    }
+}
+
+void IdeamGraphResource::action_detach_from_group(const godot::StringName& p_group_name, const godot::StringName& p_node_name) {
+    for (int i = 0; i < groups.size(); ++i) {
+        godot::Ref<IdeamGraphGroupResource> g = groups[i];
+        if (g.is_valid() && g->get_group_name() == p_group_name) {
+            godot::TypedArray<godot::StringName> g_nodes = g->get_nodes();
+            int idx = g_nodes.find(p_node_name);
+            if (idx != -1) {
+                g_nodes.remove_at(idx);
+                g->set_nodes(g_nodes);
+                emit_changed();
+            }
+            break;
+        }
+    }
+}
+
 // --- Tier 2: Direct Execution (The "Do" / "Undo" Targets) ---
 
 void IdeamGraphResource::_do_add_node(const godot::Ref<IdeamGraphNodeResource>& p_node) {
     if (p_node.is_valid()) {
         nodes.append(p_node);
+        p_node->set_local_to_scene(true); // Ensures the node gets saved with the scene if it's not already a sub-resource
         update_managed_profiles(); // Ensures memory UI updates instantly
         emit_changed();
     }

@@ -6,6 +6,7 @@
 #include "../../core/memory/memory_buffer_pod.h"
 #include <godot_cpp/classes/button.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
+#include <godot_cpp/classes/texture_rect.hpp>
 #include <unordered_map>
 
 namespace ideam::godot_ext {
@@ -47,7 +48,10 @@ private:
     godot::Ref<MemoryGrantInspector> latest_grant_snapshot;
 
     // UI Elements
+    godot::HBoxContainer* memory_controls_hb = nullptr; 
     godot::Button* inspect_memory_btn = nullptr;
+    godot::Button* request_grant_btn = nullptr;
+    godot::TextureRect* telemetry_badge = nullptr;
 
     // Active visual states
     LayoutHeaderState header_state = HEADER_VALID;
@@ -55,7 +59,7 @@ private:
 
     // Internal Helpers for Theme mapping
     godot::Ref<godot::Texture2D> _get_icon_for_layout(core::BufferLayoutType p_layout) const;
-    godot::Ref<godot::Texture2D> _get_badge_icon_for_telemetry(TelemetryBadgeState p_state) const;
+    godot::Ref<godot::Texture2D> _get_telemetry_badge_icon(TelemetryBadgeState p_state) const;
 
 protected:
     // Maps port_index -> Trait Bitmask
@@ -67,9 +71,11 @@ protected:
     
     // Intercept draw to render headers and telemetry directly over the node
     void _notification(int p_what);
+
     virtual void _update_theme_properties() override;
     void _on_inspect_memory_pressed();
-
+    void _on_request_grant_pressed();
+    
 public:
     MemoryGraphNode();
     virtual ~MemoryGraphNode() override = default;
@@ -98,6 +104,9 @@ public:
     void update_memory_port(int p_slot_index, bool p_is_left, godot::BitField<core::BufferLayoutType> p_layout);
 
     virtual void receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names);
+    virtual void receive_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant);
+
+    virtual void receive_connection_info(const godot::Dictionary& p_info) override;
 };
 
 } // namespace ideam::godot_ext

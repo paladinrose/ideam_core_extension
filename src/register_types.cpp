@@ -17,6 +17,7 @@
 #include "godot/graphs/ideam_graph_resource.h"
 #include "godot/graphs/ideam_graph_node_resource.h"
 #include "godot/graphs/ideam_graph_edit.h"
+#include "godot/graphs/ideam_graph_group_resource.h"
 #include "godot/graphs/ideam_graph_node.h"
 #include "godot/graphs/ideam_graph_inspector.h"
 #include "godot/graphs/graph_composer.h"
@@ -36,6 +37,7 @@
 #include "godot/memory/memory_graph_node_resource.h"
 #include "godot/memory/memory_grant_resource.h"
 #include "godot/memory/grant_part_resource.h"
+#include "godot/memory/grant_request_window.h"
 
 // --- Tasks UI & Editor ---
 #include "godot/tasks/ideam_tasks_plugin.h"
@@ -151,7 +153,8 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 
 		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
 		GDREGISTER_CLASS(ideam::godot_ext::ThemeRegistry);
-	
+		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphGroupResource);
+		
 		// --- Memory ---
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNodeResource);
@@ -163,7 +166,8 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
 		GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantResource);
 		GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
-
+		GDREGISTER_CLASS(ideam::godot_ext::GrantRequestWindow);
+		
 		// --- Tasks ---
 		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskResource);
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskGraphNode);

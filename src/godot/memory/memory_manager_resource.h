@@ -6,6 +6,7 @@
 
 #include "memory_buffer_resource.h"
 #include "managed_buffer_profile.h" 
+#include "memory_grant_resource.h"
 #include "../../core/memory/memory_manager_dod.h"
 
 namespace ideam::godot_ext {
@@ -22,7 +23,8 @@ public:
 private:
     godot::TypedArray<MemoryBufferResource> buffer_schemas;
     godot::TypedArray<ManagedBufferProfile> managed_profiles;
-    
+    godot::TypedArray<MemoryGrantResource> active_emulated_grants;
+
     ScalabilityStrategy scaling_strategy = STRATEGY_FIXED;
     int transient_capacity_mb = 16; 
 
@@ -59,6 +61,13 @@ public:
 
     bool buffer_contains_id(int p_buffer_id, int p_entity_id) const;
     int get_dense_index(int p_buffer_id, int p_entity_id) const;
+
+    godot::Ref<MemoryGrantResource> request_emulated_grant(const godot::PackedInt32Array& p_buffer_ids);
+    void release_emulated_grant(const godot::Ref<MemoryGrantResource>& p_grant);
+    void clear_all_emulated_grants();
+    void recalculate_emulated_grants();
+
+    godot::TypedArray<MemoryGrantResource> get_active_emulated_grants() const { return active_emulated_grants; }
 };
 
 } // namespace ideam::godot_ext

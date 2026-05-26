@@ -5,6 +5,7 @@
 #include "memory_inspectors.h"
 #include "memory_graph_node.h"
 #include "memory_graph_node_resource.h"
+#include "grant_request_window.h"
 #include <godot_cpp/classes/popup_menu.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string_name.hpp>
@@ -31,7 +32,9 @@ private:
     uint32_t current_filter_mask = 0;
     godot::Vector2 memory_popup_position;
 
-    // --- Tier 2: Edge Topography Tracking ---
+    GrantRequestWindow* grant_request_window = nullptr;
+
+    // --- Edge Topography Tracking ---
     struct EdgeMetadata {
         core::BufferAccessMode access_mode = core::BufferAccessMode::READ;
         bool is_error = false;
@@ -54,12 +57,19 @@ protected:
     
     virtual godot::TypedArray<godot::String> _get_filtered_node_types(uint32_t p_filter_mask) const;
 
+    
+    // Tracking context variables for runtime node spawning inheritances
+    godot::StringName drag_source_node;
+    int drag_source_port = -1;
+
     // Incorporate strongly-typed node spawning locally
     void _spawn_node_by_type(int p_type_id) override;
 
-    // --- Tier 2: Strict Access Routers ---
-    // Safely shadows the base class router to inject Memory-specific validation
+    // ---  Access Routers ---
+   
     void _memory_request_connect(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
+    void _on_grant_window_payload_submitted(const godot::StringName& p_node_name, const godot::PackedInt32Array& p_buffer_ids);
+    void _on_node_memory_grant_requested(godot::Object* p_node);
     void _on_buffer_names_requested(godot::Object* p_node, const godot::Array& p_buffer_ids);
     
     // Validation Rules

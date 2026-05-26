@@ -37,6 +37,14 @@ StringName TaskGraphNode::get_task_name() const {
 void TaskGraphNode::_build_ui() {
     MemoryGraphNode::_build_ui(); // Generates ports and base states
 
+    task_type_badge = memnew(godot::TextureRect);
+    task_type_badge->set_name("TaskTypeBadge");
+    add_badge(task_type_badge);
+
+    workspace_badge = memnew(godot::TextureRect);
+    workspace_badge->set_name("WorkspaceBadge");
+    add_badge(workspace_badge);
+
     Ref<TaskResource> task_res = get_task_node_resource();
     if (task_res.is_null()) return;
 
@@ -60,30 +68,10 @@ void TaskGraphNode::_build_ui() {
     logic_inspector->connect("property_changed", Callable(this, "_on_custom_param_changed"));
 
     _rebuild_dynamic_ui();
-
-    // Trigger theme definitions immediately following generation pass
-    _update_theme_properties();
 }
 
 void TaskGraphNode::_notification(int p_what) {
-    if (p_what == NOTIFICATION_THEME_CHANGED) {
-        _update_theme_properties();
-        return;
-    }
-
-    // CRITICAL: Call parent to ensure Layout Headers and Memory Telemetry badges are drawn
     MemoryGraphNode::_notification(p_what);
-
-    if (p_what == NOTIFICATION_DRAW) {
-        if (workspace_state != WORKSPACE_HIDDEN) {
-            Ref<Texture2D> badge_icon = _get_badge_icon_for_workspace(workspace_state);
-            if (badge_icon.is_valid()) {
-                Vector2 badge_pos = Vector2(10, 5);
-                Color badge_color = get_theme_color(workspace_state == WORKSPACE_ACTIVE ? "transient_active_color" : "transient_error_color", "GraphNode");
-                draw_texture(badge_icon, badge_pos, badge_color);
-            }
-        }
-    }
 }
 
 void TaskGraphNode::_update_theme_properties() {
@@ -94,18 +82,14 @@ void TaskGraphNode::_update_theme_properties() {
     StringName type_context = "GraphNode";
 
     // 2. Centralized color assignment pulling directly from active theme tokens
-    if (task_res.is_valid()) {
-        Color type_tint = Color(1, 1, 1, 1);
-        switch (task_res->get_task_type()) {
-            case TASK_GODOT_REFLECTION: type_tint = get_theme_color("task_color_reflection", type_context); break;
-            case TASK_NATIVE_CPU:       type_tint = get_theme_color("task_color_native_cpu", type_context); break;
-            case TASK_COMPUTE_GPU:      type_tint = get_theme_color("task_color_compute_gpu", type_context); break;
-            case TASK_QUERY_CULLER:     type_tint = get_theme_color("task_color_query_culler", type_context); break;
-            default:                    type_tint = get_theme_color("task_color_default", type_context); break;
-        }
-        set_self_modulate(type_tint);
+    if (workspace_badge) {
+        workspace_badge->set_texture(_get_badge_icon_for_workspace(workspace_state));
+        
+        // Since this badge used to use a custom color modulation in the draw call:
+        godot::Color badge_color = get_theme_color(workspace_state == WORKSPACE_ACTIVE ? "transient_active_color" : "transient_error_color", "GraphNode");
+        workspace_badge->set_modulate(badge_color); 
+        workspace_badge->set_visible(workspace_state != WORKSPACE_HIDDEN);
     }
-
     // 3. Propagate theme updates down to any dynamically instantiated buttons
     for (const auto& binding : buffer_option_bindings) {
         if (binding.button) {
@@ -115,7 +99,6 @@ void TaskGraphNode::_update_theme_properties() {
         }
     }
 
-    queue_redraw();
 }
 
 Ref<Texture2D> TaskGraphNode::_get_badge_icon_for_workspace(TransientWorkspaceState p_state) const {

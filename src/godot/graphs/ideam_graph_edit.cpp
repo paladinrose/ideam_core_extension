@@ -5,10 +5,17 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/variant/callable.hpp>
 #include <godot_cpp/classes/control.hpp>
+#include <godot_cpp/classes/graph_frame.hpp>
 
 using namespace godot;
 
 namespace ideam::godot_ext {
+
+enum ContextMenuIDs {
+    MENU_SPAWN_NODE_START = 100,
+    MENU_CREATE_GROUP = 10,
+    MENU_REMOVE_GROUP = 11
+};
 
 IdeamGraphEdit::IdeamGraphEdit() {
 }
@@ -27,6 +34,10 @@ void IdeamGraphEdit::_bind_methods() {
     
     ClassDB::bind_method(D_METHOD("_on_node_property_changed", "node_name", "property_name", "new_value"), &IdeamGraphEdit::_on_node_property_changed);
     ClassDB::bind_method(D_METHOD("_on_node_delete_request", "node_name"), &IdeamGraphEdit::_on_node_delete_request);
+    ClassDB::bind_method(D_METHOD("_on_node_connections_requested", "node"), &IdeamGraphEdit::_on_node_connections_requested);
+
+    ClassDB::bind_method(D_METHOD("_frame_attached", "element", "frame"), &IdeamGraphEdit::_frame_attached);
+    ClassDB::bind_method(D_METHOD("_frame_detached", "element", "frame"), &IdeamGraphEdit::_frame_detached);
 
     ClassDB::bind_method(D_METHOD("set_blueprint", "blueprint"), &IdeamGraphEdit::set_blueprint);
     ClassDB::bind_method(D_METHOD("get_blueprint"), &IdeamGraphEdit::get_blueprint);
@@ -36,8 +47,12 @@ void IdeamGraphEdit::_ready() {
     if (Engine::get_singleton()->is_editor_hint()) {
         connect("connection_request", Callable(this, "_request_connect"));
         connect("disconnection_request", Callable(this, "_request_disconnect"));
+        
         connect("popup_request", Callable(this, "_show_popup"));
         connect("end_node_move", Callable(this, "_on_end_node_move"));
+
+        //connect("frame_attached", Callable(this, "_frame_attached"));
+        //connect("frame_detached", Callable(this, "_frame_detached"));
     }
 }
 
@@ -100,11 +115,20 @@ void IdeamGraphEdit::_request_connect(const StringName &p_from_node, int p_from_
     edge["to_port"] = p_to_port;
     
     current_blueprint->action_add_edge(edge);
+    if (from_ign) _on_node_connections_requested(from_ign);
+    if (to_ign) _on_node_connections_requested(to_ign);
+
 }
 
 void IdeamGraphEdit::_request_disconnect(const StringName &p_from_node, int p_from_port, const StringName &p_to_node, int p_to_port) {
     if (current_blueprint.is_null()) return;
     current_blueprint->action_remove_edge(p_from_node, p_from_port, p_to_node, p_to_port);
+    
+    Node* from_n = get_node_or_null(NodePath(p_from_node));
+    Node* to_n = get_node_or_null(NodePath(p_to_node));
+    
+    if (from_n) _on_node_connections_requested(from_n);
+    if (to_n) _on_node_connections_requested(to_n);
 }
 
 IdeamGraphNode* IdeamGraphEdit::_create_graph_node(const Ref<IdeamGraphNodeResource>& p_node_res) {
@@ -119,9 +143,12 @@ void IdeamGraphEdit::_show_popup(const Vector2 &p_at) {
     context_node = nullptr; 
     popup_position = p_at;
 
+    context_popup->add_item("Create Node Group", MENU_CREATE_GROUP);
+    context_popup->add_separator("Spawn Node Types");
+
     TypedArray<String> types = _get_new_node_types();
     for (int i = 0; i < types.size(); ++i) {
-        context_popup->add_item(types[i], i);
+        context_popup->add_item(types[i], MENU_SPAWN_NODE_START + i);
     }
 
     if (context_popup->get_item_count() > 0) {
@@ -155,7 +182,21 @@ void IdeamGraphEdit::_popup_select(int p_id) {
         context_node->set_context_hover(false);
         context_node->select_context_menu_option(p_id);
     } else {
-        _spawn_node_by_type(p_id);
+        if (p_id == MENU_CREATE_GROUP) {
+            if (current_blueprint.is_valid()) {
+                Ref<IdeamGraphGroupResource> group_res;
+                group_res.instantiate();
+                String unique_id = "group_" + String::num_int64(UtilityFunctions::randi() % 100000);
+                group_res->set_group_name(unique_id);
+                group_res->set_title("New Node Group Container");
+                group_res->set_position(get_scroll_offset() + popup_position);
+                group_res->set_size(Vector2(250, 200));
+                
+                current_blueprint->action_create_group(group_res);
+            }
+        } else if (p_id >= MENU_SPAWN_NODE_START) {
+            _spawn_node_by_type(p_id - MENU_SPAWN_NODE_START);
+        }
     }
     context_node = nullptr;
 }
@@ -179,6 +220,53 @@ void IdeamGraphEdit::_on_node_property_changed(const StringName& p_node_name, co
     if (ign && ign->get_node_resource().is_valid()) {
         ign->get_node_resource()->set(p_property_name, p_new_value);
     }
+}
+
+void IdeamGraphEdit::_on_node_connections_requested(Object* p_node) {
+    IdeamGraphNode* ign = Object::cast_to<IdeamGraphNode>(p_node);
+    if (!ign || current_blueprint.is_null()) return;
+
+    StringName target_node_name = ign->get_blueprint_id();
+
+    TypedArray<Dictionary> inputs;
+    TypedArray<Dictionary> outputs;
+
+    TypedArray<Dictionary> edges = current_blueprint->get_edges();
+    for (int i = 0; i < edges.size(); ++i) {
+        Dictionary e = edges[i];
+        
+        if (e["to"] == Variant(target_node_name)) {
+            Dictionary conn;
+            conn["name"] = String("input_port_") + String::num_int64(e["to_port"]);
+            conn["type"] = Variant::OBJECT; // Emulating Godot reflection typing
+            conn["usage"] = PROPERTY_USAGE_DEFAULT;
+            
+            // Your custom connection payload
+            conn["port"] = e["to_port"];
+            conn["connected_node"] = e["from"];
+            conn["connected_port"] = e["from_port"];
+            inputs.push_back(conn);
+        }
+        
+        if (e["from"] == Variant(target_node_name)) {
+            Dictionary conn;
+            conn["name"] = String("output_port_") + String::num_int64(e["from_port"]);
+            conn["type"] = Variant::OBJECT; 
+            conn["usage"] = PROPERTY_USAGE_DEFAULT;
+            
+            // Your custom connection payload
+            conn["port"] = e["from_port"];
+            conn["connected_node"] = e["to"];
+            conn["connected_port"] = e["to_port"];
+            outputs.push_back(conn);
+        }
+    }
+
+    Dictionary payload;
+    payload["inputs"] = inputs;
+    payload["outputs"] = outputs;
+
+    ign->receive_connection_info(payload);
 }
 
 void IdeamGraphEdit::_on_end_node_move() {
@@ -221,13 +309,47 @@ void IdeamGraphEdit::_on_blueprint_changed() {
 
         if (ign) {
             ign->initialize(n_res);
+            
         } else {
             ign = _create_graph_node(n_res);
             
             if (ign) {
                 // Assuming _create_graph_node configures the node name correctly
                 add_child(ign);
+                ign->set_theme(get_theme());
                 ign->initialize(n_res);
+                
+            }
+        }
+        
+    }
+
+    TypedArray<Ref<IdeamGraphGroupResource>> blueprint_groups = current_blueprint->get_groups();
+    for (int i = 0; i < blueprint_groups.size(); ++i) {
+        Ref<IdeamGraphGroupResource> g_res = blueprint_groups[i];
+        if (g_res.is_null() || g_res->get_group_name().is_empty()) continue;
+
+        StringName group_id = g_res->get_group_name();
+        Node* existing_frame = get_node_or_null(NodePath(group_id));
+        GraphFrame* gf = Object::cast_to<GraphFrame>(existing_frame);
+
+        if (!gf) {
+            gf = memnew(GraphFrame);
+            gf->set_name(group_id);
+            add_child(gf);
+        }
+
+        gf->set_title(g_res->get_title());
+        gf->set_position_offset(g_res->get_position());
+        gf->set_size(g_res->get_size());
+
+        // Map child dependencies to the frame layout canvas
+        TypedArray<StringName> associated_nodes = g_res->get_nodes();
+        for(int j = 0; j < associated_nodes.size(); ++j) {
+            Node* target_node = get_node_or_null(NodePath(associated_nodes[j]));
+            GraphElement* ge = Object::cast_to<GraphElement>(target_node);
+            if (ge && ge->get_parent() == this) {
+                attach_graph_element_to_frame(ge->get_name(), group_id);
             }
         }
     }
@@ -242,6 +364,16 @@ void IdeamGraphEdit::_on_blueprint_changed() {
     }
 
     is_syncing_ui = false;
+}
+
+void IdeamGraphEdit::_frame_attached(const StringName& p_element, const StringName& p_frame) {
+    if (current_blueprint.is_null() || is_syncing_ui) return;
+    current_blueprint->action_attach_to_group(p_frame, p_element);
+}
+
+void IdeamGraphEdit::_frame_detached(const StringName& p_element, const StringName& p_frame) {
+    if (current_blueprint.is_null() || is_syncing_ui) return;
+    current_blueprint->action_detach_from_group(p_frame, p_element);
 }
 
 } // namespace ideam::godot_ext
