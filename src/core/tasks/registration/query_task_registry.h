@@ -68,7 +68,7 @@ public:
      * }
      * }
      */
-    static godot::Dictionary* ui_query_matrix;
+    static godot::Dictionary ui_query_matrix;
 
     // --- Lifecycle Management ---
     

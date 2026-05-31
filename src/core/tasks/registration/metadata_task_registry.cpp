@@ -5,7 +5,7 @@
 namespace ideam::core {
 
 std::array<const MetadataTaskRegistry::SubMatrix*, MetadataTaskRegistry::L_COUNT> MetadataTaskRegistry::logic_matrices = {};
-godot::Dictionary* MetadataTaskRegistry::ui_metadata_matrix = nullptr;
+godot::Dictionary MetadataTaskRegistry::ui_metadata_matrix;
 
 namespace { // Translation Unit Firewall
     // --- Execution Routing (Fast Path) ---
@@ -38,19 +38,14 @@ void MetadataTaskRegistry::cleanup_execution_routing() {
 }
 
 void MetadataTaskRegistry::generate_ui_matrices() {
-    if (!ui_metadata_matrix) {
-        ui_metadata_matrix = new godot::Dictionary();
-    }
+    ui_metadata_matrix.clear();
     
     // Rips through valid template permutations to build the Godot Inspector UI
     generate_ui_all_sub_registries(std::make_index_sequence<L_COUNT>{});
 }
 
 void MetadataTaskRegistry::cleanup_ui_matrices() {
-    if (ui_metadata_matrix) {
-        delete ui_metadata_matrix;
-        ui_metadata_matrix = nullptr;
-    }
+    ui_metadata_matrix.clear();
 }
 
 // --- The O(1) Dispatcher ---

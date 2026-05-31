@@ -60,7 +60,7 @@ public:
      * }
      * }
      */
-    static godot::Dictionary* ui_metadata_matrix;
+    static godot::Dictionary ui_metadata_matrix;
 
     // --- Lifecycle Management ---
     

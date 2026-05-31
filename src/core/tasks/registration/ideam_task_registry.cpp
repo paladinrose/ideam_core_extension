@@ -89,9 +89,9 @@ void IdeamTaskRegistry::bake_manifest() {
     MetadataTaskRegistry::generate_ui_matrices();
 
     // 2. Extract out the generated dictionaries to the active manifest resource
-    if (QueryTaskRegistry::ui_query_matrix) active_manifest->set_query_matrix(*QueryTaskRegistry::ui_query_matrix);
-    if (TransformTaskRegistry::ui_transform_matrix) active_manifest->set_transform_matrix(*TransformTaskRegistry::ui_transform_matrix);
-    if (MetadataTaskRegistry::ui_metadata_matrix) active_manifest->set_metadata_matrix(*MetadataTaskRegistry::ui_metadata_matrix);
+    active_manifest->set_query_matrix(QueryTaskRegistry::ui_query_matrix);
+    active_manifest->set_transform_matrix(TransformTaskRegistry::ui_transform_matrix);
+    active_manifest->set_metadata_matrix(MetadataTaskRegistry::ui_metadata_matrix);
 
     // Apply the locally cached utility matrix from manual registrations
     active_manifest->set_utility_matrix(pending_utility_matrix);

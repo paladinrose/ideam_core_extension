@@ -55,7 +55,7 @@ public:
      * }
      * }
      */
-    static godot::Dictionary* ui_transform_matrix;
+    static godot::Dictionary ui_transform_matrix;
 
     // --- Lifecycle Management ---
     

@@ -7,6 +7,7 @@
 #include "query_task_graph_node.h"
 #include "metadata_task_graph_node.h"
 
+#include "../../core/tasks/registration/ideam_task_registry.h"
 #include "../../core/tasks/registration/transform_task_registry.h"
 #include "../../core/tasks/registration/metadata_task_registry.h"
 #include "../../core/tasks/registration/query_task_registry.h"
@@ -296,7 +297,8 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
             break;
         }
         case CATEGORY_MANUAL: {
-            auto* factories = core::IdeamTaskRegistry::get_ui_factories();
+            core::IdeamTaskRegistry* registry = core::IdeamTaskRegistry::get_singleton();
+            auto* factories = registry->get_ui_factories();
         
             if (factories && factories->has(desc.task_name)) {
                 // Deterministic, O(1) instantiation. No casting required.
@@ -352,7 +354,8 @@ IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNod
     else {
 
         godot::StringName task_name = task_res->get_task_name();
-        auto* factories = core::IdeamTaskRegistry::get_ui_factories();
+        core::IdeamTaskRegistry* registry = core::IdeamTaskRegistry::get_singleton();
+        auto* factories = registry->get_ui_factories();
         if (factories && factories->has(task_name)) {
             new_node = (*factories)[task_name].node_factory();
         }

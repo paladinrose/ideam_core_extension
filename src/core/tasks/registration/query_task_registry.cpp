@@ -5,7 +5,7 @@
 namespace ideam::core {
 
 std::array<const QueryTaskRegistry::SubMatrix*, QueryTaskRegistry::L_COUNT> QueryTaskRegistry::logic_matrices = {};
-godot::Dictionary* QueryTaskRegistry::ui_query_matrix = nullptr;
+godot::Dictionary QueryTaskRegistry::ui_query_matrix;
 
 namespace { // TU Firewall
     // --- Execution Routing (Fast Path) ---
@@ -38,19 +38,14 @@ void QueryTaskRegistry::cleanup_execution_routing() {
 }
 
 void QueryTaskRegistry::generate_ui_matrices() {
-    if (!ui_query_matrix) {
-        ui_query_matrix = new godot::Dictionary();
-    }
+    ui_query_matrix.clear();
     
     // Rips through valid template permutations to build the Godot Inspector UI
     generate_ui_all_sub_registries(std::make_index_sequence<L_COUNT>{});
 }
 
 void QueryTaskRegistry::cleanup_ui_matrices() {
-    if (ui_query_matrix) {
-        delete ui_query_matrix;
-        ui_query_matrix = nullptr;
-    }
+    ui_query_matrix.clear();
 }
 
 // --- The O(1) Dispatcher ---
