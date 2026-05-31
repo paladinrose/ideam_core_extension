@@ -55,8 +55,7 @@ protected:
 
     void _on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position);
     
-    virtual godot::TypedArray<godot::String> _get_filtered_node_types(uint32_t p_filter_mask) const;
-
+    
     
     // Tracking context variables for runtime node spawning inheritances
     godot::StringName drag_source_node;

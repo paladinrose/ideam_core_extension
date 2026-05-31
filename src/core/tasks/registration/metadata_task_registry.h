@@ -2,7 +2,7 @@
 
 #include "../i_native_task.h"
 #include "../../memory/memory_common.h"
-#include "native_task_registry.h"
+#include "ideam_task_registry.h"
 #include <godot_cpp/variant/dictionary.hpp>
 #include <memory>
 #include <array>
@@ -62,8 +62,15 @@ public:
      */
     static godot::Dictionary* ui_metadata_matrix;
 
-    static void init();
-    static void cleanup();
+    // --- Lifecycle Management ---
+    
+    // Fast-path: Instantiates C++ function pointers for runtime execution
+    static void init_execution_routing();
+    static void cleanup_execution_routing();
+
+    // Heavy-path: Allocates Godot Dictionaries for the Editor UI (Call ONLY when baking manifest)
+    static void generate_ui_matrices();
+    static void cleanup_ui_matrices();
 
     static std::unique_ptr<INativeTask> create(uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id);
 };

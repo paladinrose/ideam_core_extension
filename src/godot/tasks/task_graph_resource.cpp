@@ -1,6 +1,6 @@
 #include "task_graph_resource.h"
 #include "sub_graph_task_resource.h"
-#include "../../core/tasks/registration/native_task_registry.h"
+#include "../../core/tasks/registration/ideam_task_registry.h"
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <algorithm>
 
@@ -147,7 +147,7 @@ std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
             case core::TaskTypeDOD::NATIVE_CPU: {
                 if (props.has("native_class")) {
                     godot::StringName native_class = props["native_class"];
-                    auto native_interface = core::NativeTaskRegistry::create(native_class);
+                    auto native_interface = core::IdeamTaskRegistry::create(native_class);
                         
                     if (native_interface) {
                         native_interface->apply_properties(props);

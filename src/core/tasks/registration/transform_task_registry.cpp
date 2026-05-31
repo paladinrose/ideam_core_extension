@@ -8,32 +8,45 @@ std::array<const TransformTaskRegistry::SubMatrix*, TransformTaskRegistry::L_COU
 godot::Dictionary* TransformTaskRegistry::ui_transform_matrix = nullptr;
 
 namespace { // Translation Unit Firewall
-    // --- C++20 Fold Expression Auto-Registration ---
+    // --- Execution Routing (Fast Path) ---
     template <size_t... Is>
-    void init_all_sub_registries(std::index_sequence<Is...>) {
-        (TransformLogicSubRegistry<static_cast<TransformLogicID>(Is)>::init(), ...);
+    void init_routing_all_sub_registries(std::index_sequence<Is...>) {
+        (TransformLogicSubRegistry<static_cast<TransformLogicID>(Is)>::init_execution_routing(), ...);
         ((TransformTaskRegistry::logic_matrices[Is] = &TransformLogicSubRegistry<static_cast<TransformLogicID>(Is)>::factories), ...);
     }
 
     template <size_t... Is>
-    void cleanup_all_sub_registries(std::index_sequence<Is...>) {
-        (TransformLogicSubRegistry<static_cast<TransformLogicID>(Is)>::cleanup(), ...);
+    void cleanup_routing_all_sub_registries(std::index_sequence<Is...>) {
+        (TransformLogicSubRegistry<static_cast<TransformLogicID>(Is)>::cleanup_execution_routing(), ...);
+    }
+
+    // --- UI Matrices (Heavy Path) ---
+    template <size_t... Is>
+    void generate_ui_all_sub_registries(std::index_sequence<Is...>) {
+        (TransformLogicSubRegistry<static_cast<TransformLogicID>(Is)>::generate_ui_matrices(), ...);
     }
 } // namespace
 
-void TransformTaskRegistry::init() {
+void TransformTaskRegistry::init_execution_routing() {
+    // Compiles into consecutive fast-path init calls and pointer assignments
+    init_routing_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+}
+
+void TransformTaskRegistry::cleanup_execution_routing() {
+    cleanup_routing_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    logic_matrices.fill(nullptr);
+}
+
+void TransformTaskRegistry::generate_ui_matrices() {
     if (!ui_transform_matrix) {
         ui_transform_matrix = new godot::Dictionary();
     }
     
-    // Compiles into 14 consecutive init() calls and pointer assignments
-    init_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    // Rips through valid template permutations to build the Godot Inspector UI
+    generate_ui_all_sub_registries(std::make_index_sequence<L_COUNT>{});
 }
 
-void TransformTaskRegistry::cleanup() {
-    cleanup_all_sub_registries(std::make_index_sequence<L_COUNT>{});
-    logic_matrices.fill(nullptr);
-
+void TransformTaskRegistry::cleanup_ui_matrices() {
     if (ui_transform_matrix) {
         delete ui_transform_matrix;
         ui_transform_matrix = nullptr;

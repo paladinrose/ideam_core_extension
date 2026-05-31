@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../memory/memory_graph_edit.h"
-#include "../../core/tasks/registration/native_task_registry.h"
+#include "../../core/tasks/registration/ideam_task_registry.h"
 #include "task_resource.h"
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -12,7 +12,7 @@ namespace ideam::godot_ext {
 /**
  * @class TaskGraphEdit
  * @brief The Tier 3 execution topography editor. 
- * Interrogates NativeTaskRegistry matrices to enforce O(1) visual guardrails,
+ * Interrogates IdeamTaskRegistry matrices to enforce O(1) visual guardrails,
  * ensuring users can only construct memory-safe topological paths.
  */
 class TaskGraphEdit : public MemoryGraphEdit {

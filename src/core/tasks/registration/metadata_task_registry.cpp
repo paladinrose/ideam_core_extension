@@ -8,32 +8,45 @@ std::array<const MetadataTaskRegistry::SubMatrix*, MetadataTaskRegistry::L_COUNT
 godot::Dictionary* MetadataTaskRegistry::ui_metadata_matrix = nullptr;
 
 namespace { // Translation Unit Firewall
-    // --- C++20 Fold Expression Auto-Registration ---
+    // --- Execution Routing (Fast Path) ---
     template <size_t... Is>
-    void init_all_sub_registries(std::index_sequence<Is...>) {
-        (MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::init(), ...);
+    void init_routing_all_sub_registries(std::index_sequence<Is...>) {
+        (MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::init_execution_routing(), ...);
         ((MetadataTaskRegistry::logic_matrices[Is] = &MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::factories), ...);
     }
 
     template <size_t... Is>
-    void cleanup_all_sub_registries(std::index_sequence<Is...>) {
-        (MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::cleanup(), ...);
+    void cleanup_routing_all_sub_registries(std::index_sequence<Is...>) {
+        (MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::cleanup_execution_routing(), ...);
+    }
+
+    // --- UI Matrices (Heavy Path) ---
+    template <size_t... Is>
+    void generate_ui_all_sub_registries(std::index_sequence<Is...>) {
+        (MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::generate_ui_matrices(), ...);
     }
 } // namespace
 
-void MetadataTaskRegistry::init() {
+void MetadataTaskRegistry::init_execution_routing() {
+    // Compiles into consecutive fast-path init calls and pointer assignments
+    init_routing_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+}
+
+void MetadataTaskRegistry::cleanup_execution_routing() {
+    cleanup_routing_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    logic_matrices.fill(nullptr);
+}
+
+void MetadataTaskRegistry::generate_ui_matrices() {
     if (!ui_metadata_matrix) {
         ui_metadata_matrix = new godot::Dictionary();
     }
     
-    // Compiles into 14 consecutive init() calls and pointer assignments
-    init_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    // Rips through valid template permutations to build the Godot Inspector UI
+    generate_ui_all_sub_registries(std::make_index_sequence<L_COUNT>{});
 }
 
-void MetadataTaskRegistry::cleanup() {
-    cleanup_all_sub_registries(std::make_index_sequence<L_COUNT>{});
-    logic_matrices.fill(nullptr);
-
+void MetadataTaskRegistry::cleanup_ui_matrices() {
     if (ui_metadata_matrix) {
         delete ui_metadata_matrix;
         ui_metadata_matrix = nullptr;

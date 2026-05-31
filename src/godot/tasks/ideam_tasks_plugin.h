@@ -17,6 +17,12 @@ private:
 
     // Inspector for Task resources (TaskGraphResource, etc.)
     godot::Ref<godot::EditorInspectorPlugin> task_inspector;
+    
+    // Status flag denoting structural safety
+    bool manifest_valid = false;
+
+    // Setup helper
+    void _check_manifest_and_setup();
 
 protected:
     static void _bind_methods();
@@ -28,11 +34,12 @@ public:
     // Lifecycle
     virtual void _enter_tree() override;
     virtual void _exit_tree() override;
+    
+    // Signal Callbacks
+    void _on_manifest_updated();
 
     // Global Access
     static godot::Object *undo_redo();
 };
 
 } // namespace ideam::godot_ext
-
- // IDEAM_TASKS_PLUGIN_H

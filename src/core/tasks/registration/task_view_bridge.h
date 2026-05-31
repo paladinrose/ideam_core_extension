@@ -1,6 +1,6 @@
 #pragma once
 
-#include "native_task_registry.h"       // Gives us MemoryStrategy
+#include "ideam_task_registry.h"       // Gives us MemoryStrategy
 #include "../../memory/views/view_traits.h" // Gives us ViewStrategies
 
 namespace ideam::core {

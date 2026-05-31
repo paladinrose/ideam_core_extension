@@ -124,33 +124,113 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
     PopupMenu* query_menu = create_submenu("Query");
     PopupMenu* utility_menu = create_submenu("Utility");
 
+    // Context-Aware Selection: Dynamically parse structural traits if dragging out of a port
+    mutable_this->active_filter_mask = 0; // Default to zero if right-clicking generic space
+    if (drag_source_port != -1 && drag_source_node != String().is_empty()) {
+        Node* source_node_base = get_node_or_null(NodePath(drag_source_node));
+        TaskGraphNode* source_task_node = Object::cast_to<TaskGraphNode>(source_node_base);
+        
+        if (source_task_node) {
+            Ref<TaskResource> task_res = source_task_node->get_task_node_resource();
+            if (task_res.is_valid()) {
+                Ref<MemoryGrantResource> grant_res = task_res->get_memory_grant();
+                if (grant_res.is_valid()) {
+                    TypedArray<GrantPartResource> parts = grant_res->get_configured_parts();
+                    if (drag_source_port >= 0 && drag_source_port < parts.size()) {
+                        Ref<GrantPartResource> target_part = parts[drag_source_port];
+                        if (target_part.is_valid()) {
+                            // Extract the layout/buffer type mapping from the serialized layout intent
+                            mutable_this->active_filter_mask = static_cast<uint32_t>(target_part->get_buffer_type());
+                        }
+                    }
+                }
+            }
+        }
+        godot::UtilityFunctions::print("Active Filter Mask set to: ", mutable_this->active_filter_mask);
+    }
     core::BufferLayoutType layout_requirement = static_cast<core::BufferLayoutType>(mutable_this->active_filter_mask);
     bool check_layout = layout_requirement != core::BufferLayoutType::NONE && layout_requirement != core::BufferLayoutType::ANY;
 
-    int current_global_id = 0;
+    int current_global_id = MENU_SPAWN_NODE_START; // Start after reserved IDs for context menu options
 
     auto process_matrix = [&](const Dictionary& p_matrix, TaskCategory p_category, PopupMenu* p_submenu) {
         Array keys = p_matrix.keys();
+        godot::UtilityFunctions::print("Category Check: ", p_category, " | Total Tasks found in Registry Matrix: ", keys.size());
+        
         for (int i = 0; i < keys.size(); ++i) {
             String logic_str = keys[i];
             
             uint32_t logic_id = (p_category == CATEGORY_MANUAL) ? UINT32_MAX : static_cast<uint32_t>(logic_str.to_int());
             Dictionary logic_def = p_matrix[keys[i]];
             
-            if (check_layout && logic_def.has("valid_combinations")) {
+            bool has_combos = logic_def.has("valid_combinations");
+        
+            godot::UtilityFunctions::print(
+                " -> Task Item: ", logic_str, 
+                " | check_layout variable state: ", check_layout ? "TRUE" : "FALSE",
+                " | Has valid_combinations key: ", has_combos ? "YES" : "NO"
+            );
+
+            if (check_layout && has_combos) {
                 PackedInt64Array valid_hashes = logic_def["valid_combinations"];
                 bool has_compatible_strategy = false;
                 
+                godot::UtilityFunctions::print(
+                    " ====> Entering Hash Verification Loop for ", logic_str, 
+                    " with ", valid_hashes.size(), " combinations."
+                );
+                
+                uint32_t valid_print_count = 5;
+                uint32_t current_print = 0;
+
                 for (int h = 0; h < valid_hashes.size(); ++h) {
                     uint64_t hash = valid_hashes[h];
                     uint32_t s_index = 0;
-                    if (p_category == CATEGORY_QUERY) {
-                        s_index = (hash % 2448 % 153) / 17;
-                    } else {
-                        s_index = (hash % 153) / 17;
+
+                    if (p_category == CATEGORY_METADATA) {
+                        using namespace core;
+                        // Metadata Matrix uses: (View * S_COUNT * T_COUNT) + (Strategy * T_COUNT) + Type
+                        // Stripping View leaves: hash % (S_COUNT * T_COUNT)
+                        // Dividing by T_COUNT leaves: Strategy Index
+                        uint64_t sub_stride = hash % (MetadataTaskRegistry::S_COUNT * MetadataTaskRegistry::T_COUNT);
+                        s_index = static_cast<uint32_t>(sub_stride / MetadataTaskRegistry::T_COUNT);
+                    } 
+                    else if (p_category == CATEGORY_TRANSFORM) {
+                        using namespace core;
+                        // Substitute with your Transform Registry counts
+                        uint64_t sub_stride = hash % (TransformTaskRegistry::S_COUNT * TransformTaskRegistry::T_COUNT);
+                        s_index = static_cast<uint32_t>(sub_stride / TransformTaskRegistry::T_COUNT);
+                    } 
+                    else if (p_category == CATEGORY_QUERY) {
+                        using namespace core;
+                        // Layout: (Op * V_COUNT * S_COUNT * T_COUNT) + (View * S_COUNT * T_COUNT) + (Strategy * T_COUNT) + Type
+                        // 1. Strip Op out by modulo-ing by the combined size of the 3 lower dimensions
+                        uint64_t op_sub_stride = QueryTaskRegistry::V_COUNT * QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT;
+                        uint64_t hash_without_op = hash % op_sub_stride;
+                        
+                        // 2. Strip View out by modulo-ing by the combined size of the 2 lower dimensions
+                        uint64_t view_sub_stride = QueryTaskRegistry::S_COUNT * QueryTaskRegistry::T_COUNT;
+                        uint64_t hash_without_view = hash_without_op % view_sub_stride;
+                        
+                        // 3. Isolate Strategy index by dividing by Type count
+                        s_index = static_cast<uint32_t>(hash_without_view / QueryTaskRegistry::T_COUNT);
                     }
 
-                    if (_strategy_supports_layout(static_cast<core::MemoryStrategy>(s_index), layout_requirement)) {
+                    bool match = _strategy_supports_layout(static_cast<core::MemoryStrategy>(s_index), layout_requirement);
+                    
+                    if (current_print < valid_print_count) {
+                        // --- THE SANITY PRINT PIPELINE ---
+                        godot::UtilityFunctions::print(
+                            "Category: ", p_category, 
+                            " | Hash: ", hash, 
+                            " | Unpacked S_Index: ", s_index, 
+                            " | Requirement Mask: ", static_cast<int>(layout_requirement),
+                            " | Pass Validation: ", match ? "YES" : "NO"
+                        );
+                        current_print++;
+                    }
+
+                    if (match) {
                         has_compatible_strategy = true;
                         break;
                     }
@@ -171,10 +251,10 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
         }
     };
 
-    process_matrix(core::NativeTaskRegistry::get_ui_transform_matrix(), CATEGORY_TRANSFORM, transform_menu);
-    process_matrix(core::NativeTaskRegistry::get_ui_metadata_matrix(), CATEGORY_METADATA, metadata_menu);
-    process_matrix(core::NativeTaskRegistry::get_ui_query_matrix(), CATEGORY_QUERY, query_menu);
-    process_matrix(core::NativeTaskRegistry::get_ui_utility_matrix(), CATEGORY_MANUAL, utility_menu);
+    process_matrix(core::IdeamTaskRegistry::get_ui_transform_matrix(), CATEGORY_TRANSFORM, transform_menu);
+    process_matrix(core::IdeamTaskRegistry::get_ui_metadata_matrix(), CATEGORY_METADATA, metadata_menu);
+    process_matrix(core::IdeamTaskRegistry::get_ui_query_matrix(), CATEGORY_QUERY, query_menu);
+    process_matrix(core::IdeamTaskRegistry::get_ui_utility_matrix(), CATEGORY_MANUAL, utility_menu);
 
     return TypedArray<String>();
 }
@@ -216,7 +296,7 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
             break;
         }
         case CATEGORY_MANUAL: {
-            auto* factories = core::NativeTaskRegistry::get_ui_factories();
+            auto* factories = core::IdeamTaskRegistry::get_ui_factories();
         
             if (factories && factories->has(desc.task_name)) {
                 // Deterministic, O(1) instantiation. No casting required.
@@ -272,7 +352,7 @@ IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNod
     else {
 
         godot::StringName task_name = task_res->get_task_name();
-        auto* factories = core::NativeTaskRegistry::get_ui_factories();
+        auto* factories = core::IdeamTaskRegistry::get_ui_factories();
         if (factories && factories->has(task_name)) {
             new_node = (*factories)[task_name].node_factory();
         }

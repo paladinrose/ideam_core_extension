@@ -148,6 +148,8 @@ void MemoryGraphNode::receive_connection_info(const godot::Dictionary& p_info) {
 
 // Update receive_memory_grant:
 void MemoryGraphNode::receive_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
+    godot::UtilityFunctions::print("MemoryGraphNode received memory grant: ", p_grant.is_valid() ? p_grant->get_grant_name() : "null");
+    
     Ref<MemoryGraphNodeResource> res = get_memory_node_resource();
     if (res.is_valid()) {
         res->set_memory_grant(p_grant);
@@ -172,10 +174,6 @@ void MemoryGraphNode::receive_memory_grant(const godot::Ref<MemoryGrantResource>
             }
         } else {
             inspect_memory_btn->set_disabled(true);
-        }
-
-        if (res->get_derivation_mode() == MemoryGraphNodeResource::MODE_INDEPENDENT) {
-            // ... [Keep existing linter loop integration logic] ...
         }
     }
 }

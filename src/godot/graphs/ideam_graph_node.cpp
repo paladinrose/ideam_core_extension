@@ -103,12 +103,30 @@ void IdeamGraphNode::_emit_context_request() {
 void IdeamGraphNode::initialize(const Ref<IdeamGraphNodeResource>& p_node_res) {
     node_resource = p_node_res;
     
-    if (node_resource.is_valid()) {
+    _build_ui();
+
+    update_from_resource(p_node_res);
+}
+
+void IdeamGraphNode::update_from_resource(const Ref<IdeamGraphNodeResource>& p_node_res) {
+    // If a new resource reference is injected, keep our handle current
+    if (node_resource != p_node_res) {
+        node_resource = p_node_res;
+    }
+
+    if (node_resource.is_null()) return;
+
+    // Direct O(1) state updates from the Authoring Resource
+    if (get_name() != node_resource->get_node_name()) {
         set_name(node_resource->get_node_name());
+    }
+    
+    if (get_position_offset() != node_resource->get_position_offset()) {
         set_position_offset(node_resource->get_position_offset());
     }
 
-    _build_ui();
+    // You can also drive title variations or customized sub-properties safely here:
+    // set_title(node_resource->get_node_title_or_type());
 }
 
 bool IdeamGraphNode::get_locked() const {
@@ -128,6 +146,7 @@ StringName IdeamGraphNode::get_blueprint_id() const {
 }
 
 void IdeamGraphNode::_build_ui() {
+    if (ui_built) return;
     // Floating badge container
     badge_container = memnew(godot::HBoxContainer);
     badge_container->set_name("BadgeContainer");
@@ -149,7 +168,7 @@ void IdeamGraphNode::_build_ui() {
     lock_btn->set_button_icon(get_theme_icon(is_locked_state ? "node_locked" : "node_unlocked", "GraphNode"));
     lock_btn->connect("pressed", godot::Callable(this, "_on_lock_toggled"));
     add_child(lock_btn);
-
+    ui_built = true;
 }
 
 void IdeamGraphNode::emit_property_changed(const StringName& p_property_name, const Variant& p_new_value) {

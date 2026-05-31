@@ -65,25 +65,10 @@
 #include "godot/tasks/entry_fill_task_graph_node.h"
 #include "godot/tasks/entry_fill_task_resource.h"
 
-// Native task registration
-#include "core/tasks/registration/native_task_registry.h"
+// --- Task registration ---
+#include "core/tasks/registration/ideam_task_registry.h"
+#include "core/tasks/registration/task_manifest.h"
 
-// --- Views ---
-#include "core/memory/views/single_element_view.h"
-#include "core/memory/views/multi_element_view.h"
-#include "core/memory/views/aosoa_view.h"
-#include "core/memory/views/atomic_view.h"
-#include "core/memory/views/paged_view.h"
-#include "core/memory/views/ring_view.h"
-#include "core/memory/views/sparse_set_view.h"
-#include "core/memory/views/static_stencil_view.h"
-#include "core/memory/views/stencil_view.h"
-#include "core/memory/views/swap_view.h"
-
-#include "core/memory/views/stencil_math.h"
-
-// --- Strategies ---
-#include "core/memory/views/strategies.h"
 
 // --- Narratives Plugin ---
 #include "godot/narratives/narreme.h"
@@ -136,159 +121,162 @@
 
 using namespace godot;
 using namespace ideam::core;
-void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
-	// ========================================================================
-	// SCENE LEVEL
-	// ========================================================================
-	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-		
-		// --- Controls ---
-		GDREGISTER_CLASS(ideam::godot_ext::RuntimeInspector);
-		
-        // --- Graphs ---
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphEdit);
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNode);
 
-		GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
-		GDREGISTER_CLASS(ideam::godot_ext::ThemeRegistry);
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphGroupResource);
-		
-		// --- Memory ---
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNodeResource);
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphEdit);
+void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
+    // ========================================================================
+    // SCENE LEVEL
+    // ========================================================================
+    if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
+        
+        GDREGISTER_CLASS(ideam::core::IdeamTaskRegistry);
+        GDREGISTER_CLASS(ideam::core::TaskManifest);
+        
+        // --- Controls ---
+        GDREGISTER_CLASS(ideam::godot_ext::RuntimeInspector);
+        
+        // --- Graphs ---
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphEdit);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNode);
+
+        GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
+        GDREGISTER_CLASS(ideam::godot_ext::ThemeRegistry);
+        GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphGroupResource);
+        
+        // --- Memory ---
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphResource);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNodeResource);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphEdit);
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNode);
 
-		GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
-		GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
-		GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
-		GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantResource);
-		GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
-		GDREGISTER_CLASS(ideam::godot_ext::GrantRequestWindow);
-		
-		// --- Tasks ---
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskResource);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
+        GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantResource);
+        GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
+        GDREGISTER_CLASS(ideam::godot_ext::GrantRequestWindow);
+        
+        // --- Tasks ---
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskResource);
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskGraphNode);
 
-		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
-		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
-		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
-		
-		GDREGISTER_CLASS(ideam::godot_ext::MetadataTaskResource);
-		GDREGISTER_CLASS(ideam::godot_ext::MetadataTaskGraphNode);
-		
-		GDREGISTER_CLASS(ideam::godot_ext::QueryTaskResource);
-		GDREGISTER_CLASS(ideam::godot_ext::QueryTaskGraphNode);
+        GDREGISTER_CLASS(ideam::godot_ext::TaskGraphResource);
+        GDREGISTER_CLASS(ideam::godot_ext::TaskGraphHost);
+        GDREGISTER_CLASS(ideam::godot_ext::TaskGraphEdit);
+        
+        GDREGISTER_CLASS(ideam::godot_ext::MetadataTaskResource);
+        GDREGISTER_CLASS(ideam::godot_ext::MetadataTaskGraphNode);
+        
+        GDREGISTER_CLASS(ideam::godot_ext::QueryTaskResource);
+        GDREGISTER_CLASS(ideam::godot_ext::QueryTaskGraphNode);
 
-		GDREGISTER_CLASS(ideam::godot_ext::TransformTaskResource);
-		GDREGISTER_CLASS(ideam::godot_ext::TransformTaskGraphNode);
+        GDREGISTER_CLASS(ideam::godot_ext::TransformTaskResource);
+        GDREGISTER_CLASS(ideam::godot_ext::TransformTaskGraphNode);
 
-		GDREGISTER_CLASS(ideam::godot_ext::SubGraphTaskResource);
-		GDREGISTER_CLASS(ideam::godot_ext::SubGraphTaskGraphNode);
+        GDREGISTER_CLASS(ideam::godot_ext::SubGraphTaskResource);
+        GDREGISTER_CLASS(ideam::godot_ext::SubGraphTaskGraphNode);
 
-		GDREGISTER_CLASS(ideam::godot_ext::EntryFillTaskResource);
-		GDREGISTER_CLASS(ideam::godot_ext::EntryFillTaskGraphNode);
+        GDREGISTER_CLASS(ideam::godot_ext::EntryFillTaskResource);
+        GDREGISTER_CLASS(ideam::godot_ext::EntryFillTaskGraphNode);
 
-		// --- Narratives ---
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
+        // --- Narratives ---
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::Narreme);
 
-		GDREGISTER_CLASS(ideam::godot_ext::Narrative);
-		GDREGISTER_CLASS(ideam::godot_ext::Character);
-		GDREGISTER_CLASS(ideam::godot_ext::Location);
-		GDREGISTER_CLASS(ideam::godot_ext::Prop);
-		GDREGISTER_CLASS(ideam::godot_ext::Incident);
-		GDREGISTER_CLASS(ideam::godot_ext::Plot);
+        GDREGISTER_CLASS(ideam::godot_ext::Narrative);
+        GDREGISTER_CLASS(ideam::godot_ext::Character);
+        GDREGISTER_CLASS(ideam::godot_ext::Location);
+        GDREGISTER_CLASS(ideam::godot_ext::Prop);
+        GDREGISTER_CLASS(ideam::godot_ext::Incident);
+        GDREGISTER_CLASS(ideam::godot_ext::Plot);
 
-		// --- Narrative Helper Classes ---
-		GDREGISTER_CLASS(ideam::godot_ext::Relationship);
-		GDREGISTER_CLASS(ideam::godot_ext::Incident_Condition);
-		GDREGISTER_CLASS(ideam::godot_ext::Causal_Condition);
-		GDREGISTER_CLASS(ideam::godot_ext::Gameplay_Condition);
-		GDREGISTER_CLASS(ideam::godot_ext::Narrative_Condition);
-		GDREGISTER_CLASS(ideam::godot_ext::Plot_Event);
+        // --- Narrative Helper Classes ---
+        GDREGISTER_CLASS(ideam::godot_ext::Relationship);
+        GDREGISTER_CLASS(ideam::godot_ext::Incident_Condition);
+        GDREGISTER_CLASS(ideam::godot_ext::Causal_Condition);
+        GDREGISTER_CLASS(ideam::godot_ext::Gameplay_Condition);
+        GDREGISTER_CLASS(ideam::godot_ext::Narrative_Condition);
+        GDREGISTER_CLASS(ideam::godot_ext::Plot_Event);
 
-		// --- Games ---
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::GameEntity);
-		
-		GDREGISTER_CLASS(ideam::godot_ext::GameHub);
-		GDREGISTER_CLASS(ideam::godot_ext::Game);
-		GDREGISTER_CLASS(ideam::godot_ext::GamePlayer);
-		GDREGISTER_CLASS(ideam::godot_ext::GamePlayerProfile);
-		GDREGISTER_CLASS(ideam::godot_ext::GamePlayerManager);
-		GDREGISTER_CLASS(ideam::godot_ext::GameBoard);
-		GDREGISTER_CLASS(ideam::godot_ext::GameAgent);
-		GDREGISTER_CLASS(ideam::godot_ext::GameAgentAction);
-		GDREGISTER_CLASS(ideam::godot_ext::GamePiece);
-		GDREGISTER_CLASS(ideam::godot_ext::GamePieceAction);
-		GDREGISTER_CLASS(ideam::godot_ext::GameInteraction);
+        // --- Games ---
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::GameEntity);
+        
+        GDREGISTER_CLASS(ideam::godot_ext::GameHub);
+        GDREGISTER_CLASS(ideam::godot_ext::Game);
+        GDREGISTER_CLASS(ideam::godot_ext::GamePlayer);
+        GDREGISTER_CLASS(ideam::godot_ext::GamePlayerProfile);
+        GDREGISTER_CLASS(ideam::godot_ext::GamePlayerManager);
+        GDREGISTER_CLASS(ideam::godot_ext::GameBoard);
+        GDREGISTER_CLASS(ideam::godot_ext::GameAgent);
+        GDREGISTER_CLASS(ideam::godot_ext::GameAgentAction);
+        GDREGISTER_CLASS(ideam::godot_ext::GamePiece);
+        GDREGISTER_CLASS(ideam::godot_ext::GamePieceAction);
+        GDREGISTER_CLASS(ideam::godot_ext::GameInteraction);
 
-		// --- Games UI ---
-		GDREGISTER_CLASS(ideam::godot_ext::GameHubUI);
-		GDREGISTER_CLASS(ideam::godot_ext::GameMenu);
-		GDREGISTER_CLASS(ideam::godot_ext::GameOptionsMenu);
-		GDREGISTER_CLASS(ideam::godot_ext::GamePauseMenu);
-		GDREGISTER_CLASS(ideam::godot_ext::ChapterSelect);
+        // --- Games UI ---
+        GDREGISTER_CLASS(ideam::godot_ext::GameHubUI);
+        GDREGISTER_CLASS(ideam::godot_ext::GameMenu);
+        GDREGISTER_CLASS(ideam::godot_ext::GameOptionsMenu);
+        GDREGISTER_CLASS(ideam::godot_ext::GamePauseMenu);
+        GDREGISTER_CLASS(ideam::godot_ext::ChapterSelect);
 
-		GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionTool);
-		GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionSequencer);
+        GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionTool);
+        GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionSequencer);
 
-		// --- Native Task Registration ---
-		NativeTaskRegistry::init();
-		
-	}
+        // --- Native Task Registration ---
+        IdeamTaskRegistry::init();
+    }
 
-	// ========================================================================
-	// EDITOR LEVEL
-	// ========================================================================
-	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-		
-		// Ecosystem Base Classes - Registered as Abstract to expose API but block direct instantiation
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorPlugin);
-		GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorInspectorPlugin);
-		
+    // ========================================================================
+    // EDITOR LEVEL
+    // ========================================================================
+    if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
+        
+        // Ecosystem Base Classes - Registered as Abstract to expose API but block direct instantiation
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorPlugin);
+        GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamEditorInspectorPlugin);
+        
         // Graph tooling
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphInspector);
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphsPlugin);
+        GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphInspector);
+        GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphsPlugin);
 
-		// Memory tooling
-		GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphInspector);
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamMemoryPlugin);
+        // Memory tooling
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphInspector);
+        GDREGISTER_CLASS(ideam::godot_ext::IdeamMemoryPlugin);
 
-		// Tasks tooling
-		GDREGISTER_CLASS(ideam::godot_ext::TaskGraphInspector);
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamTasksPlugin);
+        // Tasks tooling
+        GDREGISTER_CLASS(ideam::godot_ext::TaskGraphInspector);
+        GDREGISTER_CLASS(ideam::godot_ext::IdeamTasksPlugin);
 
-		// --- Games Editors ---
-		GDREGISTER_CLASS(ideam::godot_ext::GameAgentEditorInspectorPlugin);
-		GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionEditorInspectorPlugin);
-		GDREGISTER_CLASS(ideam::godot_ext::IdeamGamesPlugin);
-	}
+        // --- Games Editors ---
+        GDREGISTER_CLASS(ideam::godot_ext::GameAgentEditorInspectorPlugin);
+        GDREGISTER_CLASS(ideam::godot_ext::GameAgentActionEditorInspectorPlugin);
+        GDREGISTER_CLASS(ideam::godot_ext::IdeamGamesPlugin);
+    }
 }
 
 void uninitialize_ideam_core_module(ModuleInitializationLevel p_level) {
-	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-		// Flush the static factories and dictionaries to prevent Godot memory leak warnings on exit
-		NativeTaskRegistry::cleanup();
-	}
+    if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
+        // Flush the static factories and dictionaries to prevent Godot memory leak warnings on exit
+        IdeamTaskRegistry::cleanup();
+    }
 
-	if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
-		
-	}
+    if (p_level == MODULE_INITIALIZATION_LEVEL_EDITOR) {
+        
+    }
 }
 
 extern "C" {
 // Initialization.
 GDExtensionBool GDE_EXPORT ideam_core_library_init(GDExtensionInterfaceGetProcAddress p_get_proc_address, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
-	godot::GDExtensionBinding::InitObject init_obj(p_get_proc_address, p_library, r_initialization);
+    godot::GDExtensionBinding::InitObject init_obj(p_get_proc_address, p_library, r_initialization);
 
-	init_obj.register_initializer(initialize_ideam_core_module);
-	init_obj.register_terminator(uninitialize_ideam_core_module);
-	
-	// We set minimum level to SCENE, but our initialization function handles both SCENE and EDITOR
-	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
+    init_obj.register_initializer(initialize_ideam_core_module);
+    init_obj.register_terminator(uninitialize_ideam_core_module);
+    
+    // We set minimum level to SCENE, but our initialization function handles both SCENE and EDITOR
+    init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
 
-	return init_obj.init();
+    return init_obj.init();
 }
 }

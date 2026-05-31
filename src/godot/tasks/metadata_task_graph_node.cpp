@@ -1,6 +1,6 @@
 #include "metadata_task_graph_node.h"
 #include "../../core/tasks/registration/metadata_task_registry.h"
-#include "../../core/tasks/registration/native_task_registry.h"
+#include "../../core/tasks/registration/ideam_task_registry.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/variant/packed_int64_array.hpp>
@@ -57,7 +57,7 @@ void MetadataTaskGraphNode::_rebuild_dynamic_ui() {
     // 5. Run initial guardrail evaluation to prune invalid combos
     _update_matrix_guardrails();
 
-    Dictionary matrix = core::NativeTaskRegistry::get_ui_metadata_matrix();
+    Dictionary matrix = core::IdeamTaskRegistry::get_ui_metadata_matrix();
     String logic_str = String::num_int64(get_logic_id());
     
     if (matrix.has(logic_str)) {
@@ -82,7 +82,7 @@ uint64_t MetadataTaskGraphNode::_calculate_flat_index() const {
 void MetadataTaskGraphNode::_update_matrix_guardrails() {
     if (!view_dropdown || !strategy_dropdown || !type_dropdown) return;
 
-    Dictionary matrix = core::NativeTaskRegistry::get_ui_metadata_matrix();
+    Dictionary matrix = core::IdeamTaskRegistry::get_ui_metadata_matrix();
     String logic_str = String::num_int64(get_logic_id());
     
     if (!matrix.has(logic_str)) return;
@@ -168,7 +168,7 @@ void MetadataTaskGraphNode::_on_type_selected(int p_index) {
         emit_property_changed(StringName("type_id"), p_index);
     }
     
-    Dictionary matrix = core::NativeTaskRegistry::get_ui_metadata_matrix();
+    Dictionary matrix = core::IdeamTaskRegistry::get_ui_metadata_matrix();
     String logic_str = String::num_int64(get_logic_id());
     
     if (matrix.has(logic_str)) {

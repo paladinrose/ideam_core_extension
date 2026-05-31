@@ -11,11 +11,7 @@ using namespace godot;
 
 namespace ideam::godot_ext {
 
-enum ContextMenuIDs {
-    MENU_SPAWN_NODE_START = 100,
-    MENU_CREATE_GROUP = 10,
-    MENU_REMOVE_GROUP = 11
-};
+
 
 IdeamGraphEdit::IdeamGraphEdit() {
 }
@@ -194,6 +190,13 @@ void IdeamGraphEdit::_popup_select(int p_id) {
                 
                 current_blueprint->action_create_group(group_res);
             }
+        } else if (p_id == MENU_REMOVE_GROUP) {
+            if(current_blueprint.is_valid()) {
+                // This example assumes you have logic to determine which group is under the cursor
+                // You would need to implement hit detection against group frames to find the correct group_id
+                StringName group_id_to_remove = "some_logic_to_find_group_under_cursor";
+                current_blueprint->action_remove_group(group_id_to_remove);
+            }
         } else if (p_id >= MENU_SPAWN_NODE_START) {
             _spawn_node_by_type(p_id - MENU_SPAWN_NODE_START);
         }
@@ -308,7 +311,7 @@ void IdeamGraphEdit::_on_blueprint_changed() {
         IdeamGraphNode* ign = Object::cast_to<IdeamGraphNode>(existing_node);
 
         if (ign) {
-            ign->initialize(n_res);
+            ign->update_from_resource(n_res);
             
         } else {
             ign = _create_graph_node(n_res);

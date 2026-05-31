@@ -282,7 +282,13 @@ godot::Ref<MemoryGrantResource> MemoryManagerResource::request_emulated_grant(co
     // Check if the linter appended any errors to our newly minted grant during validation.
     if (!new_grant->is_emulated_valid()) { 
         UtilityFunctions::print_rich("[color=yellow]Memory Warning: Requested emulated grant failed linting validations.[/color]");
+        UtilityFunctions::print_rich("[color=orange]Part Count: " + String::num_int64(new_grant->get_configured_parts().size()) + "[/color]");
+        UtilityFunctions::print_rich("[color=orange]Capacity Mode: "  + String::num_int64(new_grant->get_capacity_mode()) + "[/color]");
         
+        PackedStringArray errors = new_grant->get_emulation_errors();
+        for (int i = 0; i < errors.size(); ++i) {
+            UtilityFunctions::print_rich("[color=orange] - " + errors[i] + "[/color]");
+        }
         // If it failed systemic validation rules, remove it from our active simulation tracking pool
         int tracking_idx = active_emulated_grants.find(new_grant);
         if (tracking_idx != -1) {

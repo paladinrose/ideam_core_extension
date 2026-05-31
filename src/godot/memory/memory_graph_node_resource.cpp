@@ -34,7 +34,12 @@ void MemoryGraphNodeResource::set_derivation_mode(int p_mode) {
 }
 int MemoryGraphNodeResource::get_derivation_mode() const { return static_cast<int>(derivation_mode); }
 
-void MemoryGraphNodeResource::set_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) { memory_grant = p_grant; }
+void MemoryGraphNodeResource::set_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) 
+{ 
+    memory_grant = p_grant; 
+    godot::UtilityFunctions::print("MemoryGraphNodeResource: Memory grant set to ", memory_grant.is_valid() ? memory_grant->get_grant_name() : "null");
+}
+
 godot::Ref<MemoryGrantResource> MemoryGraphNodeResource::get_memory_grant() const { return memory_grant; }
 
 bool MemoryGraphNodeResource::validate_for_compilation() const {

@@ -8,32 +8,45 @@ std::array<const QueryTaskRegistry::SubMatrix*, QueryTaskRegistry::L_COUNT> Quer
 godot::Dictionary* QueryTaskRegistry::ui_query_matrix = nullptr;
 
 namespace { // TU Firewall
-    // --- C++20 Fold Expression Auto-Registration ---
+    // --- Execution Routing (Fast Path) ---
     template <size_t... Is>
-    void init_all_sub_registries(std::index_sequence<Is...>) {
-        (QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::init(), ...);
+    void init_routing_all_sub_registries(std::index_sequence<Is...>) {
+        (QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::init_execution_routing(), ...);
         ((QueryTaskRegistry::logic_matrices[Is] = &QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::factories), ...);
     }
 
     template <size_t... Is>
-    void cleanup_all_sub_registries(std::index_sequence<Is...>) {
-        (QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::cleanup(), ...);
+    void cleanup_routing_all_sub_registries(std::index_sequence<Is...>) {
+        (QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::cleanup_execution_routing(), ...);
+    }
+
+    // --- UI Matrices (Heavy Path) ---
+    template <size_t... Is>
+    void generate_ui_all_sub_registries(std::index_sequence<Is...>) {
+        (QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::generate_ui_matrices(), ...);
     }
 } // namespace
 
-void QueryTaskRegistry::init() {
+void QueryTaskRegistry::init_execution_routing() {
+    // Compiles into consecutive fast-path init calls and pointer assignments
+    init_routing_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+}
+
+void QueryTaskRegistry::cleanup_execution_routing() {
+    cleanup_routing_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    logic_matrices.fill(nullptr);
+}
+
+void QueryTaskRegistry::generate_ui_matrices() {
     if (!ui_query_matrix) {
         ui_query_matrix = new godot::Dictionary();
     }
     
-    // Compiles into 24 consecutive init() calls and pointer assignments
-    init_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    // Rips through valid template permutations to build the Godot Inspector UI
+    generate_ui_all_sub_registries(std::make_index_sequence<L_COUNT>{});
 }
 
-void QueryTaskRegistry::cleanup() {
-    cleanup_all_sub_registries(std::make_index_sequence<L_COUNT>{});
-    logic_matrices.fill(nullptr);
-
+void QueryTaskRegistry::cleanup_ui_matrices() {
     if (ui_query_matrix) {
         delete ui_query_matrix;
         ui_query_matrix = nullptr;

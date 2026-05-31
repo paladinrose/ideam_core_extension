@@ -1,14 +1,15 @@
 #pragma once
 
 #include "../i_native_task.h"
-#include "../../memory/memory_common.h"     // For DataType
-#include "../../memory/memory_buffer_pod.h" // For BufferLayoutType
+#include "../../memory/memory_common.h"           // For DataType
+#include "../../memory/memory_buffer_pod.h"       // For BufferLayoutType
 #include "../../memory/views/view_traits.h"       // For ViewStrategies and ViewCapability
 
 #include "../../../godot/tasks/task_resource.h" 
 #include "../../../godot/tasks/task_graph_node.h" 
+#include "task_manifest.h"
 
-// --- Centralized Enums & Traits (Required by Sub-Registries) ---
+#include <godot_cpp/core/object.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -98,7 +99,6 @@ template <> struct NativeMemoryTraits<MemoryTypes::VECTOR4D> { using ConcreteTyp
 template <> struct NativeMemoryTraits<MemoryTypes::COLOR> { using ConcreteType = godot::Color; static constexpr DataType DataFlag = DataType::COLOR; };
 template <> struct NativeMemoryTraits<MemoryTypes::CUSTOM> { using ConcreteType = void*; static constexpr DataType DataFlag = DataType::CUSTOM; };
 
-
 struct TaskUIFactories {
     std::function<godot::Ref<godot_ext::TaskResource>()> resource_factory;
     std::function<godot_ext::TaskGraphNode*()> node_factory;
@@ -106,73 +106,79 @@ struct TaskUIFactories {
 
 using NativeTaskFactory = std::function<std::unique_ptr<INativeTask>()>;
 
-class NativeTaskRegistry {
-private:
-    // Only retains tasks that require dynamic/hashed lookups (e.g., manual overrides or entry tasks)
-    static godot::HashMap<godot::StringName, NativeTaskFactory>* manual_factories;
-    
-    // The structural manifest for Godot UI
-    static godot::Dictionary* ui_utility_matrix;
+class IdeamTaskRegistry : public godot::Object {
+    GDCLASS(IdeamTaskRegistry, godot::Object)
 
-    // Add a fast C++ map for instantiation
-    static godot::HashMap<godot::StringName, TaskUIFactories>* ui_factories;
+private:
+    // Global Singleton Reference
+    static IdeamTaskRegistry* singleton;
+
+    // Runtime C++ Memory Allocation (Not Serialized)
+    godot::HashMap<godot::StringName, NativeTaskFactory> manual_factories;
+    godot::HashMap<godot::StringName, TaskUIFactories> ui_factories;
+
+    // Temporary storage for utility definitions pending bake
+    godot::Dictionary pending_utility_matrix;
+
+    // Active loaded manifest
+    godot::Ref<TaskManifest> active_manifest;
+
+protected:
+    static void _bind_methods();
 
 public:
+    IdeamTaskRegistry() = default;
+    ~IdeamTaskRegistry() = default;
+
     // --- Lifecycle Management ---
     static void init();
     static void cleanup();
 
+    // --- Singleton Accessors ---
+    static IdeamTaskRegistry* get_singleton() { return singleton; }
+
+    // --- Task Baking ---
+    void bake_manifest();
+
+    // --- Active Manifest Access ---
+    godot::Ref<TaskManifest> get_active_manifest() const { return active_manifest; }
+    int get_manifest_version() const;
+
     // --- Dynamic Creation for Manual Tasks ---
-    [[nodiscard]] static std::unique_ptr<INativeTask> create(const godot::StringName& p_name);
+    [[nodiscard]] std::unique_ptr<INativeTask> create(const godot::StringName& p_name);
+    godot::HashMap<godot::StringName, TaskUIFactories>* get_ui_factories() { return &ui_factories; }
 
-    static godot::HashMap<godot::StringName, TaskUIFactories>* get_ui_factories() { return ui_factories; }
-
-    // --- Variadic Registration (Added Resource and GraphNode template constraints) ---
+    // --- Variadic Registration ---
     template <typename T_Task, typename T_Resource, typename T_Node, typename... Args>
-    static void register_task(const godot::StringName& p_name, Args... args) {
-        if (!manual_factories) return; 
-
-        // 1. Register Execution Strategy
-        (*manual_factories)[p_name] = [args...]() -> std::unique_ptr<INativeTask> {
+    void register_task(const godot::StringName& p_name, Args... args) {
+        // 1. Register Execution Strategy (Memory)
+        manual_factories[p_name] = [args...]() -> std::unique_ptr<INativeTask> {
             return std::make_unique<T_Task>(args...);
         };
 
-        // 2. Register UI Presentation Data
-        if (ui_utility_matrix) {
-            godot::Dictionary task_def;
-            
-            // Storing the static class name references allows for generic dynamic spawning in the editor
-            task_def["resource_class"] = T_Resource::get_class_static();
-            task_def["node_class"] = T_Node::get_class_static();
-            
-            // Manual tasks (like SubGraphTask) generally handle layout routing internally 
-            // or perform structural operations. By omitting the "valid_combinations" key, 
-            // we implicitly signal to TaskGraphEdit that this node bypasses the strict 
-            // hardware-layout filter and should always be available in the Utility menu.
-            
-            (*ui_utility_matrix)[p_name] = task_def;
-        }
+        // Capture type-safe instantiation closures (Memory)
+        ui_factories[p_name] = {
+            []() -> godot::Ref<godot_ext::TaskResource> {
+                godot::Ref<T_Resource> res;
+                res.instantiate();
+                return res;
+            },
+            []() -> godot_ext::TaskGraphNode* {
+                return memnew(T_Node); 
+            }
+        };
 
-        // Capture type-safe instantiation closures
-        if (ui_factories) {
-            (*ui_factories)[p_name] = {
-                []() -> godot::Ref<godot_ext::TaskResource> {
-                    godot::Ref<T_Resource> res;
-                    res.instantiate(); // Safely calls memnew() and sets initial ref count to 1
-                    return res;
-                },
-                []() -> godot_ext::TaskGraphNode* {
-                    return memnew(T_Node); // Direct heap allocation, no reflection overhead
-                }
-            };
-        }
+        // 2. Register UI Presentation Data (Cached until bake)
+        godot::Dictionary task_def;
+        task_def["resource_class"] = T_Resource::get_class_static();
+        task_def["node_class"] = T_Node::get_class_static();
+        pending_utility_matrix[p_name] = task_def;
     }
-    
-    // --- Legacy Godot Accessors (Routing directly to specialized registries to avoid state duplication) ---
+
+    // --- Legacy Godot Accessors (Routes to Singleton) ---
     static godot::Dictionary get_ui_query_matrix();
     static godot::Dictionary get_ui_transform_matrix();
     static godot::Dictionary get_ui_metadata_matrix();
-    static godot::Dictionary get_ui_simulation_matrix();
     static godot::Dictionary get_ui_utility_matrix();
 };
 

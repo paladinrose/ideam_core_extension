@@ -110,6 +110,8 @@ void GrantRequestWindow::_on_remove_part_pressed(Node* p_row_container) {
 void GrantRequestWindow::_on_confirmed() {
     // The dialog automatically hides itself when confirmed is triggered, 
     // so we just harvest the selections and emit our downstream pipeline payload.
+
+    godot::UtilityFunctions::print("GrantRequestWindow confirmed.");
     PackedInt32Array selected_ids;
     selected_ids.resize(active_option_buttons.size());
 

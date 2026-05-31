@@ -67,6 +67,12 @@ public:
     IdeamGraphEdit();
     virtual ~IdeamGraphEdit() override;
 
+    enum ContextMenuIDs {
+        MENU_SPAWN_NODE_START = 100,
+        MENU_CREATE_GROUP = 10,
+        MENU_REMOVE_GROUP = 11
+    };
+    
     void _ready() override;
     
     // Public entry point for nodes to request a context menu

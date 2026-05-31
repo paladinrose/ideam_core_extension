@@ -52,6 +52,8 @@ protected:
     bool is_context_hovered = false;
     bool is_updating_theme = false;
     
+    bool ui_built = false;
+
     // Internal trackers for logical port access control
     std::map<int, PortState> left_port_states;
     std::map<int, PortState> right_port_states;
@@ -98,6 +100,11 @@ public:
      * @brief Initializes or updates the node's visual state directly from the strong Resource type.
      */
     void initialize(const godot::Ref<IdeamGraphNodeResource>& p_node_res);
+
+    /**
+     * @brief Updates only mutable data-driven properties without altering structural child components.
+     */
+    void update_from_resource(const godot::Ref<IdeamGraphNodeResource>& p_node_res);
 
     // Direct access to the authoritative model
     godot::Ref<IdeamGraphNodeResource> get_node_resource() const { return node_resource; }

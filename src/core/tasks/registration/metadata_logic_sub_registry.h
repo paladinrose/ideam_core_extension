@@ -111,21 +111,27 @@ template <MetadataLogicID L>
 struct MetadataLogicSubRegistry {
     static std::array<MetadataTaskFactoryFn, MetadataTaskRegistry::SUB_MATRIX_SIZE> factories;
 
-    static void init() {
-        _fill_matrix(std::make_index_sequence<MetadataTaskRegistry::SUB_MATRIX_SIZE>{});
+    // Fast-path: Instantiates C++ function pointers for runtime execution
+    static void init_execution_routing() {
+        _fill_matrix<false>(std::make_index_sequence<MetadataTaskRegistry::SUB_MATRIX_SIZE>{});
     }
 
-    static void cleanup() {
+    static void cleanup_execution_routing() {
         factories.fill(nullptr);
     }
 
-private:
-    template <size_t... Indices>
-    static void _fill_matrix(std::index_sequence<Indices...>) {
-        (_fill_single<Indices>(), ...);
+    // Heavy-path: Allocates Godot Dictionaries for the Editor UI
+    static void generate_ui_matrices() {
+        _fill_matrix<true>(std::make_index_sequence<MetadataTaskRegistry::SUB_MATRIX_SIZE>{});
     }
 
-    template <size_t FlatIdx>
+private:
+    template <bool BuildUI, size_t... Indices>
+    static void _fill_matrix(std::index_sequence<Indices...>) {
+        (_fill_single<BuildUI, Indices>(), ...);
+    }
+
+    template <bool BuildUI, size_t FlatIdx>
     static void _fill_single() {
         constexpr size_t T_COUNT = MetadataTaskRegistry::T_COUNT;
         constexpr size_t S_COUNT = MetadataTaskRegistry::S_COUNT;
@@ -179,28 +185,31 @@ private:
 
         // --- FACTORY GENERATION ---
         if constexpr (is_fully_valid) {
-            factories[FlatIdx] = []() -> INativeTask* {
-                return new MetadataTask<L_Type, V_Type, T_Strategy>();
-            };
+            if constexpr (!BuildUI) {
+                // Hot-Path Execution Routing
+                factories[FlatIdx] = []() -> INativeTask* {
+                    return new MetadataTask<L_Type, V_Type, T_Strategy>();
+                };
+            } else {
+                // Cold-Path UI Collection
+                if (MetadataTaskRegistry::ui_metadata_matrix) {
+                    godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
+                    
+                    if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_key)) {
+                        godot::Dictionary dict;
+                        // Instantiate the property array exactly once per logic struct type
+                        dict["properties"] = L_Type::get_ui_properties();
+                        dict["valid_combinations"] = godot::PackedInt64Array(); 
+                        (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key] = dict;
+                    }
 
-            // Cold-Path UI Collection
-            if (MetadataTaskRegistry::ui_metadata_matrix) {
-                godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
-                
-                if (!MetadataTaskRegistry::ui_metadata_matrix->has(logic_key)) {
-                    godot::Dictionary dict;
-                    // Instantiate the property array exactly once per logic struct type
-                    dict["properties"] = L_Type::get_ui_properties();
-                    dict["valid_combinations"] = godot::PackedInt64Array(); 
-                    (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key] = dict;
+                    // Map this valid 3D configuration hash (FlatIdx) so the UI knows it's an allowed permutation
+                    godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key];
+                    godot::PackedInt64Array combos = dict["valid_combinations"];
+                    combos.push_back(static_cast<int64_t>(FlatIdx));
+                    dict["valid_combinations"] = combos; 
+                    (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key] = dict; 
                 }
-
-                // Map this valid 3D configuration hash (FlatIdx) so the UI knows it's an allowed permutation
-                godot::Dictionary dict = (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key];
-                godot::PackedInt64Array combos = dict["valid_combinations"];
-                combos.push_back(static_cast<int64_t>(FlatIdx));
-                dict["valid_combinations"] = combos; 
-                (*MetadataTaskRegistry::ui_metadata_matrix)[logic_key] = dict; 
             }
         }
     }

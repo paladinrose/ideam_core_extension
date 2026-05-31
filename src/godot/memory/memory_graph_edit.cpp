@@ -17,7 +17,7 @@ void MemoryGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_memory_request_connect", "from_node", "from_port", "to_node", "to_port"), &MemoryGraphEdit::_memory_request_connect);
     ClassDB::bind_method(D_METHOD("_on_connection_to_empty", "from_node", "from_port", "release_position"), &MemoryGraphEdit::_on_connection_to_empty);
     ClassDB::bind_method(D_METHOD("_on_node_memory_grant_requested", "node"), &MemoryGraphEdit::_on_node_memory_grant_requested);
-    ClassDB::bind_method(D_METHOD("grant_request_window_payload_submitted", "node_name", "buffer_ids"), &MemoryGraphEdit::_on_grant_window_payload_submitted);
+    ClassDB::bind_method(D_METHOD("_on_grant_window_payload_submitted", "node_name", "buffer_ids"), &MemoryGraphEdit::_on_grant_window_payload_submitted);
     
 }
 
@@ -451,6 +451,7 @@ void MemoryGraphEdit::_on_node_memory_grant_requested(godot::Object* p_node) {
 
 // The target callback that catches the data payload when the user clicks "Request Grant"
 void MemoryGraphEdit::_on_grant_window_payload_submitted(const StringName& p_node_name, const PackedInt32Array& p_buffer_ids) {
+    godot::UtilityFunctions::print("Received grant request submission for node: ", p_node_name);
     Node* target_node = get_node_or_null(NodePath(p_node_name));
     MemoryGraphNode* memory_node = Object::cast_to<MemoryGraphNode>(target_node);
     if (!memory_node) return;
@@ -466,6 +467,7 @@ void MemoryGraphEdit::_on_grant_window_payload_submitted(const StringName& p_nod
 
     // 2. Evaluate the result token
     if (compiled_grant.is_valid()) {
+        godot::UtilityFunctions::print("Compiled Grant is valid.");
         // Apply the newly authenticated configuration layout directly to the node resource
         memory_node->receive_memory_grant(compiled_grant);
         
@@ -479,6 +481,8 @@ void MemoryGraphEdit::_on_grant_window_payload_submitted(const StringName& p_nod
         memory_node->queue_redraw();
         
         UtilityFunctions::print_rich("[color=red]Failed to assign Grant to node " + String(p_node_name) + ": Validation Constraint Violation.[/color]");
+
+        
     }
 }
 
@@ -488,14 +492,9 @@ void MemoryGraphEdit::_on_connection_to_empty(const godot::StringName &p_from_no
     drag_source_port = p_from_port;
     
     // Cache screen coordinates for placement calculations
-    popup_position = p_release_position; 
+    memory_popup_position = p_release_position; 
     
-    // Call down to your existing base implementation popup system (e.g., filtered_popup->popup())
-    // For now, it stays empty awaiting your menu structure.
+    _show_popup(p_release_position);
 }
-
-
-
-TypedArray<String> MemoryGraphEdit::_get_filtered_node_types(uint32_t p_filter_mask) const { return TypedArray<String>(); }
 
 } // namespace ideam::godot_ext
