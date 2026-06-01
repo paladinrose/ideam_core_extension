@@ -5,7 +5,6 @@
 namespace ideam::core {
 
 std::array<const QueryTaskRegistry::SubMatrix*, QueryTaskRegistry::L_COUNT> QueryTaskRegistry::logic_matrices = {};
-godot::Dictionary QueryTaskRegistry::ui_query_matrix;
 
 namespace { // TU Firewall
     // --- Execution Routing (Fast Path) ---
@@ -22,8 +21,8 @@ namespace { // TU Firewall
 
     // --- UI Matrices (Heavy Path) ---
     template <size_t... Is>
-    void generate_ui_all_sub_registries(std::index_sequence<Is...>) {
-        (QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::generate_ui_matrices(), ...);
+    void generate_ui_all_sub_registries(godot::Dictionary& p_matrix, std::index_sequence<Is...>) {
+        (QueryLogicSubRegistry<static_cast<QueryLogicID>(Is)>::generate_ui_matrices(p_matrix), ...);
     }
 } // namespace
 
@@ -37,16 +36,13 @@ void QueryTaskRegistry::cleanup_execution_routing() {
     logic_matrices.fill(nullptr);
 }
 
-void QueryTaskRegistry::generate_ui_matrices() {
-    ui_query_matrix.clear();
-    
+void QueryTaskRegistry::generate_ui_matrices(godot::Dictionary& p_matrix) {
+  
     // Rips through valid template permutations to build the Godot Inspector UI
-    generate_ui_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    generate_ui_all_sub_registries(p_matrix, std::make_index_sequence<L_COUNT>{});
 }
 
-void QueryTaskRegistry::cleanup_ui_matrices() {
-    ui_query_matrix.clear();
-}
+
 
 // --- The O(1) Dispatcher ---
 std::unique_ptr<INativeTask> QueryTaskRegistry::create(uint32_t p_op_id, uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id) {

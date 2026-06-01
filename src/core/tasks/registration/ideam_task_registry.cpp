@@ -83,21 +83,26 @@ void IdeamTaskRegistry::bake_manifest() {
         return;
     }
 
-    // 1. Trigger the intensive editor-bound UI scraping (Heavy Path)
-    QueryTaskRegistry::generate_ui_matrices();
-    TransformTaskRegistry::generate_ui_matrices();
-    MetadataTaskRegistry::generate_ui_matrices();
+    // 1. Instantiate local dictionaries on the stack
+    godot::Dictionary query_matrix;
+    godot::Dictionary transform_matrix;
+    godot::Dictionary metadata_matrix;
 
-    // 2. Extract out the generated dictionaries to the active manifest resource
-    active_manifest->set_query_matrix(QueryTaskRegistry::ui_query_matrix);
-    active_manifest->set_transform_matrix(TransformTaskRegistry::ui_transform_matrix);
-    active_manifest->set_metadata_matrix(MetadataTaskRegistry::ui_metadata_matrix);
+    // 2. Trigger the intensive editor-bound UI scraping, passing the dictionaries by reference
+    QueryTaskRegistry::generate_ui_matrices(query_matrix);
+    TransformTaskRegistry::generate_ui_matrices(transform_matrix);
+    MetadataTaskRegistry::generate_ui_matrices(metadata_matrix);
+
+    // 3. Extract out the generated dictionaries to the active manifest resource
+    active_manifest->set_query_matrix(query_matrix);
+    active_manifest->set_transform_matrix(transform_matrix);
+    active_manifest->set_metadata_matrix(metadata_matrix);
 
     // Apply the locally cached utility matrix from manual registrations
     active_manifest->set_utility_matrix(pending_utility_matrix);
     active_manifest->set_manifest_version(TaskManifest::CURRENT_MANIFEST_VERSION);
 
-    // 3. Serialize to disk 
+    // 4. Serialize to disk 
     godot::Error err = godot::ResourceSaver::get_singleton()->save(active_manifest, TaskManifest::MANIFEST_PATH);
     
     if (err == godot::OK) {
@@ -106,11 +111,6 @@ void IdeamTaskRegistry::bake_manifest() {
     } else {
         godot::UtilityFunctions::printerr("IdeamTasks: Failed to save Task Manifest!");
     }
-
-    // 4. Safely flush the UI dictionaries to free up Editor RAM
-    QueryTaskRegistry::cleanup_ui_matrices();
-    TransformTaskRegistry::cleanup_ui_matrices();
-    MetadataTaskRegistry::cleanup_ui_matrices();
 }
 
 int IdeamTaskRegistry::get_manifest_version() const {

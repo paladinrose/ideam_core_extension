@@ -275,7 +275,7 @@ GDExtensionBool GDE_EXPORT ideam_core_library_init(GDExtensionInterfaceGetProcAd
     init_obj.register_terminator(uninitialize_ideam_core_module);
     
     // We set minimum level to SCENE, but our initialization function handles both SCENE and EDITOR
-    init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_EDITOR);
+    init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
 
     return init_obj.init();
 }

@@ -5,7 +5,7 @@
 namespace ideam::core {
 
 std::array<const MetadataTaskRegistry::SubMatrix*, MetadataTaskRegistry::L_COUNT> MetadataTaskRegistry::logic_matrices = {};
-godot::Dictionary MetadataTaskRegistry::ui_metadata_matrix;
+
 
 namespace { // Translation Unit Firewall
     // --- Execution Routing (Fast Path) ---
@@ -22,8 +22,8 @@ namespace { // Translation Unit Firewall
 
     // --- UI Matrices (Heavy Path) ---
     template <size_t... Is>
-    void generate_ui_all_sub_registries(std::index_sequence<Is...>) {
-        (MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::generate_ui_matrices(), ...);
+    void generate_ui_all_sub_registries(godot::Dictionary& p_matrix, std::index_sequence<Is...>) {
+        (MetadataLogicSubRegistry<static_cast<MetadataLogicID>(Is)>::generate_ui_matrices(p_matrix), ...);
     }
 } // namespace
 
@@ -37,16 +37,11 @@ void MetadataTaskRegistry::cleanup_execution_routing() {
     logic_matrices.fill(nullptr);
 }
 
-void MetadataTaskRegistry::generate_ui_matrices() {
-    ui_metadata_matrix.clear();
-    
+void MetadataTaskRegistry::generate_ui_matrices(godot::Dictionary& p_matrix) {
     // Rips through valid template permutations to build the Godot Inspector UI
-    generate_ui_all_sub_registries(std::make_index_sequence<L_COUNT>{});
+    generate_ui_all_sub_registries(p_matrix, std::make_index_sequence<L_COUNT>{});
 }
 
-void MetadataTaskRegistry::cleanup_ui_matrices() {
-    ui_metadata_matrix.clear();
-}
 
 // --- The O(1) Dispatcher ---
 std::unique_ptr<INativeTask> MetadataTaskRegistry::create(uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id) {

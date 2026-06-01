@@ -116,7 +116,7 @@ struct TransformLogicSubRegistry {
 
     // Fast-path: Instantiates C++ function pointers for runtime execution
     static void init_execution_routing() {
-        _fill_matrix<false>(std::make_index_sequence<TransformTaskRegistry::SUB_MATRIX_SIZE>{});
+        _fill_matrix<false>(std::make_index_sequence<TransformTaskRegistry::SUB_MATRIX_SIZE>{}, nullptr);
     }
 
     static void cleanup_execution_routing() {
@@ -124,18 +124,18 @@ struct TransformLogicSubRegistry {
     }
 
     // Heavy-path: Allocates Godot Dictionaries for the Editor UI
-    static void generate_ui_matrices() {
-        _fill_matrix<true>(std::make_index_sequence<TransformTaskRegistry::SUB_MATRIX_SIZE>{});
+    static void generate_ui_matrices(godot::Dictionary& p_matrix) {
+        _fill_matrix<true>(std::make_index_sequence<TransformTaskRegistry::SUB_MATRIX_SIZE>{}, &p_matrix);
     }
 
 private:
     template <bool BuildUI, size_t... Indices>
-    static void _fill_matrix(std::index_sequence<Indices...>) {
-        (_fill_single<BuildUI, Indices>(), ...);
+    static void _fill_matrix(std::index_sequence<Indices...>, godot::Dictionary* p_matrix) {
+        (_fill_single<BuildUI, Indices>(p_matrix), ...);
     }
 
     template <bool BuildUI, size_t FlatIdx>
-    static void _fill_single() {
+    static void _fill_single(godot::Dictionary* p_matrix) {
         constexpr size_t T_COUNT = TransformTaskRegistry::T_COUNT;
         constexpr size_t S_COUNT = TransformTaskRegistry::S_COUNT;
 
@@ -195,23 +195,23 @@ private:
                 };
             } else {
                 // Cold-Path UI Collection
-                if (TransformTaskRegistry::ui_transform_matrix) {
+                if (p_matrix) {
                     godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
                     
-                    if (!TransformTaskRegistry::ui_transform_matrix->has(logic_key)) {
+                    if (!p_matrix->has(logic_key)) {
                         godot::Dictionary dict;
                         // Instantiate the property array exactly once per logic struct type
                         dict["properties"] = L_Type::get_ui_properties();
                         dict["valid_combinations"] = godot::PackedInt64Array(); 
-                        (*TransformTaskRegistry::ui_transform_matrix)[logic_key] = dict;
+                        (*p_matrix)[logic_key] = dict;
                     }
 
                     // Map this valid 3D configuration hash (FlatIdx) so the UI knows it's an allowed permutation
-                    godot::Dictionary dict = (*TransformTaskRegistry::ui_transform_matrix)[logic_key];
+                    godot::Dictionary dict = (*p_matrix)[logic_key];
                     godot::PackedInt64Array combos = dict["valid_combinations"];
                     combos.push_back(static_cast<int64_t>(FlatIdx));
                     dict["valid_combinations"] = combos; 
-                    (*TransformTaskRegistry::ui_transform_matrix)[logic_key] = dict; 
+                    (*p_matrix)[logic_key] = dict; 
                 }
             }
         }

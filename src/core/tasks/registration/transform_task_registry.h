@@ -55,7 +55,7 @@ public:
      * }
      * }
      */
-    static godot::Dictionary ui_transform_matrix;
+    //static godot::Dictionary ui_transform_matrix;
 
     // --- Lifecycle Management ---
     
@@ -64,9 +64,8 @@ public:
     static void cleanup_execution_routing();
 
     // Heavy-path: Allocates Godot Dictionaries for the Editor UI (Call ONLY when baking manifest)
-    static void generate_ui_matrices();
-    static void cleanup_ui_matrices();
-
+    static void generate_ui_matrices(godot::Dictionary& p_matrix);
+    
     static std::unique_ptr<INativeTask> create(uint32_t p_logic_id, uint32_t p_view_id, uint32_t p_strategy_id, uint32_t p_type_id);
 };
 
