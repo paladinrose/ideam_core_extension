@@ -37,9 +37,11 @@ void TransformTaskRegistry::cleanup_execution_routing() {
 }
 
 void TransformTaskRegistry::generate_ui_matrices(godot::Dictionary& p_matrix) {
-   
+    IdeamTaskRegistry::log_with_registry("  -> TransformTaskRegistry: Unrolling templates for L_COUNT = " + godot::itos(L_COUNT));
     // Rips through valid template permutations to build the Godot Inspector UI
     generate_ui_all_sub_registries(p_matrix, std::make_index_sequence<L_COUNT>{});
+    IdeamTaskRegistry::log_with_registry("  -> TransformTaskRegistry: Template unrolling complete.");
+    
 }
 
 

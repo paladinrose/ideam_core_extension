@@ -13,6 +13,7 @@
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/classes/file_access.hpp>
 
 #include <memory>
 #include <functional>
@@ -110,6 +111,9 @@ class IdeamTaskRegistry : public godot::Object {
     GDCLASS(IdeamTaskRegistry, godot::Object)
 
 private:
+
+    static godot::Ref<godot::FileAccess> bake_log_file;
+    
     // Global Singleton Reference
     static IdeamTaskRegistry* singleton;
 
@@ -130,6 +134,9 @@ public:
     IdeamTaskRegistry() = default;
     ~IdeamTaskRegistry() = default;
 
+    static void start_bake_log();
+    static void log_with_registry(const godot::String& p_message);
+    static void end_bake_log();
     // --- Lifecycle Management ---
     static void init();
     static void cleanup();

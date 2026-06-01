@@ -24,6 +24,32 @@
 
 namespace ideam::core {
 
+godot::Ref<godot::FileAccess> IdeamTaskRegistry::bake_log_file;
+
+void IdeamTaskRegistry::start_bake_log() {
+    // Opens a text file at the root of your Godot project
+    bake_log_file = godot::FileAccess::open("res://ideam_bake_log.txt", godot::FileAccess::WRITE);
+    if (bake_log_file.is_valid()) {
+        bake_log_file->store_line("=== TASK REGISTRY BAKE LOG START ===");
+    } else {
+        godot::UtilityFunctions::printerr("IdeamTasks: Could not open bake_log.txt for writing.");
+    }
+}
+
+void IdeamTaskRegistry::log_with_registry(const godot::String& p_message) {
+    if (bake_log_file.is_valid()) {
+        bake_log_file->store_line(p_message);
+    }
+}
+
+void IdeamTaskRegistry::end_bake_log() {
+    if (bake_log_file.is_valid()) {
+        bake_log_file->store_line("=== TASK REGISTRY BAKE LOG END ===");
+        bake_log_file->flush();
+        bake_log_file.unref(); // Safely closes the file stream
+    }
+}
+
 IdeamTaskRegistry* IdeamTaskRegistry::singleton = nullptr;
 
 void IdeamTaskRegistry::_bind_methods() {
@@ -78,8 +104,13 @@ void IdeamTaskRegistry::cleanup() {
 }
 
 void IdeamTaskRegistry::bake_manifest() {
+    start_bake_log();
+    log_with_registry("INIT: Starting bake_manifest sequence.");
+
     if (!active_manifest.is_valid()) {
+        log_with_registry("ERROR: Active manifest is invalid. Aborting.");
         godot::UtilityFunctions::printerr("IdeamTasks: Cannot bake manifest. Active manifest is invalid.");
+        end_bake_log();
         return;
     }
 
@@ -90,8 +121,12 @@ void IdeamTaskRegistry::bake_manifest() {
 
     // 2. Trigger the intensive editor-bound UI scraping, passing the dictionaries by reference
     QueryTaskRegistry::generate_ui_matrices(query_matrix);
+    log_with_registry("METRIC: query_matrix size after generation = " + godot::itos(query_matrix.size()));
     TransformTaskRegistry::generate_ui_matrices(transform_matrix);
+    log_with_registry("METRIC: transform_matrix size after generation = " + godot::itos(transform_matrix.size()));
     MetadataTaskRegistry::generate_ui_matrices(metadata_matrix);
+    log_with_registry("METRIC: metadata_matrix size after generation = " + godot::itos(metadata_matrix.size()));
+
 
     // 3. Extract out the generated dictionaries to the active manifest resource
     active_manifest->set_query_matrix(query_matrix);
@@ -103,14 +138,19 @@ void IdeamTaskRegistry::bake_manifest() {
     active_manifest->set_manifest_version(TaskManifest::CURRENT_MANIFEST_VERSION);
 
     // 4. Serialize to disk 
+    log_with_registry("SAVE: Attempting to save manifest to " + godot::String(TaskManifest::MANIFEST_PATH));
     godot::Error err = godot::ResourceSaver::get_singleton()->save(active_manifest, TaskManifest::MANIFEST_PATH);
     
     if (err == godot::OK) {
+        log_with_registry("SUCCESS: Task Manifest baked successfully.");
         godot::UtilityFunctions::print("IdeamTasks: Task Manifest successfully baked!");
         emit_signal("manifest_updated");
     } else {
+        log_with_registry("ERROR: Failed to save Task Manifest. Godot Error Code: " + godot::itos(err));
         godot::UtilityFunctions::printerr("IdeamTasks: Failed to save Task Manifest!");
     }
+
+    end_bake_log();
 }
 
 int IdeamTaskRegistry::get_manifest_version() const {

@@ -152,7 +152,19 @@ struct QueryLogicSubRegistry {
 
     // Heavy-path: Allocates Godot Dictionaries for the Editor UI
     static void generate_ui_matrices(godot::Dictionary& p_matrix) {
+        IdeamTaskRegistry::log_with_registry(godot::vformat("    -> Evaluating LogicID: %d", static_cast<int64_t>(L)));
+        
         _fill_matrix<true>(std::make_index_sequence<QueryTaskRegistry::SUB_MATRIX_SIZE>{}, &p_matrix);
+
+        // POST-EVALUATION METRIC GATHERING
+        godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
+        if (p_matrix.has(logic_key)) {
+            godot::Dictionary dict = p_matrix[logic_key];
+            godot::PackedInt64Array combos = dict["valid_combinations"];
+            IdeamTaskRegistry::log_with_registry(godot::vformat("      -> SUCCESS: LogicID %d appended with %d valid combinations.", static_cast<int64_t>(L), combos.size()));
+        } else {
+            IdeamTaskRegistry::log_with_registry(godot::vformat("      -> FAILURE: LogicID %d resulted in 0 valid combinations. Key not created.", static_cast<int64_t>(L)));
+        }
     }
 
 private:
@@ -231,6 +243,11 @@ private:
             } else {
                 // Cold-Path UI Collection
                 if (p_matrix) {
+
+                    IdeamTaskRegistry::log_with_registry(
+                        godot::vformat("        -> Valid Combo: T=%d, S=%d, V=%d, O=%d (FlatIdx: %d)", T, S, V, O, FlatIdx)
+                    );
+                    
                     godot::StringName logic_key(godot::String::num_int64(static_cast<int64_t>(L)));
                     
                     if (!p_matrix->has(logic_key)) {
