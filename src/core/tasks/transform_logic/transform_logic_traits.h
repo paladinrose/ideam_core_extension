@@ -8,6 +8,7 @@
 #include <type_traits>
 
 #include <godot_cpp/variant/array.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 
 namespace ideam::core {
 

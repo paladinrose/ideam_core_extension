@@ -78,7 +78,7 @@ struct DirectionalQueryLogic {
             target_direction = p_props["target_direction"];
         }
         if (p_props.has("angle_threshold")) {
-            angle_threshold = std::cos(p_props["angle_threshold"]);
+            angle_threshold = std::cos(static_cast<float>(p_props["angle_threshold"]));
         }
     }
     

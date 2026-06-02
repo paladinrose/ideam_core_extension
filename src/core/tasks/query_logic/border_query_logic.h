@@ -42,11 +42,9 @@ struct BorderQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
-    void apply_properties(const godot::Dictionary& p_props) noexcept {
-        // No properties for this logic, but method must be defined to satisfy the interface.
-    }
+    void apply_properties(const godot::Dictionary& p_props) noexcept { }
     
-    template <QueryOp Op, typename T_View, typename T_Strategy>
+    template <QueryOp Op, typename T_View, typename T_StrategyType>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 
                  const T_View& p_view) const {
@@ -62,21 +60,79 @@ struct BorderQueryLogic {
 
 private:
     template <typename T_View>
+    int64_t _get_spatial_neighbor_index(const T_View& p_view, int64_t p_current_idx, uint32_t p_dim, int64_t p_step) const noexcept {
+        const auto& part = p_view.grant->parts[p_view.grant_part_index];
+        const size_t stride = part.element_stride;
+        const int64_t total_elements = static_cast<int64_t>(part.capacity_bytes / stride);
+
+        if constexpr (T_Strategy::dimensions == 1) {
+            int64_t x = p_current_idx + p_step;
+            if (x >= 0 && x < total_elements) return x;
+        } 
+        else if constexpr (T_Strategy::dimensions == 2) {
+            int64_t width = p_view.strategy.stride_y / stride;
+            int64_t x = p_current_idx % width;
+            int64_t y = p_current_idx / width;
+            
+            if (p_dim == 0) x += p_step;
+            else if (p_dim == 1) y += p_step;
+            
+            if (x >= 0 && x < width && y >= 0 && y < (total_elements / width)) {
+                return x + (y * width);
+            }
+        }
+        else if constexpr (T_Strategy::dimensions == 3) {
+            int64_t width = p_view.strategy.stride_y / stride;
+            int64_t height = p_view.strategy.stride_z / p_view.strategy.stride_y;
+            int64_t x = p_current_idx % width;
+            int64_t y = (p_current_idx / width) % height;
+            int64_t z = p_current_idx / (width * height);
+            
+            if (p_dim == 0) x += p_step;
+            else if (p_dim == 1) y += p_step;
+            else if (p_dim == 2) z += p_step;
+            
+            if (x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < (total_elements / (width * height))) {
+                return x + (y * width) + (z * width * height);
+            }
+        }
+        else if constexpr (T_Strategy::dimensions == 4) {
+            int64_t width = p_view.strategy.stride_y / stride;
+            int64_t height = p_view.strategy.stride_z / p_view.strategy.stride_y;
+            int64_t depth = p_view.strategy.stride_w / p_view.strategy.stride_z;
+            int64_t x = p_current_idx % width;
+            int64_t y = (p_current_idx / width) % height;
+            int64_t z = (p_current_idx / (width * height)) % depth;
+            int64_t w = p_current_idx / (width * height * depth);
+            
+            if (p_dim == 0) x += p_step;
+            else if (p_dim == 1) y += p_step;
+            else if (p_dim == 2) z += p_step;
+            else if (p_dim == 3) w += p_step;
+            
+            if (x >= 0 && x < width && y >= 0 && y < height && z >= 0 && z < depth && w >= 0) {
+                return x + (y * width) + (z * width * height) + (w * width * height * depth);
+            }
+        }
+
+        return -1; // Out of bounds
+    }
+
+    template <typename T_View>
     void _cull_sparse(MemoryBufferSelectionPOD& r_selection, const T_View& p_view) const {
         std::vector<int64_t> sorted_indices(r_selection.data.indices, r_selection.data.indices + r_selection.element_count);
         std::sort(sorted_indices.begin(), sorted_indices.end());
 
         int64_t write_ptr = 0;
         const int64_t original_count = r_selection.element_count;
-        const T_Strategy& strategy = p_view.get_strategy();
 
         for (int64_t i = 0; i < original_count; ++i) {
             const int64_t current_idx = r_selection.data.indices[i];
             bool is_border = false;
 
             for (uint32_t d = 0; d < T_Strategy::dimensions; ++d) {
-                for (int32_t step : {-1, 1}) {
-                    int64_t neighbor_idx = strategy.get_neighbor_index(current_idx, d, step);
+                for (int64_t step : {-1LL, 1LL}) {
+                    int64_t neighbor_idx = _get_spatial_neighbor_index(p_view, current_idx, d, step);
 
                     if (neighbor_idx == -1 || !std::binary_search(sorted_indices.begin(), sorted_indices.end(), neighbor_idx)) {
                         is_border = true;
@@ -100,15 +156,14 @@ private:
         std::sort(sorted_indices.begin(), sorted_indices.end());
 
         const int64_t original_count = r_selection.element_count;
-        const T_Strategy& strategy = p_view.get_strategy();
         const uint64_t* unclaimed = r_selection.unclaimed_mask;
 
         for (int64_t i = 0; i < original_count; ++i) {
             const int64_t current_idx = r_selection.data.indices[i];
 
             for (uint32_t d = 0; d < T_Strategy::dimensions; ++d) {
-                for (int32_t step : {-1, 1}) {
-                    int64_t neighbor_idx = strategy.get_neighbor_index(current_idx, d, step);
+                for (int64_t step : {-1LL, 1LL}) {
+                    int64_t neighbor_idx = _get_spatial_neighbor_index(p_view, current_idx, d, step);
 
                     // If neighbor index exists but isn't part of our selection, it's a dilation candidate
                     if (neighbor_idx != -1 && !std::binary_search(sorted_indices.begin(), sorted_indices.end(), neighbor_idx)) {
@@ -125,5 +180,3 @@ private:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_BORDER_QUERY_LOGIC_H

@@ -160,7 +160,7 @@ struct StencilView {
             #endif
         } 
         else {
-            static_assert(sizeof...(Coords) < 0, "Invalid coordinate dimensions for Stencil Strategy!");
+            static_assert(false, "Invalid coordinate dimensions for Stencil Strategy!");
         }
 
         // Update the mutable internal cursor legally

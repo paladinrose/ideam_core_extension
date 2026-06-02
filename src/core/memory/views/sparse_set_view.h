@@ -161,7 +161,8 @@ struct SparseSetView {
             }
         }
         else {
-            static_assert(sizeof...(Coords) < 0, "Invalid coordinate dimensions for SparseSetView Strategy!");
+            static_assert(false, "Invalid coordinate dimensions for SparseSetView Strategy!");
+            //static_assert(sizeof...(Coords) == static_cast<size_t>(-1), "Invalid coordinate dimensions for SparseSetView Strategy!");
         }
     }
 
