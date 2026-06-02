@@ -39,11 +39,6 @@ struct PartitionMetadataLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
-        godot::Dictionary buffer_prop;
-        buffer_prop["name"] = "target_buffer_id";
-        buffer_prop["type"] = godot::Variant::INT;
-        props.push_back(buffer_prop);
-
         godot::Dictionary default_part_prop;
         default_part_prop["name"] = "default_partition";
         default_part_prop["type"] = godot::Variant::INT;
@@ -72,6 +67,25 @@ struct PartitionMetadataLogic {
     }
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
+
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("default_partition")) {
+            default_partition = p_props["default_partition"];
+        }
+        if (p_props.has("mappings")) {
+            godot::Array arr = p_props["mappings"];
+            size_t elements_to_copy = std::min(static_cast<size_t>(arr.size()), N);
+            for (size_t i = 0; i < elements_to_copy; ++i) {
+                godot::Dictionary element = arr[i];
+                if (element.has("source_value")) {
+                    mappings[i].source_value = element["source_value"];
+                }
+                if (element.has("partition_id")) {
+                    mappings[i].partition_id = element["partition_id"];
+                }
+            }
+        }
+    }
 
     template <typename T_View, typename T_Strategy>
     void execute_metadata(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {

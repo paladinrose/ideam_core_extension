@@ -29,14 +29,15 @@ struct GrantPartPOD {
     uint32_t buffer_version_at_issue = 0;
     uint32_t element_stride = 0;         // Size of element (AoS)
     uint32_t column_id = 0;              // Target column (SoA)
-
+    uint32_t capacity_bytes = 0;
+    
     // --- 1-Byte Alignment Block ---
     BufferAccessMode access_mode = BufferAccessMode::READ;
     bool is_contiguous = false;          // SelectionMode::RANGE optimization flag
 
     // --- Explicit Tail Padding ---
-// 6 bytes of padding brings the struct to exactly 128 bytes (2 cache lines).
-uint8_t reserved_padding[6] = {0};
+    // 2 bytes of padding brings the struct to exactly 128 bytes (2 cache lines).
+    uint8_t reserved_padding[2] = {0};
 };
 
 static_assert(sizeof(GrantPartPOD) % 8 == 0, "GrantPartPOD is not properly padded!");

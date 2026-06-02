@@ -640,7 +640,8 @@ bool MemoryManagerDOD::_bake_grant_core(GrantPartPOD* r_parts, uint32_t max_part
             case BufferLayoutType::AOS:
             case BufferLayoutType::TILED_SOA:
                 r_parts[i].raw_base_ptr = buffer_start;
-                r_parts[i].element_stride = buf.element_stride; 
+                r_parts[i].element_stride = buf.element_stride;
+                r_parts[i].capacity_bytes = buf.capacity_bytes; 
                 break;
             case BufferLayoutType::SOA:
             case BufferLayoutType::SPARSE_SET:
@@ -648,19 +649,23 @@ bool MemoryManagerDOD::_bake_grant_core(GrantPartPOD* r_parts, uint32_t max_part
                     if (buf.columns[c].id == req.column_id) {
                         r_parts[i].raw_base_ptr = buffer_start + buf.columns[c].offset;
                         r_parts[i].element_stride = buf.columns[c].type_size;
+                        r_parts[i].capacity_bytes = buf.max_elements * buf.columns[c].type_size;
                         break;
                     }
                 }
                 break;
             case BufferLayoutType::PAGED:
                 r_parts[i].raw_base_ptr = reinterpret_cast<uint8_t*>(buf.extra.paged.table_ptr);
+                r_parts[i].capacity_bytes = buf.extra.paged.page_count * sizeof(uint8_t*);
                 break;
             case BufferLayoutType::RING:
                 r_parts[i].raw_base_ptr = buffer_start + buf.extra.ring.tail_offset;
+                r_parts[i].capacity_bytes = buf.capacity_bytes;
                 break;
             case BufferLayoutType::FLAT:
                 r_parts[i].raw_base_ptr = buffer_start;
                 r_parts[i].element_stride = buf.element_stride;
+                r_parts[i].capacity_bytes = buf.capacity_bytes;
                 break;
             case BufferLayoutType::NONE:
                 break;

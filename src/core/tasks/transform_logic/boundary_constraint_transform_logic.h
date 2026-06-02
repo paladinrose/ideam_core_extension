@@ -70,7 +70,6 @@ struct alignas(64) BoundaryConstraintTransformLogic {
         int_vec_hint["hint"] = godot::PROPERTY_HINT_NONE;
         int_vec_hint["hint_string"] = ""; 
 
-        // Note: Adjust the enums below to match your exact MemoryTypes definitions
         type_hints[static_cast<uint32_t>(MemoryTypes::VECTOR3)] = float_vec_hint;
         type_hints[static_cast<uint32_t>(MemoryTypes::VECTOR3D)] = float_vec_hint;
         type_hints[static_cast<uint32_t>(MemoryTypes::VECTOR3I)]   = int_vec_hint;
@@ -92,8 +91,20 @@ struct alignas(64) BoundaryConstraintTransformLogic {
         return props;
     }
     
-    [[nodiscard]] inline uint32_t get_primary_buffer_id() const { return position_buffer_id; }
+    [[nodiscard]] inline uint32_t get_target_buffer_id() const { return position_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("mode")) {
+            mode = static_cast<BoundaryMode>(static_cast<uint8_t>(p_props["mode"]));
+        }
+        if (p_props.has("bounds_min")) {
+            bounds_min = p_props["bounds_min"];
+        }
+        if (p_props.has("bounds_max")) {
+            bounds_max = p_props["bounds_max"];
+        }
+    }
+    
     template <typename T_View, typename T_Strategy>
     inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {
         const MemoryBufferSelectionPOD* sel = context.get_selection(position_buffer_id);

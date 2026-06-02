@@ -86,6 +86,25 @@ struct ColorRGBAQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("mode")) {
+            mode = static_cast<RgbaMode>(static_cast<uint8_t>(p_props["mode"]));
+        }
+        if (p_props.has("op")) {
+            op = static_cast<Comparison>(static_cast<uint8_t>(p_props["op"]));
+        }
+        if (p_props.has("mask")) {
+            mask = p_props["mask"];
+        }
+        if (p_props.has("threshold")) {
+            threshold = p_props["threshold"];
+            distance_threshold_sq = threshold * threshold; // Update pre-calculated value
+        }
+        if (p_props.has("target_color")) {
+            target_color = p_props["target_color"];
+        }
+    }
+
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

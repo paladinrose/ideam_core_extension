@@ -79,7 +79,7 @@ public:
     }
 
     virtual void execute(const TaskContextPOD& p_context) override {
-        const uint32_t target_id = logic.get_primary_buffer_id();
+        const uint32_t target_id = logic.get_target_buffer_id();
         
         const GrantPartPOD* part = p_context.get_grant_part(target_id);
         if (!part) return; // Silent abort if DAG failed to secure lease

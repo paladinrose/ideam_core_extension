@@ -36,6 +36,12 @@ struct SwapEruptionBridgeQueryLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
+        godot::Dictionary col_prop;
+        col_prop["name"] = "source_column_id";
+        col_prop["type"] = godot::Variant::INT;
+        col_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(col_prop);
+
         godot::Dictionary thresh_prop;
         thresh_prop["name"] = "eruption_threshold";
         thresh_prop["type"] = "T"; 
@@ -47,6 +53,15 @@ struct SwapEruptionBridgeQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("source_column_id")) {
+            source_column_id = p_props["source_column_id"];
+        }
+        if (p_props.has("eruption_threshold")) {
+            eruption_threshold = p_props["eruption_threshold"];
+        }
+    }
+    
     /**
      * configure_view
      * Binds the secondary (Write/Previous) state into the SwapView.

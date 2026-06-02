@@ -42,10 +42,25 @@ struct BooleanQueryLogic {
         val_prop["hint"] = godot::PROPERTY_HINT_NONE;
         props.push_back(val_prop);
 
+        godot::Dictionary col_prop;
+        col_prop["name"] = "column_id";
+        col_prop["type"] = godot::Variant::INT;
+        col_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(col_prop);
+
         return props;
     }
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
+
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("target_value")) {
+            target_value = p_props["target_value"];
+        }
+        if (p_props.has("column_id")) {
+            column_id = p_props["column_id"];
+        }
+    }
 
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 

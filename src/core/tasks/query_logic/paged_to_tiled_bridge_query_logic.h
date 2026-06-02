@@ -48,6 +48,12 @@ struct PagedToTiledBridgeQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("elements_per_page")) {
+            elements_per_page = p_props["elements_per_page"];
+        }
+    }
+    
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

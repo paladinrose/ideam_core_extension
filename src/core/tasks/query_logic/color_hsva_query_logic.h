@@ -63,6 +63,18 @@ struct ColorHSVAQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("op")) {
+            op = static_cast<Comparison>(static_cast<uint8_t>(p_props["op"]));
+        }
+        if (p_props.has("mask")) {
+            mask = p_props["mask"];
+        }
+        if (p_props.has("threshold")) {
+            threshold = p_props["threshold"];
+        }
+    }
+    
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

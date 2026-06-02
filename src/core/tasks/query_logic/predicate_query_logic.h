@@ -38,6 +38,12 @@ struct PredicateQueryLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
+        godot::Dictionary col_prop;
+        col_prop["name"] = "column_id";
+        col_prop["type"] = godot::Variant::INT;
+        col_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(col_prop);
+        
         godot::Dictionary op_prop;
         op_prop["name"] = "op";
         op_prop["type"] = godot::Variant::INT;
@@ -56,6 +62,18 @@ struct PredicateQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("column_id")) {
+            column_id = p_props["column_id"];
+        }
+        if (p_props.has("op")) {
+            op = static_cast<Comparison>(p_props["op"]);
+        }
+        if (p_props.has("target_value")) {
+            target_value = p_props["target_value"];
+        }
+    }
+    
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

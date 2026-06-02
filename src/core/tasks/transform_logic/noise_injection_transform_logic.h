@@ -52,8 +52,17 @@ struct alignas(64) NoiseInjectionTransformLogic {
         return props;
     }
     
-    [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
+    [[nodiscard]] inline uint32_t get_target_buffer_id() const {
         return target_buffer_id;
+    }
+
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("magnitude")) {
+            magnitude = p_props["magnitude"];
+        }
+        if (p_props.has("seed")) {
+            seed = static_cast<uint32_t>(p_props["seed"]);
+        }
     }
 
     template <typename T_View, typename T_Strategy>

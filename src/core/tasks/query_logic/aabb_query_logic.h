@@ -58,6 +58,15 @@ struct AABBQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("box_min")) {
+            box_min = p_props["box_min"];
+        }
+        if (p_props.has("box_max")) {
+            box_max = p_props["box_max"];
+        }
+    }
+    
     template<QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

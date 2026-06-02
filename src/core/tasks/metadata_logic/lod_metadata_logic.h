@@ -41,11 +41,6 @@ struct LODMetadataLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
-        godot::Dictionary buffer_prop;
-        buffer_prop["name"] = "target_buffer_id";
-        buffer_prop["type"] = godot::Variant::INT;
-        props.push_back(buffer_prop);
-
         godot::Dictionary default_lod_prop;
         default_lod_prop["name"] = "default_lod";
         default_lod_prop["type"] = godot::Variant::INT;
@@ -74,6 +69,25 @@ struct LODMetadataLogic {
     }
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
+
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("default_lod")) {
+            default_lod = static_cast<uint8_t>(static_cast<int>(p_props["default_lod"]));
+        }
+        if (p_props.has("mappings")) {
+            godot::Array arr = p_props["mappings"];
+            size_t elements_to_copy = std::min(static_cast<size_t>(arr.size()), N);
+            for (size_t i = 0; i < elements_to_copy; ++i) {
+                godot::Dictionary element = arr[i];
+                if (element.has("target_value")) {
+                    mappings[i].target_value = element["target_value"];
+                }
+                if (element.has("lod_level")) {
+                    mappings[i].lod_level = static_cast<uint8_t>(static_cast<int>(element["lod_level"]));
+                }
+            }
+        }
+    }
 
     template <typename T_View, typename T_Strategy>
     void execute_metadata(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {

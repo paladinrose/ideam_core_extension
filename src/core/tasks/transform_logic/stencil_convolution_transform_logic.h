@@ -67,6 +67,29 @@ struct alignas(64) StencilConvolutionTransformLogic {
         return props;
     }
     
+    [[nodiscard]] uint32_t get_target_buffer_id() const { return grid_buffer_id; }
+
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("center_weight")) {
+            center_weight = p_props["center_weight"];
+        }
+        if (p_props.has("kernel_weights")) {
+            godot::Array kw_array = p_props["kernel_weights"];
+            for (size_t i = 0; i < KernelSize && i < kw_array.size(); ++i) {
+                kernel_weights[i] = kw_array[i];
+            }
+        }
+        if (p_props.has("kernel_deltas")) {
+            godot::Array kd_array = p_props["kernel_deltas"];
+            for (size_t i = 0; i < KernelSize && i < kd_array.size(); ++i) {
+                godot::Array delta_pair = kd_array[i];
+                for (size_t d = 0; d < T_Strategy::dimensions && d < delta_pair.size(); ++d) {
+                    kernel_deltas[i][d] = delta_pair[d];
+                }
+            }
+        }
+    }
+    
     /**
      * get_transient_requirement (Dynamic Scaling)
      * We just need space for our Kernel weights. 

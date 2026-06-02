@@ -35,11 +35,27 @@ struct ArchetypeQueryLogic {
     uint32_t required_count = 0;
 
     static godot::Array get_ui_properties() {
-        return godot::Array();
+        godot::Array props;
+        godot::Dictionary signature_prop;
+        signature_prop["name"] = "required_buffer_ids";
+        signature_prop["type"] = godot::Variant::ARRAY;
+        signature_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        signature_prop["hint_string"] = "type:uint32";
+        props.push_back(signature_prop);
+        return props;
     }
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("required_buffer_ids")) {
+            godot::Array arr = p_props["required_buffer_ids"];
+            required_count = std::min(static_cast<size_t>(arr.size()), MAX_SIGNATURE_SIZE);
+            for (size_t i = 0; i < required_count; ++i) {
+                required_buffer_ids[i] = arr[i];
+            }
+        }
+    }
     template<QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

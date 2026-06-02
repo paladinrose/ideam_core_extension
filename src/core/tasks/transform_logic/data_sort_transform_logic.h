@@ -56,8 +56,14 @@ struct DataSortTransformLogic {
         return props;
     }
     
-    [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
+    [[nodiscard]] inline uint32_t get_target_buffer_id() const {
         return primary_buffer_id;
+    }
+
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("direction")) {
+            direction = static_cast<SortDirection>(static_cast<uint8_t>(p_props["direction"]));
+        }
     }
 
     template <typename T_View, typename T_Strategy>

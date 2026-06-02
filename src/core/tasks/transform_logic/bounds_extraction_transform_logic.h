@@ -44,10 +44,14 @@ struct alignas(64) BoundsExtractionTransformLogic {
         return godot::Array(); 
     }
     
-    [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
+    [[nodiscard]] inline uint32_t get_target_buffer_id() const {
         return primary_buffer_id;
     }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        
+    }
+    
     // --- The Transform Execution ---
     template <typename T_View, typename T_Strategy>
     inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {

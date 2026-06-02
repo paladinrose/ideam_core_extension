@@ -54,6 +54,10 @@ struct alignas(64) FastNoiseLiteTransformLogic {
         noise_generator.SetNoiseType(type);
     }
 
+    [[nodiscard]] inline uint32_t get_target_buffer_id() const {
+        return INVALID_ID; // No input buffer, operates on generated coordinates
+    }
+    
     // 4. Execution Payload
     template <typename T_View>
     void execute_transform(const TaskContextPOD& context, T_View& view) const {

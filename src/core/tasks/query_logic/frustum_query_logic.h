@@ -40,6 +40,12 @@ struct FrustumQueryLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
+        godot::Dictionary col_prop;
+        col_prop["name"] = "column_id";
+        col_prop["type"] = godot::Variant::INT;
+        col_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(col_prop);
+
         godot::Dictionary num_prop;
         num_prop["name"] = "num_planes";
         num_prop["type"] = godot::Variant::INT;
@@ -66,6 +72,27 @@ struct FrustumQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("column_id")) {
+            column_id = p_props["column_id"];
+        }
+        if (p_props.has("num_planes")) {
+            num_planes = std::min(static_cast<uint32_t>(p_props["num_planes"]), MAX_PLANES);
+        }
+        if (p_props.has("plane_normals")) {
+            godot::Array arr = p_props["plane_normals"];
+            for (uint32_t i = 0; i < num_planes && i < arr.size(); ++i) {
+                plane_normals[i] = arr[i];
+            }
+        }
+        if (p_props.has("plane_distances")) {
+            godot::Array arr = p_props["plane_distances"];
+            for (uint32_t i = 0; i < num_planes && i < arr.size(); ++i) {
+                plane_distances[i] = arr[i];
+            }
+        }
+    }
+    
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

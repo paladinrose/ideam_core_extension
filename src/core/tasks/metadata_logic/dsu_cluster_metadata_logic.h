@@ -97,6 +97,27 @@ struct DSUClusterMetadataLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("mode")) {
+            mode = static_cast<ClusterCompareMode>(static_cast<uint8_t>(p_props["mode"]));
+        }
+        if (p_props.has("tolerance")) {
+            tolerance = p_props["tolerance"];
+        }
+        if (p_props.has("cos_threshold")) {
+            cos_threshold = p_props["cos_threshold"];
+        }
+        if (p_props.has("bitmask")) {
+            bitmask = p_props["bitmask"];
+        }
+        if (p_props.has("min_cluster_size")) {
+            min_cluster_size = p_props["min_cluster_size"];
+        }
+        if (p_props.has("partition_id_offset")) {
+            partition_id_offset = p_props["partition_id_offset"];
+        }
+    }
+
     template <typename T_View, typename T_Strategy>
     void execute_metadata(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {
         if (!r_selection.partition_ids || r_selection.element_count == 0 || !p_context.local_workspace) return;

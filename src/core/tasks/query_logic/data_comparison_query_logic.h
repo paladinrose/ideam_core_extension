@@ -44,12 +44,44 @@ struct DataComparisonQueryLogic {
         op_prop["hint_string"] = "Equal,Not Equal,Less Than,Less Equal,Greater Than,Greater Equal";
         props.push_back(op_prop);
 
+        godot::Dictionary col_a_prop;
+        col_a_prop["name"] = "column_id_a";
+        col_a_prop["type"] = godot::Variant::INT;
+        col_a_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(col_a_prop);
+
+        godot::Dictionary comparison_buffer_prop;
+        comparison_buffer_prop["name"] = "comparison_buffer_id";
+        comparison_buffer_prop["type"] = godot::Variant::INT;
+        comparison_buffer_prop["hint_string"] = "buffer_option";
+        props.push_back(comparison_buffer_prop);
+
+        godot::Dictionary col_b_prop;
+        col_b_prop["name"] = "column_id_b";
+        col_b_prop["type"] = godot::Variant::INT;
+        col_b_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(col_b_prop);
+
         return props;
     }
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
-
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("op")) {
+            op = static_cast<Operator>(static_cast<uint8_t>(p_props["op"]));
+        }
+        if (p_props.has("column_id_a")) {
+            column_id_a = p_props["column_id_a"];
+        }
+        if (p_props.has("comparison_buffer_id")) {
+            comparison_buffer_id = p_props["comparison_buffer_id"];
+        }
+        if (p_props.has("column_id_b")) {
+            column_id_b = p_props["column_id_b"];
+        }
+    }
+    
     // --- The DOD View Adapter ---
     template <typename T_View>
     #if defined(_MSC_VER)

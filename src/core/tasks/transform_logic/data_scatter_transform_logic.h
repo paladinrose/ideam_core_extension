@@ -36,13 +36,28 @@ struct alignas(64) DataScatterTransformLogic {
     const std::vector<int64_t>* input_index_map = nullptr;
 
     static godot::Array get_ui_properties() {
-        return godot::Array(); 
+        godot::Array props;
+
+        godot::Dictionary source_prop;
+        source_prop["name"] = "source_buffer_id";
+        source_prop["type"] = godot::Variant::INT;
+        source_prop["hint_string"] = "buffer_option";
+
+        props.push_back(source_prop);
+
+        return props; 
     }
     
-    [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
+    [[nodiscard]] inline uint32_t get_target_buffer_id() const {
         return target_buffer_id;
     }
-
+    
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("source_buffer_id")) {
+            source_buffer_id = p_props["source_buffer_id"];
+        }
+    }
+    
     template <typename T_View, typename T_Strategy>
     inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {
         if (!input_index_map || input_index_map->empty()) return;

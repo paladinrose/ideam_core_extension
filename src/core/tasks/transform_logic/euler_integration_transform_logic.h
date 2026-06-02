@@ -39,11 +39,35 @@ struct alignas(64) EulerIntegrationTransformLogic {
         time_prop["hint_string"] = "suffix:x"; // Visual indicator for multiplier
         props.push_back(time_prop);
 
+        godot::Dictionary pos_prop;
+        pos_prop["name"] = "position_buffer_id";
+        pos_prop["type"] = godot::Variant::INT;
+        pos_prop["hint_string"] = "buffer_option";
+        props.push_back(pos_prop);
+
+        godot::Dictionary vel_prop;
+        vel_prop["name"] = "velocity_buffer_id";
+        vel_prop["type"] = godot::Variant::INT;
+        vel_prop["hint_string"] = "buffer_option";
+        props.push_back(vel_prop);
+
         return props;
     }
     
-    [[nodiscard]] inline uint32_t get_primary_buffer_id() const {
+    [[nodiscard]] inline uint32_t get_target_buffer_id() const {
         return position_buffer_id;
+    }
+
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("time_scale")) {
+            time_scale = p_props["time_scale"];
+        }
+        if (p_props.has("position_buffer_id")) {
+            position_buffer_id = p_props["position_buffer_id"];
+        }
+        if (p_props.has("velocity_buffer_id")) {
+            velocity_buffer_id = p_props["velocity_buffer_id"];
+        }
     }
 
     template <typename T_View, typename T_Strategy>

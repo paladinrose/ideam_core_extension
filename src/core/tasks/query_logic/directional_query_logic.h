@@ -37,6 +37,12 @@ struct DirectionalQueryLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
+        godot::Dictionary col_prop;
+        col_prop["name"] = "column_id";
+        col_prop["type"] = godot::Variant::INT;
+        col_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(col_prop);
+
         godot::Dictionary op_prop;
         op_prop["name"] = "op";
         op_prop["type"] = godot::Variant::INT;
@@ -61,6 +67,21 @@ struct DirectionalQueryLogic {
     
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
+    void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("column_id")) {
+            column_id = p_props["column_id"];
+        }
+        if (p_props.has("op")) {
+            op = static_cast<Comparison>(static_cast<uint8_t>(p_props["op"]));
+        }
+        if (p_props.has("target_direction")) {
+            target_direction = p_props["target_direction"];
+        }
+        if (p_props.has("angle_threshold")) {
+            angle_threshold = std::cos(p_props["angle_threshold"]);
+        }
+    }
+    
     template <QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 
