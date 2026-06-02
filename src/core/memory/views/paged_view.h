@@ -183,6 +183,21 @@ struct PagedView {
 static_assert(sizeof(PagedView<int, FlatStrategy>) == 48, "PagedView base layout alignment failed!");
 #endif
 
+template<typename T, IsMemoryStrategy Strategy>
+struct ViewTraits<PagedView<T, Strategy>> {
+    static constexpr ViewCapability capabilities = 
+        ViewCapability::LINEAR_ACCESS | 
+        ViewCapability::SPATIAL_ACCESS | 
+        ViewCapability::VIRTUAL_MEMORY;
+        
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+        
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
+    static constexpr DataType       supported_types      = DataType::ANY;
+    static constexpr uint32_t       lane_width           = 1;
+};
+
 } // namespace ideam::core
 
  // IDEAM_CORE_PAGED_VIEW_H

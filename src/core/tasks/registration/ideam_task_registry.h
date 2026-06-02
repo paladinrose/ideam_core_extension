@@ -41,8 +41,8 @@ enum class MemoryView : uint32_t {
     Count
 };
 
-enum class MemoryStrategy {
-    FlatStrategy,
+enum class MemoryStrategy : uint32_t {
+    FlatStrategy = 0,
     SoAStrategy,
     AoSStrategy,
     Spatial2DStrategy,
@@ -54,7 +54,7 @@ enum class MemoryStrategy {
     Count
 };
 
-enum class MemoryTypes {
+enum class MemoryTypes : uint32_t {
     BOOL = 0,
     BYTE,
     INT32,

@@ -53,7 +53,7 @@ enum class DataType : uint64_t {
 
     // --- Final Utility Aggregates ---
     ANY_NUMERIC = ANY_32BIT_FLOAT | ANY_64BIT_FLOAT | ANY_32BIT_INT | INT64 | BYTE,
-    ANY         = (1ULL << 16) - 1 
+    ANY         = ~0ULL 
 };
 
 constexpr DataType operator|(DataType a, DataType b) noexcept {

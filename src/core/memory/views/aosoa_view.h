@@ -226,6 +226,21 @@ struct AOSOAView {
 static_assert(sizeof(AOSOAView<int, 8, FlatStrategy>) == 32, "AOSOAView base layout alignment failed!");
 #endif
 
+template<typename T, uint32_t LaneWidth, IsMemoryStrategy Strategy>
+struct ViewTraits<AOSOAView<T, LaneWidth, Strategy>> {
+    static constexpr ViewCapability capabilities = 
+        ViewCapability::LINEAR_ACCESS | 
+        ViewCapability::SPATIAL_ACCESS | 
+        ViewCapability::SIMD_ACCESS;
+        
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::AOS | BufferLayoutType::SOA;
+        
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
+    static constexpr DataType       supported_types      = DataType::ANY;
+    static constexpr uint32_t       lane_width           = LaneWidth;
+};
+
 } // namespace ideam::core
 
  // IDEAM_CORE_AOSOA_VIEW_H

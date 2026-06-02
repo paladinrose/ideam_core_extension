@@ -190,6 +190,21 @@ struct MultiElementView {
 static_assert(sizeof(MultiElementView<AoSStrategy>) == 32, "MultiElementView base layout alignment failed!");
 #endif
 
+template<IsMemoryStrategy Strategy>
+struct ViewTraits<MultiElementView<Strategy>> {
+    static constexpr ViewCapability capabilities = 
+        ViewCapability::LINEAR_ACCESS | 
+        ViewCapability::SPATIAL_ACCESS | 
+        ViewCapability::MULTI_COMPONENT_ACCESS;
+        
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+        
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
+    static constexpr DataType       supported_types      = DataType::ANY;
+    static constexpr uint32_t       lane_width           = 1;
+};
+
 } // namespace ideam::core
 
  // IDEAM_CORE_MULTI_ELEMENT_VIEW_H

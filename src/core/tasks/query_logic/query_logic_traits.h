@@ -18,9 +18,10 @@ namespace ideam::core {
  * QueryOp
  * Compile-time router for T_Logic structs to ensure zero-cost flat paths.
  */
-enum class QueryOp : uint8_t {
-    CULL, // Immediate bitwise pruning
-    ADD   // Deferred appending via Wave/Graph Command Buffers
+enum class QueryOp : uint32_t {
+    CULL = 0, // Immediate bitwise pruning
+    ADD,   // Deferred appending via Wave/Graph Command Buffers
+    Count
 };
 
 /**

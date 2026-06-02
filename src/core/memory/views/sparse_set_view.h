@@ -219,6 +219,21 @@ struct SparseSetView {
 static_assert(sizeof(SparseSetView<int, FlatStrategy>) == 48, "SparseSetView base layout alignment failed!");
 #endif
 
+template<typename T, IsMemoryStrategy Strategy>
+struct ViewTraits<SparseSetView<T, Strategy>> {
+    static constexpr ViewCapability capabilities = 
+        ViewCapability::LINEAR_ACCESS | 
+        ViewCapability::RANDOM_ACCESS | 
+        ViewCapability::ENTITY_ID_ACCESS;
+        
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+        
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
+    static constexpr DataType       supported_types      = DataType::ANY;
+    static constexpr uint32_t       lane_width           = 1;
+};
+
 } // namespace ideam::core
 
  // IDEAM_CORE_SPARSE_SET_VIEW_H

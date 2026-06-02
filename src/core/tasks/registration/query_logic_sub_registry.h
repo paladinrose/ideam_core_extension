@@ -255,7 +255,7 @@ private:
                         // Instantiate the property array exactly once per logic struct type
                         dict["properties"] = L_Type::get_ui_properties();
                         dict["valid_combinations"] = godot::PackedInt64Array(); 
-                        (p_matrix)[logic_key] = dict;
+                        (*p_matrix)[logic_key] = dict;
                     }
 
                     // Map this valid 4D configuration hash (FlatIdx) so the UI knows it's an allowed permutation

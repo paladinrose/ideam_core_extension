@@ -191,6 +191,19 @@ struct BridgeView {
     }
 };
 
+template<typename TParent, typename TChild, size_t DimCount, IsMemoryStrategy Strategy>
+struct ViewTraits<BridgeView<TParent, TChild, DimCount, Strategy>> {
+    static constexpr ViewCapability capabilities = ViewCapability::SPATIAL_ACCESS;
+        
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::AOS | BufferLayoutType::SOA;
+        
+    // Restrict this explicitly to spatial permutations
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY_SPATIAL;
+    static constexpr DataType       supported_types      = DataType::ANY;
+    static constexpr uint32_t       lane_width           = 1;
+};
+
 } // namespace ideam::core
 
  // IDEAM_CORE_BRIDGE_VIEW_H

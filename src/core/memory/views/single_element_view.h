@@ -178,6 +178,20 @@ struct SingleElementView {
 static_assert(sizeof(SingleElementView<int, FlatStrategy>) == 32, "SingleElementView base layout alignment failed!");
 #endif
 
+template<typename T, IsMemoryStrategy Strategy>
+struct ViewTraits<SingleElementView<T, Strategy>> {
+    static constexpr ViewCapability capabilities = 
+        ViewCapability::LINEAR_ACCESS | 
+        ViewCapability::SPATIAL_ACCESS;
+        
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+        
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
+    static constexpr DataType       supported_types      = DataType::ANY;
+    static constexpr uint32_t       lane_width           = 1;
+};
+
 } // namespace ideam::core
 
  // IDEAM_CORE_SINGLE_ELEMENT_VIEW_H

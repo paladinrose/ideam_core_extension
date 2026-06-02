@@ -231,6 +231,21 @@ struct SwapView {
 static_assert(sizeof(SwapView<int, FlatStrategy>) == 64, "SwapView base layout alignment failed!");
 #endif
 
+template<typename T, IsMemoryStrategy Strategy>
+struct ViewTraits<SwapView<T, Strategy>> {
+    static constexpr ViewCapability capabilities = 
+        ViewCapability::LINEAR_ACCESS | 
+        ViewCapability::SPATIAL_ACCESS | 
+        ViewCapability::SWAP_ACCESS;
+        
+    static constexpr BufferLayoutType supported_layouts = 
+        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+        
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
+    static constexpr DataType       supported_types      = DataType::ANY;
+    static constexpr uint32_t       lane_width           = 1;
+};
+
 } // namespace ideam::core
 
  // IDEAM_CORE_SWAP_VIEW_H
