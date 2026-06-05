@@ -100,7 +100,7 @@ struct SparseSetView {
         const auto& selection = part.selection;
 
         // --- 1D LINEAR (DENSE ITERATION) ---
-        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+        if constexpr (sizeof...(Coords) == 1) {
             size_t p_selection_index = static_cast<size_t>((p_coords, ...));
 
             #ifdef NDEBUG

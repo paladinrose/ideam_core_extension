@@ -201,6 +201,18 @@ private:
         // --- FACTORY GENERATION ---
         if constexpr (is_fully_valid) {
             if constexpr (!BuildUI) {
+                // TRAP 1: Enforce Default Constructibility
+                static_assert(std::is_default_constructible_v<L_Type>, 
+                    "COMPILE TRAP: L_Type lacks a default constructor.");
+                
+                // TRAP 2: Enforce Implicit Contract Methods
+                static_assert(requires(L_Type l) { l.get_target_buffer_id(); }, 
+                    "COMPILE TRAP: L_Type is missing get_target_buffer_id().");
+
+                // TRAP 3: Verify View Assembly Constraints
+                static_assert(requires(L_Type l, const TaskContextPOD& c, const GrantPartPOD* p) { assemble_view<L_Type, V_Type>(l, c, p); }, 
+                    "COMPILE TRAP: assemble_view is rejecting this L_Type and V_Type combination.");
+
                 // Hot-Path Execution Routing
                 factories[FlatIdx] = []() -> INativeTask* {
                     return new TransformTask<L_Type, V_Type, T_Strategy>();
