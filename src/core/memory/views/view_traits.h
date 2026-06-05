@@ -71,6 +71,36 @@ constexpr ViewStrategies operator&(ViewStrategies a, ViewStrategies b) noexcept 
     return static_cast<ViewStrategies>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
 }
 
+template <typename T>
+consteval bool extract_has_static_kernel() {
+    return requires { T::KERNEL_POINTS; };
+}
+
+template <typename T>
+consteval size_t extract_kernel_size() {
+    if constexpr (requires { T::KERNEL_POINTS; }) {
+        return T::KERNEL_POINTS;
+    } else {
+        return 0; // 0 indicates a dynamic kernel or non-stencil view
+    }
+}
+
+template <typename T>
+consteval size_t extract_dimensionality() {
+    // 1. Try to get DimCount directly from the View (e.g., StencilView)
+    if constexpr (requires { T::DimCount; }) {
+        return T::DimCount;
+    } 
+    // 2. Try to get it from the Strategy (fallback for generic views)
+    else if constexpr (requires { T::dimensions; }) {
+        return T::dimensions;
+    } 
+    // 3. Default to 1D linear
+    else {
+        return 1; 
+    }
+}
+
 /**
  * ViewTraits<View>
  * Standardized DOD metadata for all MemoryViews.
@@ -89,6 +119,11 @@ struct ViewTraits {
 
     // --- Hardware Alignment ---
     static constexpr uint32_t lane_width = 1;
+
+    // --- Extracted Spatial & Kernel Contracts ---
+    static constexpr bool is_static_stencil = extract_has_static_kernel<T_View>();
+    static constexpr size_t kernel_size     = extract_kernel_size<T_View>();
+    static constexpr size_t dimensions      = extract_dimensionality<T_View>();
 };
 
 } // namespace ideam::core

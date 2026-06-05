@@ -250,9 +250,14 @@ struct ViewTraits<StaticStencilView<T, Strategy, PointCount>> {
     static constexpr BufferLayoutType supported_layouts = 
         BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
         
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
+    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY_SPATIAL;
     static constexpr DataType       supported_types      = DataType::ANY;
     static constexpr uint32_t       lane_width           = 1;
+
+    // --- Extracted Spatial & Kernel Contracts ---
+    static constexpr bool is_static_stencil = true;
+    static constexpr size_t kernel_size     = PointCount;
+    static constexpr size_t dimensions      = Strategy::dimensions;
 };
 
 } // namespace ideam::core

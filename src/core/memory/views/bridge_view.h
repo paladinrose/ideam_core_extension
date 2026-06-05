@@ -202,6 +202,11 @@ struct ViewTraits<BridgeView<TParent, TChild, DimCount, Strategy>> {
     static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY_SPATIAL;
     static constexpr DataType       supported_types      = DataType::ANY;
     static constexpr uint32_t       lane_width           = 1;
+
+    // Spatial Contracts
+    static constexpr bool is_static_stencil = false; 
+    static constexpr size_t kernel_size     = 0;
+    static constexpr size_t dimensions      = Strategy::dimensions;
 };
 
 } // namespace ideam::core
