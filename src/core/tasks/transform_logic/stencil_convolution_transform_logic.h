@@ -24,6 +24,11 @@ struct alignas(64) StencilConvolutionTransformLogic {
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_SPATIAL;
     static constexpr DataType required_types              = DataType::ANY_NUMERIC;
     
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = T_Strategy::dimensions;
+    static constexpr bool requires_static_kernel = true;
+    static constexpr size_t kernel_size = KernelSize;
+    
     // Demand enough transient memory to build our SoA weights array for the hot loop
     static constexpr size_t transient_workspace_bytes = KernelSize * sizeof(T);
 
@@ -71,12 +76,12 @@ struct alignas(64) StencilConvolutionTransformLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("center_weight")) {
-            center_weight = p_props["center_weight"];
+            center_weight = static_cast<T>(p_props["center_weight"]);
         }
         if (p_props.has("kernel_weights")) {
             godot::Array kw_array = p_props["kernel_weights"];
             for (size_t i = 0; i < KernelSize && i < kw_array.size(); ++i) {
-                kernel_weights[i] = kw_array[i];
+                kernel_weights[i] = static_cast<T>(kw_array[i]);
             }
         }
         if (p_props.has("kernel_deltas")) {
@@ -84,7 +89,7 @@ struct alignas(64) StencilConvolutionTransformLogic {
             for (size_t i = 0; i < KernelSize && i < kd_array.size(); ++i) {
                 godot::Array delta_pair = kd_array[i];
                 for (size_t d = 0; d < T_Strategy::dimensions && d < delta_pair.size(); ++d) {
-                    kernel_deltas[i][d] = delta_pair[d];
+                    kernel_deltas[i][d] = static_cast<int64_t>(delta_pair[d]);
                 }
             }
         }

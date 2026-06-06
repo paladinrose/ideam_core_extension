@@ -21,6 +21,12 @@ struct DirectionalQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4 | DataType::VECTOR4I | DataType::VECTOR4D;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
@@ -69,13 +75,13 @@ struct DirectionalQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("column_id")) {
-            column_id = p_props["column_id"];
+            column_id = static_cast<uint32_t>(p_props["column_id"]);
         }
         if (p_props.has("op")) {
             op = static_cast<Comparison>(static_cast<uint8_t>(p_props["op"]));
         }
         if (p_props.has("target_direction")) {
-            target_direction = p_props["target_direction"];
+            target_direction = static_cast<T>(p_props["target_direction"]);
         }
         if (p_props.has("angle_threshold")) {
             angle_threshold = std::cos(static_cast<float>(p_props["angle_threshold"]));

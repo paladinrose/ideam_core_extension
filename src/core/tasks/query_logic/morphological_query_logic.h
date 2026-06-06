@@ -33,6 +33,12 @@ struct MorphologicalQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::STENCIL_ACCESS | ViewCapability::SPATIAL_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_SPATIAL;
     static constexpr DataType required_types              = DataType::ANY;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = T_Strategy::dimensions;
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
@@ -58,7 +64,7 @@ struct MorphologicalQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("iterations")) {
-            iterations = p_props["iterations"];
+            iterations = static_cast<int32_t>(p_props["iterations"]);
         }
     }
 

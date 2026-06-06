@@ -28,6 +28,12 @@ struct BorderQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::STENCIL_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_SPATIAL;
     static constexpr DataType required_types              = DataType::ANY;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = T_Strategy::dimensions; 
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
     
     // UI/Compiler Routing

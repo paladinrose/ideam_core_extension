@@ -27,6 +27,12 @@ struct alignas(64) NoiseInjectionTransformLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_VECTOR3;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---
@@ -58,7 +64,7 @@ struct alignas(64) NoiseInjectionTransformLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("magnitude")) {
-            magnitude = p_props["magnitude"];
+            magnitude = static_cast<float>(p_props["magnitude"]);
         }
         if (p_props.has("seed")) {
             seed = static_cast<uint32_t>(p_props["seed"]);

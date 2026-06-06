@@ -22,11 +22,18 @@ struct alignas(64) EulerIntegrationTransformLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::SWAP_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_VECTOR3; // Tightened from ANY_NUMERIC for safety
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---
     uint32_t position_buffer_id = INVALID_ID; // The Primary View
     uint32_t velocity_buffer_id = INVALID_ID; // The Secondary View
+
     float time_scale = 1.0f;
 
     static godot::Array get_ui_properties() {
@@ -60,13 +67,13 @@ struct alignas(64) EulerIntegrationTransformLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("time_scale")) {
-            time_scale = p_props["time_scale"];
+            time_scale = static_cast<float>(p_props["time_scale"]);
         }
         if (p_props.has("position_buffer_id")) {
-            position_buffer_id = p_props["position_buffer_id"];
+            position_buffer_id = static_cast<uint32_t>(p_props["position_buffer_id"]);
         }
         if (p_props.has("velocity_buffer_id")) {
-            velocity_buffer_id = p_props["velocity_buffer_id"];
+            velocity_buffer_id = static_cast<uint32_t>(p_props["velocity_buffer_id"]);
         }
     }
 

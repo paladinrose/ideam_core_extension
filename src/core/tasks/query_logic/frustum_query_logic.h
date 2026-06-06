@@ -22,6 +22,12 @@ struct FrustumQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_VECTOR3;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
@@ -74,7 +80,7 @@ struct FrustumQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("column_id")) {
-            column_id = p_props["column_id"];
+            column_id = static_cast<uint32_t>(p_props["column_id"]);
         }
         if (p_props.has("num_planes")) {
             num_planes = std::min(static_cast<uint32_t>(p_props["num_planes"]), MAX_PLANES);
@@ -82,13 +88,13 @@ struct FrustumQueryLogic {
         if (p_props.has("plane_normals")) {
             godot::Array arr = p_props["plane_normals"];
             for (uint32_t i = 0; i < num_planes && i < arr.size(); ++i) {
-                plane_normals[i] = arr[i];
+                plane_normals[i] = static_cast<godot::Vector3>(arr[i]);
             }
         }
         if (p_props.has("plane_distances")) {
             godot::Array arr = p_props["plane_distances"];
             for (uint32_t i = 0; i < num_planes && i < arr.size(); ++i) {
-                plane_distances[i] = arr[i];
+                plane_distances[i] = static_cast<float>(arr[i]);
             }
         }
     }

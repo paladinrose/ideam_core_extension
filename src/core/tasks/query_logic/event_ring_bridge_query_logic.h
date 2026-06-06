@@ -23,6 +23,12 @@ struct EventRingBridgeQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::QUEUE_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::RING;
     static constexpr DataType required_types              = DataType::CUSTOM;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
     
     static constexpr bool supports_cull = false;

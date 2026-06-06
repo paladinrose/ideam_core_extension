@@ -27,6 +27,12 @@ struct StencilDilationBridgeQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::STENCIL_ACCESS | ViewCapability::SPATIAL_ACCESS | ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_SPATIAL;
     static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4I | DataType::VECTOR4D;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = T_Strategy::dimensions; 
+    static constexpr bool requires_static_kernel = true;
+    static constexpr size_t kernel_size = DimCount;
+    
     static constexpr size_t transient_workspace_bytes     = 0; // Dynamically allocated by Job Graph
 
     static constexpr bool supports_cull = false; // Stencils are used for dilation/addition
@@ -52,7 +58,7 @@ struct StencilDilationBridgeQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("column_id")) {
-            column_id = p_props["column_id"];
+            column_id = static_cast<uint32_t>(p_props["column_id"]);
         }
     }
 

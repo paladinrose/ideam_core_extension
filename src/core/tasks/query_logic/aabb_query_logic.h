@@ -10,6 +10,9 @@
 
 namespace ideam::core {
 
+/* TODO:
+- Add support for Vector3I and Vector3D in get_ui_properties() and apply_properties(), ensuring proper type handling in the evaluation logic.
+*/
 /**
  * AABBQueryLogic
  * Performs a spatial intersection test between a 3D Box and the target buffer.
@@ -26,6 +29,12 @@ struct AABBQueryLogic {
     // Upgraded to allow standard 1D contiguous vectors to be queried spatially
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR | BufferLayoutType::ANY_SPATIAL; 
     static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
     
     // UI/Compiler Routing
@@ -60,10 +69,10 @@ struct AABBQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("box_min")) {
-            box_min = p_props["box_min"];
+            box_min = static_cast<godot::Vector3>(p_props["box_min"]);
         }
         if (p_props.has("box_max")) {
-            box_max = p_props["box_max"];
+            box_max = static_cast<godot::Vector3>(p_props["box_max"]);
         }
     }
     

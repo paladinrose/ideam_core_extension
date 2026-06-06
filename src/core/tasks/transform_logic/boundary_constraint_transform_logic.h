@@ -30,6 +30,12 @@ struct alignas(64) BoundaryConstraintTransformLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_VECTOR3;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---
@@ -98,10 +104,10 @@ struct alignas(64) BoundaryConstraintTransformLogic {
             mode = static_cast<BoundaryMode>(static_cast<uint8_t>(p_props["mode"]));
         }
         if (p_props.has("bounds_min")) {
-            bounds_min = p_props["bounds_min"];
+            bounds_min = static_cast<T>(p_props["bounds_min"]);
         }
         if (p_props.has("bounds_max")) {
-            bounds_max = p_props["bounds_max"];
+            bounds_max = static_cast<T>(p_props["bounds_max"]);
         }
     }
     

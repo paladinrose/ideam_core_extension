@@ -19,6 +19,12 @@ struct ColorHSVAQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::COLOR; // Or custom HSVA type identifier
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
@@ -68,10 +74,10 @@ struct ColorHSVAQueryLogic {
             op = static_cast<Comparison>(static_cast<uint8_t>(p_props["op"]));
         }
         if (p_props.has("mask")) {
-            mask = p_props["mask"];
+            mask = static_cast<uint32_t>(p_props["mask"]);
         }
         if (p_props.has("threshold")) {
-            threshold = p_props["threshold"];
+            threshold = static_cast<float>(p_props["threshold"]);
         }
     }
     

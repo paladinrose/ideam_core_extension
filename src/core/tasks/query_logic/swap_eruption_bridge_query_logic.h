@@ -24,6 +24,12 @@ struct SwapEruptionBridgeQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::SWAP_ACCESS | ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::ANY_VECTOR4;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = false; // Eruptions are strictly additive
@@ -55,10 +61,10 @@ struct SwapEruptionBridgeQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("source_column_id")) {
-            source_column_id = p_props["source_column_id"];
+            source_column_id = static_cast<uint32_t>(p_props["source_column_id"]);
         }
         if (p_props.has("eruption_threshold")) {
-            eruption_threshold = p_props["eruption_threshold"];
+            eruption_threshold = static_cast<T>(p_props["eruption_threshold"]);
         }
     }
     

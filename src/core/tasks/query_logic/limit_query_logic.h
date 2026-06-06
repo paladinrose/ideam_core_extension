@@ -29,6 +29,12 @@ struct LimitQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY;
     static constexpr DataType required_types              = DataType::ANY;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
     
     static constexpr bool supports_cull = true;
@@ -53,7 +59,7 @@ struct LimitQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("limit")) {
-            limit = p_props["limit"];
+            limit = static_cast<int64_t>(p_props["limit"]);
         }
     }
     

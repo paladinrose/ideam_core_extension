@@ -40,6 +40,12 @@ struct alignas(64) ValueAccumulationTransformLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR; // Upgraded from FLAT | AOS | SOA
     static constexpr DataType required_types              = DataType::ANY_NUMERIC;        // Cleaned up to use aggregate mask
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---

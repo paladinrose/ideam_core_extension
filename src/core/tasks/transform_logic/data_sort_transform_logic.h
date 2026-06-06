@@ -34,11 +34,17 @@ struct DataSortTransformLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0; // Output vector is externally provided via Graph Port
     
     // --- Configuration ---
     SortDirection direction = SortDirection::ASCENDING;
-    uint32_t primary_buffer_id = INVALID_ID;
+    uint32_t target_buffer_id = INVALID_ID;
     
     // Output Graph Port: Will contain the sorted sequence of buffer indices
     std::vector<int64_t>* output_destination = nullptr;
@@ -57,7 +63,7 @@ struct DataSortTransformLogic {
     }
     
     [[nodiscard]] inline uint32_t get_target_buffer_id() const {
-        return primary_buffer_id;
+        return target_buffer_id;
     }
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
@@ -70,7 +76,7 @@ struct DataSortTransformLogic {
     inline void execute_transform(const TaskContextPOD& context, T_View& p_view) const {
         if (!output_destination) return;
 
-        const MemoryBufferSelectionPOD* sel = context.get_selection(primary_buffer_id);
+        const MemoryBufferSelectionPOD* sel = context.get_selection(target_buffer_id);
         if (!sel || !sel->is_valid()) return;
 
         // 1. Unpack active indices from the selection mask

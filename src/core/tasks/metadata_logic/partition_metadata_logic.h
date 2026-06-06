@@ -25,6 +25,12 @@ struct PartitionMetadataLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY;
+
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     struct Mapping {
@@ -70,7 +76,7 @@ struct PartitionMetadataLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("default_partition")) {
-            default_partition = p_props["default_partition"];
+            default_partition = static_cast<int32_t>(p_props["default_partition"]);
         }
         if (p_props.has("mappings")) {
             godot::Array arr = p_props["mappings"];
@@ -78,10 +84,10 @@ struct PartitionMetadataLogic {
             for (size_t i = 0; i < elements_to_copy; ++i) {
                 godot::Dictionary element = arr[i];
                 if (element.has("source_value")) {
-                    mappings[i].source_value = element["source_value"];
+                    mappings[i].source_value = static_cast<T>(element["source_value"]);
                 }
                 if (element.has("partition_id")) {
-                    mappings[i].partition_id = element["partition_id"];
+                    mappings[i].partition_id = static_cast<int32_t>(element["partition_id"]);
                 }
             }
         }

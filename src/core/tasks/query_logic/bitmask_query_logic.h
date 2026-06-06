@@ -25,6 +25,12 @@ struct BitmaskQueryLogic {
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     // Keeping explicitly integer-based to prevent compilation failure on Vector bitwise ops
     static constexpr DataType required_types              = DataType::BYTE | DataType::INT32 | DataType::INT64; 
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     // UI/Compiler Routing
@@ -70,8 +76,9 @@ struct BitmaskQueryLogic {
         if (p_props.has("op")) {
             op = static_cast<BitOp>(static_cast<uint8_t>(p_props["op"]));
         }
+        
         if (p_props.has("mask")) {
-            mask = p_props["mask"];
+            mask = static_cast<T>(p_props["mask"]);
         }
     }
     

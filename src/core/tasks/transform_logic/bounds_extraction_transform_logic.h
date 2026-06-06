@@ -34,10 +34,16 @@ struct alignas(64) BoundsExtractionTransformLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR; // Upgraded from restricted subset
     static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
 
     // --- Configuration ---
-    uint32_t primary_buffer_id = INVALID_ID;
+    uint32_t target_buffer_id = INVALID_ID;
     BoundsResult<T>* output_destination = nullptr;
 
     static godot::Array get_ui_properties() {
@@ -45,7 +51,7 @@ struct alignas(64) BoundsExtractionTransformLogic {
     }
     
     [[nodiscard]] inline uint32_t get_target_buffer_id() const {
-        return primary_buffer_id;
+        return target_buffer_id;
     }
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
@@ -57,7 +63,7 @@ struct alignas(64) BoundsExtractionTransformLogic {
     inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {
         if (!output_destination) return;
 
-        const MemoryBufferSelectionPOD* sel = context.get_selection(primary_buffer_id);
+        const MemoryBufferSelectionPOD* sel = context.get_selection(target_buffer_id);
         if (!sel || !sel->is_valid()) return;
 
         BoundsResult<T> local_result;

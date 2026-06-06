@@ -22,6 +22,12 @@ struct ArchetypeQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::SPARSE_SET; // Strictly ECS
     static constexpr DataType required_types              = DataType::INT32;              // Entity IDs
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
     
     // UI/Compiler Routing
@@ -52,10 +58,11 @@ struct ArchetypeQueryLogic {
             godot::Array arr = p_props["required_buffer_ids"];
             required_count = std::min(static_cast<size_t>(arr.size()), MAX_SIGNATURE_SIZE);
             for (size_t i = 0; i < required_count; ++i) {
-                required_buffer_ids[i] = arr[i];
+                required_buffer_ids[i] = static_cast<uint32_t>(arr[i]);
             }
         }
     }
+    
     template<QueryOp Op, typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection, 
                  const TaskContextPOD& p_context, 

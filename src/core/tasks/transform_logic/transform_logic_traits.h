@@ -12,6 +12,10 @@
 
 namespace ideam::core {
 
+/* TODO:
+- For those transforms that accumulate a value or extract a value, figure out the pipeline that brings this
+    data to useful places.
+*/
 struct TransformLogicValidator {
     template <typename T_Logic, typename T_View>
     static consteval bool validate() {

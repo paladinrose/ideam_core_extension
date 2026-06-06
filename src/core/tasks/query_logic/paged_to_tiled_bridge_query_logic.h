@@ -23,6 +23,12 @@ struct PagedToTiledBridgeQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::TILED_SOA;
     static constexpr DataType required_types              = DataType::ANY;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
     
     static constexpr bool supports_cull = true;
@@ -50,7 +56,7 @@ struct PagedToTiledBridgeQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("elements_per_page")) {
-            elements_per_page = p_props["elements_per_page"];
+            elements_per_page = static_cast<int64_t>(p_props["elements_per_page"]);
         }
     }
     

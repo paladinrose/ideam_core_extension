@@ -19,6 +19,12 @@ struct DataComparisonQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::BYTE | DataType::INT32 | DataType::INT64 | DataType::FLOAT32 | DataType::FLOAT64;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+    
     static constexpr size_t transient_workspace_bytes     = 0;
     
     static constexpr bool supports_cull = true;
@@ -72,13 +78,13 @@ struct DataComparisonQueryLogic {
             op = static_cast<Operator>(static_cast<uint8_t>(p_props["op"]));
         }
         if (p_props.has("column_id_a")) {
-            column_id_a = p_props["column_id_a"];
+            column_id_a = static_cast<uint32_t>(p_props["column_id_a"]);
         }
         if (p_props.has("comparison_buffer_id")) {
-            comparison_buffer_id = p_props["comparison_buffer_id"];
+            comparison_buffer_id = static_cast<uint32_t>(p_props["comparison_buffer_id"]);
         }
         if (p_props.has("column_id_b")) {
-            column_id_b = p_props["column_id_b"];
+            column_id_b = static_cast<uint32_t>(p_props["column_id_b"]);
         }
     }
     

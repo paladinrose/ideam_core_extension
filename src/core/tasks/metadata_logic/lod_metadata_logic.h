@@ -26,6 +26,12 @@ struct LODMetadataLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::ANY_VECTOR3;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     struct Mapping {
@@ -72,7 +78,7 @@ struct LODMetadataLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("default_lod")) {
-            default_lod = static_cast<uint8_t>(static_cast<int>(p_props["default_lod"]));
+            default_lod = static_cast<uint8_t>(static_cast<int64_t>(p_props["default_lod"]));
         }
         if (p_props.has("mappings")) {
             godot::Array arr = p_props["mappings"];
@@ -80,17 +86,20 @@ struct LODMetadataLogic {
             for (size_t i = 0; i < elements_to_copy; ++i) {
                 godot::Dictionary element = arr[i];
                 if (element.has("target_value")) {
-                    mappings[i].target_value = element["target_value"];
+                    mappings[i].target_value = static_cast<T>(element["target_value"]);
                 }
                 if (element.has("lod_level")) {
-                    mappings[i].lod_level = static_cast<uint8_t>(static_cast<int>(element["lod_level"]));
+                    mappings[i].lod_level = static_cast<uint8_t>(static_cast<int64_t>(element["lod_level"]));
                 }
             }
         }
     }
 
     template <typename T_View, typename T_Strategy>
-    void execute_metadata(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {
+    void execute_metadata(MemoryBufferSelectionPOD& r_selection,
+                          T_View& p_view,
+                          const T_Strategy& p_strategy,
+                          const TaskContextPOD& p_context) const {
         if (!r_selection.lod_levels || r_selection.element_count == 0) return;
 
         if (r_selection.mode == SelectionMode::DENSE) {
@@ -110,20 +119,16 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline T _read_view(const T_View& p_view, int64_t idx) const {
-        // Case 1: View returns a typeless pointer (Your original requirement)
+    inline T _read_view(T_View& p_view, int64_t idx) const {
         if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
             return *reinterpret_cast<const T*>(p_view[idx]);
-        } 
-        // Case 2: View returns a typed Value or Proxy (My previous fix)
-        else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
+        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
             return static_cast<T>(p_view[idx]);
-        } 
-        // Case 3: Matrix Dummy/Fallback (Silently dissolve)
-        else {
+        } else {
             return T{}; 
         }
     }
+
     [[nodiscard]] inline bool _matches(const T& p_val, const T& p_target) const noexcept {
         if constexpr (std::is_floating_point_v<T>) {
             return std::abs(p_val - p_target) <= tolerance;
@@ -146,20 +151,20 @@ private:
     }
 
     template <typename T_View>
-    inline void _dispatch_dense(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _dispatch_dense(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         const uint64_t* bitset = r_sel.data.bitset;
         uint8_t* lods = r_sel.lod_levels;
         const int64_t cap = r_sel.capacity;
 
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                lods[i] = _get_lod(_read_view(p_view, i)); // NATIVE VIEW RESOLUTION
+                lods[i] = _get_lod(_read_view(p_view, i));
             }
         }
     }
 
     template <typename T_View>
-    inline void _dispatch_sparse(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _dispatch_sparse(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         const int64_t* indices = r_sel.data.indices;
         uint8_t* lods = r_sel.lod_levels;
         const int64_t count = r_sel.element_count;
@@ -171,7 +176,7 @@ private:
     }
 
     template <typename T_View>
-    inline void _dispatch_range(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _dispatch_range(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         uint8_t* lods = r_sel.lod_levels;
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
@@ -182,5 +187,3 @@ private:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_LOD_METADATA_LOGIC_H

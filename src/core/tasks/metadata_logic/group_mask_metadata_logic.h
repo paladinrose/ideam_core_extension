@@ -32,6 +32,12 @@ struct GroupMaskMetadataLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::ANY;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Flat element comparison
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     struct Mapping {
@@ -47,6 +53,22 @@ struct GroupMaskMetadataLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
 
+        // 1. Operation Mode
+        godot::Dictionary op_prop;
+        op_prop["name"] = "op";
+        op_prop["type"] = godot::Variant::INT;
+        op_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        op_prop["hint_string"] = "Set,Add,Remove";
+        props.push_back(op_prop);
+
+        // 2. Tolerance
+        godot::Dictionary tol_prop;
+        tol_prop["name"] = "tolerance";
+        tol_prop["type"] = godot::Variant::FLOAT;
+        tol_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(tol_prop);
+
+        // 3. Mappings
         godot::Dictionary mappings_prop;
         mappings_prop["name"] = "mappings";
         mappings_prop["type"] = godot::Variant::ARRAY;
@@ -72,24 +94,34 @@ struct GroupMaskMetadataLogic {
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("op")) {
+            op = static_cast<GroupMaskOp>(static_cast<uint8_t>(static_cast<int64_t>(p_props["op"])));
+        }
         
+        if (p_props.has("tolerance")) {
+            tolerance = static_cast<float>(p_props["tolerance"]);
+        }
+
         if (p_props.has("mappings")) {
             godot::Array arr = p_props["mappings"];
             size_t elements_to_copy = std::min(static_cast<size_t>(arr.size()), N);
             for (size_t i = 0; i < elements_to_copy; ++i) {
                 godot::Dictionary element = arr[i];
                 if (element.has("target_value")) {
-                    mappings[i].target_value = element["target_value"];
+                    mappings[i].target_value = static_cast<T>(element["target_value"]);
                 }
                 if (element.has("bit_flag")) {
-                    mappings[i].bit_flag = element["bit_flag"];
+                    mappings[i].bit_flag = static_cast<uint32_t>(static_cast<int64_t>(element["bit_flag"]));
                 }
             }
         }
     }
 
     template <typename T_View, typename T_Strategy>
-    void execute_metadata(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {
+    void execute_metadata(MemoryBufferSelectionPOD& r_selection,
+                          T_View& p_view,
+                          const T_Strategy& p_strategy,
+                          const TaskContextPOD& p_context) const {
         if (!r_selection.group_masks || r_selection.element_count == 0) return;
 
         if (r_selection.mode == SelectionMode::DENSE) {
@@ -110,7 +142,7 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline T _read_view(const T_View& p_view, int64_t idx) const {
+    inline T _read_view(T_View& p_view, int64_t idx) const {
         if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
             return *reinterpret_cast<const T*>(p_view[idx]);
         } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
@@ -143,7 +175,7 @@ private:
     }
 
     template <typename T_View>
-    inline void _dispatch_dense(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _dispatch_dense(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         switch (op) {
             case GroupMaskOp::SET:    _loop_dense<GroupMaskOp::SET>(r_sel, p_view); break;
             case GroupMaskOp::ADD:    _loop_dense<GroupMaskOp::ADD>(r_sel, p_view); break;
@@ -152,7 +184,7 @@ private:
     }
 
     template <typename T_View>
-    inline void _dispatch_sparse(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _dispatch_sparse(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         switch (op) {
             case GroupMaskOp::SET:    _loop_sparse<GroupMaskOp::SET>(r_sel, p_view); break;
             case GroupMaskOp::ADD:    _loop_sparse<GroupMaskOp::ADD>(r_sel, p_view); break;
@@ -161,7 +193,7 @@ private:
     }
 
     template <typename T_View>
-    inline void _dispatch_range(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _dispatch_range(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         switch (op) {
             case GroupMaskOp::SET:    _loop_range<GroupMaskOp::SET>(r_sel, p_view); break;
             case GroupMaskOp::ADD:    _loop_range<GroupMaskOp::ADD>(r_sel, p_view); break;
@@ -170,7 +202,7 @@ private:
     }
 
     template <GroupMaskOp O, typename T_View>
-    inline void _loop_dense(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _loop_dense(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         const uint64_t* bitset = r_sel.data.bitset;
         uint32_t* masks = r_sel.group_masks;
         const int64_t cap = r_sel.capacity;
@@ -188,7 +220,7 @@ private:
     }
 
     template <GroupMaskOp O, typename T_View>
-    inline void _loop_sparse(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _loop_sparse(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         const int64_t* indices = r_sel.data.indices;
         uint32_t* masks = r_sel.group_masks;
         const int64_t count = r_sel.element_count;
@@ -205,7 +237,7 @@ private:
     }
 
     template <GroupMaskOp O, typename T_View>
-    inline void _loop_range(MemoryBufferSelectionPOD& r_sel, const T_View& p_view) const {
+    inline void _loop_range(MemoryBufferSelectionPOD& r_sel, T_View& p_view) const {
         uint32_t* masks = r_sel.group_masks;
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
@@ -221,5 +253,3 @@ private:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_GROUP_MASK_METADATA_LOGIC_H

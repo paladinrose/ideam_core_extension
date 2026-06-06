@@ -25,6 +25,12 @@ struct RelationalBridgeQueryLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
     static constexpr DataType required_types              = DataType::INT32 | DataType::INT64;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr bool requires_static_kernel = false;
+    static constexpr size_t kernel_size = 0;
+
     static constexpr size_t transient_workspace_bytes     = 0;
 
     static constexpr bool supports_cull = true;
@@ -50,7 +56,7 @@ struct RelationalBridgeQueryLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("column_id")) {
-            column_id = p_props["column_id"];
+            column_id = static_cast<uint32_t>(p_props["column_id"]);
         }
     }
     

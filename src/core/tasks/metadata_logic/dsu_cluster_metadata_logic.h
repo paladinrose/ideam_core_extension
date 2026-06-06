@@ -33,6 +33,12 @@ struct DSUClusterMetadataLogic {
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::STENCIL_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR | BufferLayoutType::ANY_SPATIAL;
     static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
+    
+    // --- Explicit Spatial Contracts ---
+    static constexpr size_t dimensions = 0; // Topological/Graph evaluation assumes dimensionless topology
+    static constexpr bool requires_static_kernel = true;
+    static constexpr size_t kernel_size = PointCount;
+    
     static constexpr size_t transient_workspace_bytes     = 0; // User must set via Graph to `capacity * 20`
 
     // --- Configuration ---
@@ -99,27 +105,30 @@ struct DSUClusterMetadataLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("mode")) {
-            mode = static_cast<ClusterCompareMode>(static_cast<uint8_t>(p_props["mode"]));
+            mode = static_cast<ClusterCompareMode>(static_cast<uint8_t>(static_cast<int64_t>(p_props["mode"])));
         }
         if (p_props.has("tolerance")) {
-            tolerance = p_props["tolerance"];
+            tolerance = static_cast<float>(p_props["tolerance"]);
         }
         if (p_props.has("cos_threshold")) {
-            cos_threshold = p_props["cos_threshold"];
+            cos_threshold = static_cast<float>(p_props["cos_threshold"]);
         }
         if (p_props.has("bitmask")) {
-            bitmask = p_props["bitmask"];
+            bitmask = static_cast<uint32_t>(static_cast<int64_t>(p_props["bitmask"]));
         }
         if (p_props.has("min_cluster_size")) {
-            min_cluster_size = p_props["min_cluster_size"];
+            min_cluster_size = static_cast<int64_t>(p_props["min_cluster_size"]);
         }
         if (p_props.has("partition_id_offset")) {
-            partition_id_offset = p_props["partition_id_offset"];
+            partition_id_offset = static_cast<int32_t>(static_cast<int64_t>(p_props["partition_id_offset"]));
         }
     }
 
     template <typename T_View, typename T_Strategy>
-    void execute_metadata(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {
+    void execute_metadata(MemoryBufferSelectionPOD& r_selection,
+                          T_View& p_view,
+                          const T_Strategy& p_strategy,
+                          const TaskContextPOD& p_context) const {
         if (!r_selection.partition_ids || r_selection.element_count == 0 || !p_context.local_workspace) return;
 
         const int64_t total_capacity = r_selection.capacity;
@@ -268,5 +277,3 @@ private:
 };
 
 } // namespace ideam::core
-
- // IDEAM_CORE_DSU_CLUSTER_METADATA_LOGIC_H
