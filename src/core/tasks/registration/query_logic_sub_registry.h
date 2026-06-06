@@ -222,15 +222,8 @@ private:
             if ((L_Type::required_types & iter_type_mask) == DataType::NONE) return false;
             if ((V_Traits::supported_types & iter_type_mask) == DataType::NONE) return false;
             
-            // 4. The Core 6-Argument DOD Validator
-            return QueryLogicValidator::validate(
-                L_Type::required_capabilities, 
-                L_Type::required_layouts, 
-                L_Type::required_types,
-                V_Traits::capabilities, 
-                V_Traits::supported_layouts, 
-                V_Traits::supported_types
-            );
+            // 4. Deep DOD Validation via Types (Capabilities, Layouts, Types, Dimensions, Kernels)
+            return QueryLogicValidator::validate<L_Type, V_Type>();
         }();
 
         // --- FACTORY GENERATION ---
