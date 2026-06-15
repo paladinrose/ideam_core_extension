@@ -80,7 +80,7 @@ struct SpatialProjectionBridgeQueryLogic {
             for (int64_t i = 0; i < source_selection->capacity; ++i) {
                 if (src_bitset[i >> 6] & (1ULL << (i & 63))) {
                     // CORRECTED: Safe extraction
-                    int64_t cell_id = p_view.get_strategy().get_cell_index(_read_view(p_view, i));
+                    int64_t cell_id = p_view.strategy.get_cell_index(_read_view(p_view, i));
                     if (cell_id >= 0 && cell_id < r_selection.capacity) {
                         projection_mask[cell_id >> 6] |= (1ULL << (cell_id & 63));
                     }
@@ -90,7 +90,7 @@ struct SpatialProjectionBridgeQueryLogic {
             for (int64_t i = 0; i < source_selection->element_count; ++i) {
                 int64_t src_idx = source_selection->data.indices[i];
                 // CORRECTED: Safe extraction
-                int64_t cell_id = p_view.get_strategy().get_cell_index(_read_view(p_view, src_idx));
+                int64_t cell_id = p_view.strategy.get_cell_index(_read_view(p_view, src_idx));
                 if (cell_id >= 0 && cell_id < r_selection.capacity) {
                     projection_mask[cell_id >> 6] |= (1ULL << (cell_id & 63));
                 }

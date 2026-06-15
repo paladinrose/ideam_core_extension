@@ -4,15 +4,21 @@
 #include "../../memory/memory_manager_dod.h"
 #include "../../memory/memory_buffer_selection_pod.h"
 #include "../../memory/views/static_stencil_view.h"
-#include "../../memory/views/swap_view.h" // Added for Write-Routing
+#include "../../memory/views/swap_view.h" 
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "transform_logic_traits.h"
 #include <array>
-#include <new> // Required for placement new in the workspace
+#include <new> 
 
 namespace ideam::core {
 
+/**
+ * StencilConvolutionTransformLogic<T, Strategy, KernelSize>
+ * Applies a fixed-topology MAC (Multiply-Accumulate) convolution over a spatial grid.
+ * Examples: Gaussian Blur, Sobel Edge Detection, Cellular Automata.
+ * EXCLUSIVELY STATIC: Enforces compile-time unrolling of the MAC sequence.
+ */
 template <typename T, typename T_Strategy, size_t KernelSize>
 struct alignas(64) StencilConvolutionTransformLogic {
     using ValueType       = T;
@@ -47,21 +53,18 @@ struct alignas(64) StencilConvolutionTransformLogic {
     static godot::Array get_ui_properties() {
         godot::Array props;
         
-        // 1. Center Weight (Type T)
         godot::Dictionary cw_prop;
         cw_prop["name"] = "center_weight";
-        cw_prop["type"] = "T"; // Caught and parsed by your dynamic registry
+        cw_prop["type"] = "T"; 
         props.push_back(cw_prop);
 
-        // 2. Kernel Weights (Fixed-size Array of T)
         godot::Dictionary kw_prop;
         kw_prop["name"] = "kernel_weights";
         kw_prop["type"] = godot::Variant::ARRAY;
         kw_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        kw_prop["hint_string"] = "Array of T"; // Tells your UI builder what variants to lock the array to
+        kw_prop["hint_string"] = "Array of T"; 
         props.push_back(kw_prop);
 
-        // 3. Kernel Deltas (Fixed-size Array of spatial offsets)
         godot::Dictionary kd_prop;
         kd_prop["name"] = "kernel_deltas";
         kd_prop["type"] = godot::Variant::ARRAY;
@@ -95,24 +98,15 @@ struct alignas(64) StencilConvolutionTransformLogic {
         }
     }
     
-    /**
-     * get_transient_requirement (Dynamic Scaling)
-     * We just need space for our Kernel weights. 
-     */
-    inline size_t get_transient_requirement(const TaskContextPOD& p_context) const {
+    [[nodiscard]] inline size_t get_transient_requirement(const TaskContextPOD& p_context) const noexcept {
         return KernelSize * sizeof(T); 
     }
 
-    /**
-     * prepare (The Pre-Flight)
-     * Executed before the graph barrier sync. Perfect time to handle offset math
-     * and weaponize our transient memory to avoid cache thrashing.
-     */
     inline void prepare(const TaskContextPOD& p_context) {
         const GrantPartPOD* part = p_context.get_grant_part(grid_buffer_id);
         if (!part) return;
 
-        // 1. Selectively recalculate spatial offsets if the buffer layout changed
+        // 1. Selectively recalculate spatial byte-offsets if the buffer layout changed
         if (part->buffer_version_at_issue != cached_buffer_version) {
             persistent_baked_offsets = DefaultView::bake_spatial_offsets(
                 T_Strategy{}, part->element_stride, kernel_deltas
@@ -120,9 +114,7 @@ struct alignas(64) StencilConvolutionTransformLogic {
             cached_buffer_version = part->buffer_version_at_issue;
         }
 
-        // 2. Weaponize local_workspace (Aligning weights for SIMD)
-        // Copy weights into the transient scratchpad to ensure they sit on a fresh, 
-        // contiguous cache line right beside our execution frame.
+        // 2. Weaponize local_workspace (Aligning weights for L1 Cache)
         if (p_context.local_workspace) {
             T* fast_weights = new (p_context.local_workspace) T[KernelSize];
             for (size_t i = 0; i < KernelSize; ++i) {
@@ -131,34 +123,25 @@ struct alignas(64) StencilConvolutionTransformLogic {
         }
     }
 
-    /**
-     * configure_view (The Binder)
-     * Maps our pre-calculated state into the primary read view right before execution.
-     */
     inline void configure_view(DefaultView& p_view, const TaskContextPOD& p_context, const GrantPartPOD* p_part) const {
         p_view.baked_offsets = persistent_baked_offsets;
     }
 
-    /**
-     * execute_transform (The Hot Loop)
-     */
-    template <typename T_View>
+    template <typename T_View, typename T_StrategyType>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {
+    inline void execute(const TaskContextPOD& context, const T_View& main_view) const {
         const MemoryBufferSelectionPOD* sel = context.get_selection(grid_buffer_id);
         if (!sel || sel->mode != SelectionMode::DENSE) return;
 
         // 1. Spin up the Secondary SwapView for State T+1 Writes
-        SwapView<T, T_Strategy> write_view;
+        SwapView<T, T_StrategyType> write_view;
         write_view.bind_secondary(context.get_grant_part(grid_buffer_id));
 
-        // 2. The Graceful Fallback (Zero Branching inside the loop)
-        // If transient memory was exhausted, context.local_workspace is null.
-        // We gracefully degrade to the cold-storage weights inside the Logic struct.
+        // 2. Resolve Active Weights Pointer
         const T* active_weights = context.local_workspace ? 
             reinterpret_cast<const T*>(context.local_workspace) : 
             kernel_weights.data();
@@ -170,11 +153,11 @@ struct alignas(64) StencilConvolutionTransformLogic {
         for (int64_t i = 0; i < count; ++i) {
             if (!(bitset[i >> 6] & (1ULL << (i & 63)))) continue;
 
-            main_view[i];
+            main_view[i]; // Position Stencil center
             
             T accumulator = main_view.center() * center_weight;
 
-            // Prefetcher blasts through active_weights, oblivious to where it lives.
+            // Zero-branching, unrollable sequence
             for (size_t k = 0; k < KernelSize; ++k) {
                 accumulator += main_view.neighbor(k) * active_weights[k];
             }

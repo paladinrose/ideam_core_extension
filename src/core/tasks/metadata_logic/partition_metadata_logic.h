@@ -94,7 +94,9 @@ struct PartitionMetadataLogic {
     }
 
     template <typename T_View, typename T_Strategy>
-    void execute_metadata(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {
+    void execute(MemoryBufferSelectionPOD& r_selection,
+                    const TaskContextPOD& p_context,
+                    const T_View& p_view) const {
         if (!r_selection.partition_ids || r_selection.element_count == 0) return;
 
         if (r_selection.mode == SelectionMode::DENSE) {

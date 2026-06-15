@@ -78,7 +78,7 @@ struct alignas(64) EulerIntegrationTransformLogic {
     }
 
     template <typename T_View, typename T_Strategy>
-    inline void execute_transform(const TaskContextPOD& context, T_View& pos_view) const {
+    inline void execute(const TaskContextPOD& context,  const T_View& pos_view) const {
         // 1. Grab the secondary buffer (Velocity)
         const GrantPartPOD* vel_part = context.get_grant_part(velocity_buffer_id);
         if (!vel_part) return;

@@ -96,10 +96,11 @@ struct LODMetadataLogic {
     }
 
     template <typename T_View, typename T_Strategy>
-    void execute_metadata(MemoryBufferSelectionPOD& r_selection,
-                          T_View& p_view,
-                          const T_Strategy& p_strategy,
-                          const TaskContextPOD& p_context) const {
+    void execute(MemoryBufferSelectionPOD& r_selection,
+                            const TaskContextPOD& p_context,
+                            const T_View& p_view
+                            //const T_Strategy& p_strategy,
+                            ) const {
         if (!r_selection.lod_levels || r_selection.element_count == 0) return;
 
         if (r_selection.mode == SelectionMode::DENSE) {

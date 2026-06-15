@@ -60,7 +60,7 @@ struct alignas(64) BoundsExtractionTransformLogic {
     
     // --- The Transform Execution ---
     template <typename T_View, typename T_Strategy>
-    inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {
+    inline void execute(const TaskContextPOD& context, const T_View& main_view) const {
         if (!output_destination) return;
 
         const MemoryBufferSelectionPOD* sel = context.get_selection(target_buffer_id);

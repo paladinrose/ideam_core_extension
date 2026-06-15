@@ -128,7 +128,9 @@ struct DataComparisonQueryLogic {
     #else
         [[gnu::always_inline]]
     #endif
-    inline void execute(MemoryBufferSelectionPOD& r_selection, const TaskContextPOD& p_context, const T_View& p_view) const {
+    inline void execute(MemoryBufferSelectionPOD& r_selection, 
+                            const TaskContextPOD& p_context, 
+                            const T_View& p_view) const {
         
         // 1. Fetch the secondary buffer. NO VIEW CONSTRUCTION. 
         const GrantPartPOD* part_b = p_context.get_grant_part(comparison_buffer_id);

@@ -76,9 +76,9 @@ concept IsQueryLogic = requires {
     { 
         std::declval<T>().template execute<QueryOp::CULL, typename T::DefaultView, typename T::DefaultStrategy>(
             std::declval<MemoryBufferSelectionPOD&>(),
-            std::declval<const typename T::DefaultView&>(),
-            std::declval<const typename T::DefaultStrategy&>(),
-            std::declval<const TaskContextPOD&>()
+            std::declval<const TaskContextPOD&>(),
+            std::declval<const typename T::DefaultView&>()
+            //std::declval<const typename T::DefaultStrategy&>(),
         )
     } -> std::same_as<void>;
 };

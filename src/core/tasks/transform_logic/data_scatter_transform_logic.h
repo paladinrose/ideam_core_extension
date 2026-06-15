@@ -65,7 +65,7 @@ struct alignas(64) DataScatterTransformLogic {
     }
     
     template <typename T_View, typename T_Strategy>
-    inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {
+    inline void execute(const TaskContextPOD& context, const T_View& main_view) const {
         if (!input_index_map || input_index_map->empty()) return;
 
         const GrantPartPOD* src_part = context.get_grant_part(source_buffer_id);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../memory/memory_buffer_selection_pod.h"
-#include "../../memory/views/stencil_view.h"
+#include "../../memory/views/static_stencil_view.h"
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "metadata_logic_traits.h"
@@ -11,23 +11,23 @@
 
 namespace ideam::core {
 
-enum class ClusterCompareMode : uint8_t {
+enum class ClusterStaticCompareMode : uint8_t {
     ABSOLUTE_VALUE,
     ANGULAR,
     BITMASK_MATCH
 };
 
 /**
- * DSUClusterMetadataLogic<T>
+ * DSUClusterStaticMetadataLogic<T, PointCount>
  * Clusters adjacent elements into partitions using a Disjoint Set Union algorithm.
- * Fully delegates spatial topology to the dynamic StencilView.
+ * Fully delegates spatial topology to the provided StaticStencilView.
  * TRANSIENT MEMORY: Requires `capacity * 20` bytes for O(N) mapping arrays.
  */
-template <typename T>
-struct DSUClusterMetadataLogic {
+template <typename T, size_t PointCount>
+struct DSUClusterStaticMetadataLogic {
     using ValueType       = T;
     using DefaultStrategy = FlatStrategy;
-    using DefaultView     = StencilView<T, DefaultStrategy>;
+    using DefaultView     = StaticStencilView<T, DefaultStrategy, PointCount>;
 
     // --- DOD Contract Requirements ---
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::STENCIL_ACCESS;
@@ -36,16 +36,14 @@ struct DSUClusterMetadataLogic {
     
     // --- Explicit Spatial Contracts ---
     static constexpr size_t dimensions = 0; // Topological/Graph evaluation assumes dimensionless topology
-    static constexpr bool requires_static_kernel = false;
-    static constexpr size_t kernel_size = 0;
+    static constexpr bool requires_static_kernel = true;
+    static constexpr size_t kernel_size = PointCount;
     
     static constexpr size_t transient_workspace_bytes     = 0; // User must set via Graph to `capacity * 20`
 
     // --- Configuration ---
-    ClusterCompareMode mode = ClusterCompareMode::ABSOLUTE_VALUE;
+    ClusterStaticCompareMode mode = ClusterStaticCompareMode::ABSOLUTE_VALUE;
     
-    int32_t radius = 1; // Dynamic footprint
-
     float tolerance = 0.1f;
     float cos_threshold = 1.0f;
     uint32_t bitmask = 0xFFFFFFFF;
@@ -65,42 +63,35 @@ struct DSUClusterMetadataLogic {
         mode_prop["hint_string"] = "Absolute Value,Angular,Bitmask Match";
         props.push_back(mode_prop);
 
-        // 2. Radius
-        godot::Dictionary radius_prop;
-        radius_prop["name"] = "radius";
-        radius_prop["type"] = godot::Variant::INT;
-        radius_prop["hint"] = godot::PROPERTY_HINT_NONE;
-        props.push_back(radius_prop);
-
-        // 3. Tolerance
+        // 2. Tolerance
         godot::Dictionary tol_prop;
         tol_prop["name"] = "tolerance";
         tol_prop["type"] = godot::Variant::FLOAT;
         tol_prop["hint"] = godot::PROPERTY_HINT_NONE;
         props.push_back(tol_prop);
 
-        // 4. Cos Threshold
+        // 3. Cos Threshold
         godot::Dictionary cos_prop;
         cos_prop["name"] = "cos_threshold";
         cos_prop["type"] = godot::Variant::FLOAT;
         cos_prop["hint"] = godot::PROPERTY_HINT_NONE;
         props.push_back(cos_prop);
 
-        // 5. Bitmask
+        // 4. Bitmask
         godot::Dictionary bit_prop;
         bit_prop["name"] = "bitmask";
         bit_prop["type"] = godot::Variant::INT;
         bit_prop["hint"] = godot::PROPERTY_HINT_NONE;
         props.push_back(bit_prop);
 
-        // 6. Min Cluster Size
+        // 5. Min Cluster Size
         godot::Dictionary min_prop;
         min_prop["name"] = "min_cluster_size";
         min_prop["type"] = godot::Variant::INT;
         min_prop["hint"] = godot::PROPERTY_HINT_NONE;
         props.push_back(min_prop);
 
-        // 7. Partition ID Offset
+        // 6. Partition ID Offset
         godot::Dictionary part_offset_prop;
         part_offset_prop["name"] = "partition_id_offset";
         part_offset_prop["type"] = godot::Variant::INT;
@@ -114,10 +105,7 @@ struct DSUClusterMetadataLogic {
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("mode")) {
-            mode = static_cast<ClusterCompareMode>(static_cast<uint8_t>(static_cast<int64_t>(p_props["mode"])));
-        }
-        if (p_props.has("radius")) {
-            radius = static_cast<int32_t>(static_cast<int64_t>(p_props["radius"]));
+            mode = static_cast<ClusterStaticCompareMode>(static_cast<uint8_t>(static_cast<int64_t>(p_props["mode"])));
         }
         if (p_props.has("tolerance")) {
             tolerance = static_cast<float>(p_props["tolerance"]);
@@ -186,42 +174,28 @@ struct DSUClusterMetadataLogic {
         // SINGLE SOURCE OF TRUTH: Hardware base pointer from the Grant
         const uint8_t* raw_base = static_cast<const uint8_t*>(part->raw_base_ptr);
 
-        constexpr size_t dim = ViewTraits<T_View>::dimensions;
-
         // 3. Unify Neighbors
         for (int32_t i = 0; i < n; ++i) {
-            // Position the View's internal mutable cursor
+            // CLEAN ABSTRACTION: 
+            // 'i' maps perfectly to the View's logical selection coordinate.
+            // Calling operator[] correctly positions the View's internal mutable cursor.
             const T& val_a = p_view[i];
 
-            if constexpr (dim == 1) {
-                for (int32_t dx = -radius; dx <= radius; ++dx) {
-                    if (dx == 0) continue;
-                    _attempt_unification(val_a, p_view.neighbor(dx), raw_base, stride, total_capacity, global_to_local, dsu_map, i);
-                }
-            } else if constexpr (dim == 2) {
-                for (int32_t dy = -radius; dy <= radius; ++dy) {
-                    for (int32_t dx = -radius; dx <= radius; ++dx) {
-                        if (dx == 0 && dy == 0) continue;
-                        _attempt_unification(val_a, p_view.neighbor(dx, dy), raw_base, stride, total_capacity, global_to_local, dsu_map, i);
-                    }
-                }
-            } else if constexpr (dim == 3) {
-                for (int32_t dz = -radius; dz <= radius; ++dz) {
-                    for (int32_t dy = -radius; dy <= radius; ++dy) {
-                        for (int32_t dx = -radius; dx <= radius; ++dx) {
-                            if (dx == 0 && dy == 0 && dz == 0) continue;
-                            _attempt_unification(val_a, p_view.neighbor(dx, dy, dz), raw_base, stride, total_capacity, global_to_local, dsu_map, i);
-                        }
-                    }
-                }
-            } else if constexpr (dim == 4) {
-                for (int32_t dw = -radius; dw <= radius; ++dw) {
-                    for (int32_t dz = -radius; dz <= radius; ++dz) {
-                        for (int32_t dy = -radius; dy <= radius; ++dy) {
-                            for (int32_t dx = -radius; dx <= radius; ++dx) {
-                                if (dx == 0 && dy == 0 && dz == 0 && dw == 0) continue;
-                                _attempt_unification(val_a, p_view.neighbor(dx, dy, dz, dw), raw_base, stride, total_capacity, global_to_local, dsu_map, i);
-                            }
+            // C++17 compile-time gate ensures SingleElementView (PointCount = 0) is pruned 
+            // and never attempts to call neighbor().
+            if constexpr (PointCount > 0) {
+                for (size_t p = 0; p < PointCount; ++p) {
+                    const T& neigh_val = p_view.neighbor(p);
+                    
+                    // SAFE HARDWARE MATH: Calculate global index offset against the GrantPart base, 
+                    // completely independent of the View's internal naming structure.
+                    const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
+                    const int64_t neigh_g_idx = byte_diff / stride;
+                    
+                    if (neigh_g_idx >= 0 && neigh_g_idx < total_capacity && global_to_local[neigh_g_idx] != -1) {
+                        const int32_t local_neigh = global_to_local[neigh_g_idx];
+                        if (local_neigh > i && _evaluate(val_a, neigh_val)) {
+                            _unite(dsu_map, i, local_neigh);
                         }
                     }
                 }
@@ -253,18 +227,6 @@ struct DSUClusterMetadataLogic {
     }
     
 private:
-    inline void _attempt_unification(const T& val_a, const T& neigh_val, const uint8_t* raw_base, const intptr_t stride, const int64_t total_capacity, const int32_t* global_to_local, int32_t* dsu_map, int32_t i) const {
-        const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
-        const int64_t neigh_g_idx = byte_diff / stride;
-        
-        if (neigh_g_idx >= 0 && neigh_g_idx < total_capacity && global_to_local[neigh_g_idx] != -1) {
-            const int32_t local_neigh = global_to_local[neigh_g_idx];
-            if (local_neigh > i && _evaluate(val_a, neigh_val)) {
-                _unite(dsu_map, i, local_neigh);
-            }
-        }
-    }
-
     inline int32_t _find_root(int32_t* dsu_map, int32_t i) const {
         while (i != dsu_map[i]) {
             dsu_map[i] = dsu_map[dsu_map[i]]; // Path compression
@@ -280,11 +242,11 @@ private:
     }
 
     inline bool _evaluate(const T& a, const T& b) const {
-        if (mode == ClusterCompareMode::ABSOLUTE_VALUE) {
+        if (mode == ClusterStaticCompareMode::ABSOLUTE_VALUE) {
             if constexpr (std::is_floating_point_v<T>) return std::abs(a - b) <= tolerance;
             else if constexpr (requires { a.distance_squared_to(b); }) return a.distance_squared_to(b) <= (tolerance * tolerance);
             else return a == b;
-        } else if (mode == ClusterCompareMode::BITMASK_MATCH) {
+        } else if (mode == ClusterStaticCompareMode::BITMASK_MATCH) {
             if constexpr (std::is_integral_v<T>) return (a & bitmask) == (b & bitmask);
         }
         return false;

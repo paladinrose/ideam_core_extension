@@ -145,7 +145,7 @@ struct alignas(64) FastNoiseLiteTransformLogic {
     
     // 4. Execution Payload
     template <typename T_View>
-    void execute_transform(const TaskContextPOD& context, T_View& view) const {
+    void execute(const TaskContextPOD& context, const T_View& view) const {
         for (auto it = view.begin(); it != view.end(); ++it) {
             FastNoiseLiteTargetPOD& target = *it;
             // Evaluates pure function mapping. No branching, no cache disruption.

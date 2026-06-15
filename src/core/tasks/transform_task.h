@@ -25,14 +25,7 @@ class alignas(64) TransformTask final : public INativeTask {
     // Evaluates the strict bitwise intersection of what the Logic mathematical 
     // payload demands vs what the instantiated View can structurally provide.
     static_assert(
-        TransformLogicValidator::validate(
-            T_Logic::required_capabilities,
-            T_Logic::required_layouts,
-            T_Logic::required_types,  
-            ViewTraits<T_View>::capabilities,
-            ViewTraits<T_View>::supported_layouts,
-            ViewTraits<T_View>::supported_types
-        ),
+        TransformLogicValidator::validate<T_Logic, T_View>(),
         "TransformTask instantiation failed: The selected T_View or T_Strategy does not fulfill the hardware, layout, or type requirements of the T_Logic!"
     );
 
@@ -87,7 +80,7 @@ public:
         T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
         // Zero-overhead dispatch into the optimized math payload
-        logic.template execute_transform<T_View, T_Strategy>(p_context, view);
+        logic.template execute<T_View, T_Strategy>(p_context, view);
     }
 
 };

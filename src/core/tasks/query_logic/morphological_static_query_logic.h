@@ -2,7 +2,7 @@
 
 #include "../../memory/memory_common.h"
 #include "../../memory/memory_buffer_selection_pod.h"
-#include "../../memory/views/stencil_view.h" // Switched to dynamic StencilView
+#include "../../memory/views/static_stencil_view.h" // Upgraded to Static Stencil
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "query_logic_traits.h"
@@ -12,18 +12,20 @@
 namespace ideam::core {
 
 /**
- * MorphologicalQueryLogic
+ * MorphologicalStaticQueryLogic
  * Replaces both BorderCull and ErosionCull.
  * CULL (Erosion): Removes elements that touch inactive space.
  * ADD (Dilation): Queues inactive elements that touch active space.
- * * DESIGN: Utilizes the dynamic StencilView. Geometric axes are unrolled 
- * at compile time to map coordinate deltas (dx, dy, dz) to flat memory offsets.
+ * * DESIGN: Utilizes StaticStencilView for pure DOD byte-offset traversal. 
+ * Expected to be sized using `stencil_math::von_neumann_size`. 
+ * Note: Edges will spatially wrap. If a borderless topology is not desired, 
+ * either pad the grid with a Halo, or chain BorderQueryLogic<CULL> after this pass.
  */
-template <typename T, typename T_Strategy>
-struct MorphologicalQueryLogic {
+template <typename T, typename T_Strategy, size_t PointCount>
+struct MorphologicalStaticQueryLogic {
     using ValueType       = T; 
     using DefaultStrategy = T_Strategy;
-    using DefaultView     = StencilView<T, T_Strategy>; // No PointCount required
+    using DefaultView     = StaticStencilView<T, T_Strategy, PointCount>;
 
     // --- DOD Contract Requirements ---
     static constexpr ViewCapability required_capabilities = ViewCapability::STENCIL_ACCESS | ViewCapability::SPATIAL_ACCESS;
@@ -32,8 +34,8 @@ struct MorphologicalQueryLogic {
     
     // --- Explicit Spatial Contracts ---
     static constexpr size_t dimensions = T_Strategy::dimensions;
-    static constexpr bool requires_static_kernel = false; // Changed to false
-    static constexpr size_t kernel_size = 0;              // Changed to 0
+    static constexpr bool requires_static_kernel = true;
+    static constexpr size_t kernel_size = PointCount;
     
     static constexpr size_t transient_workspace_bytes     = 0;
 
@@ -90,41 +92,6 @@ private:
         return (p_bitset[p_index >> 6] & (1ULL << (p_index & 63))) != 0;
     }
 
-    // --- Dynamic Geometric Unroller ---
-    // Safely translates a Von Neumann iteration into explicit spatial coordinates 
-    // for the StencilView's variadic neighbor() function.
-    template <typename T_View, typename F>
-    #if defined(_MSC_VER)
-        [[msvc::forceinline]]
-    #else
-        [[gnu::always_inline]]
-    #endif
-    inline void _evaluate_von_neumann(const T_View& p_view, F&& p_callback) const {
-        if constexpr (T_Strategy::dimensions == 1) {
-            for (intptr_t step : {-1, 1}) { 
-                p_callback(p_view.neighbor(step)); 
-            }
-        } else if constexpr (T_Strategy::dimensions == 2) {
-            for (intptr_t step : {-1, 1}) {
-                p_callback(p_view.neighbor(step, 0));
-                p_callback(p_view.neighbor(0, step));
-            }
-        } else if constexpr (T_Strategy::dimensions == 3) {
-            for (intptr_t step : {-1, 1}) {
-                p_callback(p_view.neighbor(step, 0, 0));
-                p_callback(p_view.neighbor(0, step, 0));
-                p_callback(p_view.neighbor(0, 0, step));
-            }
-        } else if constexpr (T_Strategy::dimensions == 4) {
-            for (intptr_t step : {-1, 1}) {
-                p_callback(p_view.neighbor(step, 0, 0, 0));
-                p_callback(p_view.neighbor(0, step, 0, 0));
-                p_callback(p_view.neighbor(0, 0, step, 0));
-                p_callback(p_view.neighbor(0, 0, 0, step));
-            }
-        }
-    }
-
     template <typename T_View>
     void _execute_erosion(MemoryBufferSelectionPOD& r_selection, const T_View& p_view, void* p_workspace, const TaskContextPOD& p_ctx) const {
         uint64_t* bitset = r_selection.data.bitset;
@@ -133,6 +100,7 @@ private:
         uint64_t* snapshot = static_cast<uint64_t*>(p_workspace);
         const size_t bytes_needed = ((capacity + 63) / 64) * sizeof(uint64_t);
 
+        // Hardware pointers for the DSU index-resolution trick
         const GrantPartPOD* part = p_ctx.get_grant_part(target_buffer_id);
         const intptr_t stride = part->element_stride;
         const uint8_t* raw_base = static_cast<const uint8_t*>(part->raw_base_ptr);
@@ -143,21 +111,25 @@ private:
             for (int64_t i = 0; i < capacity; ++i) {
                 if (!(snapshot[i >> 6] & (1ULL << (i & 63)))) continue;
 
-                p_view[i]; // Focus the Stencil cursor
+                // Focus the View's mutable cursor
+                p_view[i];
 
                 bool should_erode = false;
 
-                // Fire the unroller callback
-                _evaluate_von_neumann(p_view, [&](const T& neigh_val) {
-                    if (should_erode) return; // Skip remaining if already eroded
+                if constexpr (PointCount > 0) {
+                    for (size_t p = 0; p < PointCount; ++p) {
+                        const T& neigh_val = p_view.neighbor(p);
+                        
+                        // O(1) mathematical conversion back to global flat index
+                        const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
+                        const int64_t neighbor_idx = byte_diff / stride;
 
-                    const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
-                    const int64_t neighbor_idx = byte_diff / stride;
-
-                    if (!_evaluate_neighbor(neighbor_idx, snapshot, capacity)) {
-                        should_erode = true;
+                        if (!_evaluate_neighbor(neighbor_idx, snapshot, capacity)) {
+                            should_erode = true;
+                            break;
+                        }
                     }
-                });
+                }
 
                 if (should_erode) {
                     bitset[i >> 6] &= ~(1ULL << (i & 63));
@@ -181,20 +153,24 @@ private:
         for (int64_t i = 0; i < capacity; ++i) {
             if (!(bitset[i >> 6] & (1ULL << (i & 63)))) continue;
 
-            p_view[i]; // Focus the Stencil cursor
+            p_view[i]; 
 
-            _evaluate_von_neumann(p_view, [&](const T& neigh_val) {
-                const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
-                const int64_t neighbor_idx = byte_diff / stride;
-                
-                if (neighbor_idx >= 0 && neighbor_idx < capacity) {
-                    if (!(bitset[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
-                        if (unclaimed && (unclaimed[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
-                            p_ctx.queue_selection_command(target_buffer_id, neighbor_idx);
+            if constexpr (PointCount > 0) {
+                for (size_t p = 0; p < PointCount; ++p) {
+                    const T& neigh_val = p_view.neighbor(p);
+                    
+                    const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
+                    const int64_t neighbor_idx = byte_diff / stride;
+                    
+                    if (neighbor_idx >= 0 && neighbor_idx < capacity) {
+                        if (!(bitset[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
+                            if (unclaimed && (unclaimed[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
+                                p_ctx.queue_selection_command(target_buffer_id, neighbor_idx);
+                            }
                         }
                     }
                 }
-            });
+            }
         }
     }
 };

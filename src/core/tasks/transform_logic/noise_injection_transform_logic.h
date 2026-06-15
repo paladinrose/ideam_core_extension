@@ -72,7 +72,7 @@ struct alignas(64) NoiseInjectionTransformLogic {
     }
 
     template <typename T_View, typename T_Strategy>
-    inline void execute_transform(const TaskContextPOD& context, T_View& main_view) const {
+    inline void execute(const TaskContextPOD& context, const T_View& main_view) const {
         const int64_t count = main_view.count;
         const float scale = magnitude * static_cast<float>(context.delta);
         

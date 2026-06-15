@@ -26,14 +26,7 @@ class alignas(64) MetadataTask final : public INativeTask {
     // Evaluates the strict bitwise intersection of what the Logic structural 
     // payload demands vs what the instantiated View can provide.
     static_assert(
-        MetadataLogicValidator::validate(
-            T_Logic::required_capabilities, 
-            T_Logic::required_layouts, 
-            T_Logic::required_types,
-            ViewTraits<T_View>::capabilities,
-            ViewTraits<T_View>::supported_layouts,
-            ViewTraits<T_View>::supported_types
-        ),
+        MetadataLogicValidator::validate<T_Logic, T_View>(),
         "MetadataTask instantiation failed: The selected T_View or T_Strategy does not fulfill the hardware, layout, or type requirements of the T_Logic!"
     );
 
@@ -89,7 +82,7 @@ public:
 
         T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
-        logic.template execute_metadata<T_View, T_Strategy>(*selection, p_context, view);
+        logic.template execute<T_View, T_Strategy>(*selection, p_context, view);
     }
 
 };

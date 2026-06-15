@@ -32,14 +32,7 @@ class alignas(64) QueryTask final : public INativeTask {
 
     // --- Compile-Time Firewall ---
     static_assert(
-        QueryLogicValidator::validate(
-            T_Logic::required_capabilities, 
-            T_Logic::required_layouts,      
-            T_Logic::required_types,        
-            ViewTraits<T_View>::capabilities, 
-            ViewTraits<T_View>::supported_layouts,
-            ViewTraits<T_View>::supported_types
-        ),
+        QueryLogicValidator::validate<T_Logic, T_View>(),
         "QueryTask instantiation failed: The selected T_View or T_Strategy does not fulfill the hardware, layout, or type requirements of the T_Logic!"
     );
 

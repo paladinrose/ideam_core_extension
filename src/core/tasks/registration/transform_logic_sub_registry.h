@@ -29,6 +29,7 @@
 #include "../../memory/views/sparse_set_view.h"
 #include "../../memory/views/static_stencil_view.h"
 #include "../../memory/views/stencil_view.h"
+#include "../../memory/views/stencil_math.h"
 #include "../../memory/views/swap_view.h"
 #include "../../memory/views/strategies.h"
 
@@ -71,12 +72,36 @@ namespace {
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::FastNoiseLite, C, S> { using Type = FastNoiseLiteTransformLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::NoiseInjection, C, S> { using Type = NoiseInjectionTransformLogic<C>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 9>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 25>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 49>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 5>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 13>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, C, S> { using Type = StencilConvolutionTransformLogic<C, S, 25>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 1>();
+        using Type = StencilConvolutionTransformLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R2, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 2>();
+        using Type = StencilConvolutionTransformLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R3, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 3>();
+        using Type = StencilConvolutionTransformLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R1, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::von_neumann_size<S::dimensions, 1>();
+        using Type = StencilConvolutionTransformLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R2, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::von_neumann_size<S::dimensions, 2>();
+        using Type = StencilConvolutionTransformLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_VonNeumann_R3, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::von_neumann_size<S::dimensions, 3>();
+        using Type = StencilConvolutionTransformLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ValueAccumulation, C, S> { using Type = ValueAccumulationTransformLogic<C>; static constexpr bool is_valid = true; };
     template <TransformLogicID LogicID, typename C, typename S> struct LogicKernelExtractor : KernelExtractorImpl<TransformLogicResolver<LogicID, C, S>> {};
 
@@ -194,18 +219,6 @@ private:
         // --- FACTORY GENERATION ---
         if constexpr (is_fully_valid) {
             if constexpr (!BuildUI) {
-                // TRAP 1: Enforce Default Constructibility
-                static_assert(std::is_default_constructible_v<L_Type>, 
-                    "COMPILE TRAP: L_Type lacks a default constructor.");
-                
-                // TRAP 2: Enforce Implicit Contract Methods
-                static_assert(requires(L_Type l) { l.get_target_buffer_id(); }, 
-                    "COMPILE TRAP: L_Type is missing get_target_buffer_id().");
-
-                // TRAP 3: Verify View Assembly Constraints
-                static_assert(requires(L_Type l, const TaskContextPOD& c, const GrantPartPOD* p) { assemble_view<L_Type, V_Type>(l, c, p); }, 
-                    "COMPILE TRAP: assemble_view is rejecting this L_Type and V_Type combination.");
-
                 // Hot-Path Execution Routing
                 factories[FlatIdx] = []() -> INativeTask* {
                     return new TransformTask<L_Type, V_Type, T_Strategy>();

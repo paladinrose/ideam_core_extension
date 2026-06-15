@@ -101,7 +101,7 @@ private:
     inline bool _evaluate(int64_t index, const T_View& p_view) const {
         // CORRECTED: Safe extraction
         T_Coord pos = _read_view(p_view, index);
-        const T_Strategy& strategy = p_view.get_strategy();
+        const T_Strategy& strategy = p_view.strategy;
         
         int64_t grid_idx = strategy.world_to_flat_index(pos);
         if (grid_idx < 0 || grid_idx >= source_selection->capacity) return false;

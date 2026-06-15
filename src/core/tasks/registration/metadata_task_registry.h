@@ -12,8 +12,10 @@ namespace ideam::core {
 
 // --- Compile-Time Coordinates (The O(1) Indices) ---
 enum class MetadataLogicID : uint32_t {
-    DSUCluster_Moore_R1 = 0,
-    DSUCluster_VonNeumann_R1,
+    DSUCluster_Static_Moore_R1 = 0,
+    DSUCluster_Static_VonNeumann_R1,
+    
+    DSUCluster,
     
     GroupMask_1Bit,
     GroupMask_2Bit,

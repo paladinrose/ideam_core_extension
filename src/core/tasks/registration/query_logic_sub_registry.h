@@ -24,6 +24,7 @@
 #include "../query_logic/hierarchical_bridge_query_logic.h"
 #include "../query_logic/limit_query_logic.h"
 #include "../query_logic/morphological_query_logic.h"
+#include "../query_logic/morphological_static_query_logic.h"
 #include "../query_logic/paged_to_tiled_bridge_query_logic.h"
 #include "../query_logic/predicate_query_logic.h"
 #include "../query_logic/relational_bridge_query_logic.h"
@@ -44,6 +45,7 @@
 #include "../../memory/views/sparse_set_view.h"
 #include "../../memory/views/static_stencil_view.h"
 #include "../../memory/views/stencil_view.h"
+#include "../../memory/views/stencil_math.h"
 #include "../../memory/views/swap_view.h"
 #include "../../memory/views/strategies.h"
 
@@ -96,12 +98,42 @@ namespace {
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::HierarchicalBridge, C, S> { using Type = HierarchicalBridgeQueryLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Limit, C, S> { using Type = LimitQueryLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological, C, S> { using Type = MorphologicalQueryLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological_Static_Moore_R1, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 1>();
+        using Type = MorphologicalStaticQueryLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological_Static_Moore_R2, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 2>();
+        using Type = MorphologicalStaticQueryLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological_Static_Moore_R3, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 3>();
+        using Type = MorphologicalStaticQueryLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological_Static_VonNeumann_R1, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::von_neumann_size<S::dimensions, 1>();
+        using Type = MorphologicalStaticQueryLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological_Static_VonNeumann_R2, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::von_neumann_size<S::dimensions, 2>();
+        using Type = MorphologicalStaticQueryLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Morphological_Static_VonNeumann_R3, C, S> { 
+        static constexpr size_t K_SIZE = stencil_math::von_neumann_size<S::dimensions, 3>();
+        using Type = MorphologicalStaticQueryLogic<C, S, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::PagedToTiledBridge, C, S> { using Type = PagedToTiledBridgeQueryLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Predicate, C, S> { using Type = PredicateQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::RelationalBridge, C, S> { using Type = RelationalBridgeQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::SpatialInclusionBridge, C, S> { using Type = SpatialInclusionBridgeQueryLogic<C, S>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::SpatialProjectionBridge, C, S> { using Type = SpatialProjectionBridgeQueryLogic<C, S>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::StencilDilationBridge, C, S> { using Type = StencilDilationBridgeQueryLogic<C, S, StrategyDimExtractor<S>::value>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::StencilDilationBridge, C, S> { using Type = StencilDilationBridgeQueryLogic<C, S>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Stochastic, C, S> { using Type = StochasticQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::SwapEruptionBridge, C, S> { using Type = SwapEruptionBridgeQueryLogic<C>; static constexpr bool is_valid = true; };
 

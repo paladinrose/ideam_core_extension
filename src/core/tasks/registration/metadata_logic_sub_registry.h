@@ -10,6 +10,7 @@
 #include "../../memory/views/view_traits.h"
 // --- Logics ---
 #include "../metadata_logic/dsu_cluster_metadata_logic.h"
+#include "../metadata_logic/dsu_cluster_static_metadata_logic.h"
 #include "../metadata_logic/group_mask_metadata_logic.h"
 #include "../metadata_logic/lod_metadata_logic.h"
 #include "../metadata_logic/partition_metadata_logic.h"
@@ -25,6 +26,7 @@
 #include "../../memory/views/sparse_set_view.h"
 #include "../../memory/views/static_stencil_view.h"
 #include "../../memory/views/stencil_view.h"
+#include "../../memory/views/stencil_math.h"
 #include "../../memory/views/swap_view.h"
 #include "../../memory/views/strategies.h"
 
@@ -60,8 +62,17 @@ namespace {
     template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::Type::KERNEL_POINTS)>> { static constexpr size_t value = T_Resolver::Type::KERNEL_POINTS; static constexpr bool has_kernel = true; };
 
     template <MetadataLogicID ID, typename T_Concrete, typename T_Strategy> struct MetadataLogicResolver { static constexpr bool is_valid = false; };
-    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::DSUCluster_Moore_R1, C, S>  { using Type = DSUClusterMetadataLogic<C, 9>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::DSUCluster_VonNeumann_R1, C, S> { using Type = DSUClusterMetadataLogic<C, 5>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::DSUCluster, C, S>  { using Type = DSUClusterMetadataLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::DSUCluster_Static_Moore_R1, C, S>  { 
+        static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 1>();
+        using Type = DSUClusterStaticMetadataLogic<C, K_SIZE>; 
+        static constexpr bool is_valid = true;  
+    };
+    template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::DSUCluster_Static_VonNeumann_R1, C, S> {
+        static constexpr size_t K_SIZE = stencil_math::von_neumann_size<S::dimensions, 1>();
+        using Type = DSUClusterStaticMetadataLogic<C, K_SIZE>; 
+        static constexpr bool is_valid = true; 
+    };
     template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::GroupMask_1Bit, C, S> { using Type = GroupMaskMetadataLogic<C, 1>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::GroupMask_2Bit, C, S> { using Type = GroupMaskMetadataLogic<C, 2>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct MetadataLogicResolver<MetadataLogicID::GroupMask_3Bit, C, S> { using Type = GroupMaskMetadataLogic<C, 3>; static constexpr bool is_valid = true; };

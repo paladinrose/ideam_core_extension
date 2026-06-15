@@ -61,15 +61,18 @@ concept IsMetadataLogic = requires {
     { T::get_ui_properties() } -> std::same_as<godot::Array>;
     { std::declval<T>().apply_properties(std::declval<const godot::Dictionary&>()) } -> std::same_as<void>;
     
-    // Must implement templated execute_metadata handling the mutable selection
+    // Must implement templated execute handling the mutable selection
     { 
-        std::declval<T>().template execute_metadata<typename T::DefaultView, typename T::DefaultStrategy>(
+        std::declval<T>().template execute<typename T::DefaultView, typename T::DefaultStrategy>(
             std::declval<MemoryBufferSelectionPOD&>(),
-            std::declval<typename T::DefaultView&>(),
-            std::declval<const typename T::DefaultStrategy&>(),
-            std::declval<const TaskContextPOD&>()
+            std::declval<const TaskContextPOD&>(),
+            std::declval<typename T::DefaultView&>()
+            //std::declval<const typename T::DefaultStrategy&>(),
+            
         )
     } -> std::same_as<void>;
+
+    
 };
 
 } // namespace ideam::core
