@@ -242,17 +242,13 @@ struct StaticStencilView {
 
 template<typename T, IsMemoryStrategy Strategy, size_t PointCount>
 struct ViewTraits<StaticStencilView<T, Strategy, PointCount>> {
-    static constexpr ViewCapability capabilities = 
-        ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::SPATIAL_ACCESS | 
-        ViewCapability::STENCIL_ACCESS;
+    static constexpr ViewCapability capabilities = StaticStencilView<T, Strategy, PointCount>::capabilities;
         
-    static constexpr BufferLayoutType supported_layouts = 
-        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr BufferLayoutType supported_layouts = StaticStencilView<T, Strategy, PointCount>::supported_layouts;
         
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY_SPATIAL;
-    static constexpr DataType       supported_types      = DataType::ANY;
-    static constexpr uint32_t       lane_width           = 1;
+    static constexpr ViewStrategies supported_strategies = StaticStencilView<T, Strategy, PointCount>::supported_strategies;
+    static constexpr DataType       supported_types      = StaticStencilView<T, Strategy, PointCount>::supported_types;
+    static constexpr uint32_t       lane_width           = StaticStencilView<T, Strategy, PointCount>::lane_width;
 
     // --- Extracted Spatial & Kernel Contracts ---
     static constexpr bool is_static_stencil = true;

@@ -193,15 +193,14 @@ struct BridgeView {
 
 template<typename TParent, typename TChild, size_t DimCount, IsMemoryStrategy Strategy>
 struct ViewTraits<BridgeView<TParent, TChild, DimCount, Strategy>> {
-    static constexpr ViewCapability capabilities = ViewCapability::SPATIAL_ACCESS;
+    static constexpr ViewCapability capabilities = BridgeView<TParent, TChild, DimCount, Strategy>::capabilities;
         
-    static constexpr BufferLayoutType supported_layouts = 
-        BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr BufferLayoutType supported_layouts = BridgeView<TParent, TChild, DimCount, Strategy>::supported_layouts;
         
     // Restrict this explicitly to spatial permutations
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY_SPATIAL;
-    static constexpr DataType       supported_types      = DataType::ANY;
-    static constexpr uint32_t       lane_width           = 1;
+    static constexpr ViewStrategies supported_strategies = BridgeView<TParent, TChild, DimCount, Strategy>::supported_strategies;
+    static constexpr DataType       supported_types      = BridgeView<TParent, TChild, DimCount, Strategy>::supported_types;
+    static constexpr uint32_t       lane_width           = BridgeView<TParent, TChild, DimCount, Strategy>::lane_width;
 
     // Spatial Contracts
     static constexpr bool is_static_stencil = false; 

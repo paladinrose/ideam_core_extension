@@ -73,7 +73,7 @@ struct PredicateQueryLogic {
             column_id = static_cast<uint32_t>(p_props["column_id"]);
         }
         if (p_props.has("op")) {
-            op = static_cast<Comparison>(p_props["op"]);
+            op = static_cast<Comparison>(static_cast<uint8_t>(p_props["op"]));
         }
         if (p_props.has("target_value")) {
             target_value = static_cast<T>(p_props["target_value"]);

@@ -101,7 +101,7 @@ struct RingView {
         size_t logical_idx = 0;
 
         // --- 1D LINEAR ACCESS PATH ---
-        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+        if constexpr (sizeof...(Coords) == 1) {
             size_t p_selection_index = static_cast<size_t>((p_coords, ...));
             
             #ifdef NDEBUG
@@ -169,6 +169,66 @@ struct RingView {
         const auto& part = grant->parts[grant_part_index];
         return (static_cast<size_t>(part.selection.capacity) - *read_index_ptr) + *write_index_ptr;
     }
+
+    /**
+     * pop
+     * Removes and returns the next element from the ring buffer.
+     * Returns false if the buffer is empty.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline bool pop(T& out_value) const noexcept {
+        if (available() == 0) return false;
+
+        const auto& part = grant->parts[grant_part_index];
+
+        // Access the value at the current physical read index
+        if constexpr (std::is_empty_v<Strategy>) {
+            out_value = *Strategy::template resolve<T>(head_ptr, *read_index_ptr, part.element_stride, part.capacity_bytes);
+        } else {
+            out_value = *strategy.template resolve<T>(head_ptr, *read_index_ptr, part.element_stride, part.capacity_bytes);
+        }
+
+        // Advance the read index and wrap around the capacity
+        *read_index_ptr = (*read_index_ptr + 1) % part.selection.capacity;
+
+        return true;
+    }
+
+    /**
+     * push
+     * Adds an element to the ring buffer.
+     * Returns false if the buffer is full.
+     */
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline bool push(const T& in_value) const noexcept {
+        const auto& part = grant->parts[grant_part_index];
+        const uint32_t cap = part.selection.capacity;
+
+        // Check if full (write_index + 1 == read_index)
+        if ((*write_index_ptr + 1) % cap == *read_index_ptr) {
+            return false; 
+        }
+
+        // Write the value at the current physical write index
+        if constexpr (std::is_empty_v<Strategy>) {
+            *Strategy::template resolve<T>(head_ptr, *write_index_ptr, part.element_stride, part.capacity_bytes) = in_value;
+        } else {
+            *strategy.template resolve<T>(head_ptr, *write_index_ptr, part.element_stride, part.capacity_bytes) = in_value;
+        }
+
+        // Advance the write index and wrap around the capacity
+        *write_index_ptr = (*write_index_ptr + 1) % cap;
+
+        return true;
+    }
 };
 
 #ifndef __INTELLISENSE__
@@ -177,17 +237,13 @@ static_assert(sizeof(RingView<int, FlatStrategy>) == 48, "RingView base layout a
 
 template<typename T, IsMemoryStrategy Strategy>
 struct ViewTraits<RingView<T, Strategy>> {
-    static constexpr ViewCapability capabilities = 
-        ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::SPATIAL_ACCESS | 
-        ViewCapability::QUEUE_ACCESS;
+    static constexpr ViewCapability capabilities = RingView<T, Strategy>::capabilities;
         
-    static constexpr BufferLayoutType supported_layouts = 
-        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr BufferLayoutType supported_layouts = RingView<T, Strategy>::supported_layouts;
         
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
-    static constexpr DataType       supported_types      = DataType::ANY;
-    static constexpr uint32_t       lane_width           = 1;
+    static constexpr ViewStrategies supported_strategies = RingView<T, Strategy>::supported_strategies;
+    static constexpr DataType       supported_types      = RingView<T, Strategy>::supported_types;
+    static constexpr uint32_t       lane_width           = RingView<T, Strategy>::lane_width;
 
     // Spatial Contracts
     static constexpr bool is_static_stencil = false; 

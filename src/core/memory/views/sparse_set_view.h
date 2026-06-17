@@ -222,17 +222,13 @@ static_assert(sizeof(SparseSetView<int, FlatStrategy>) == 48, "SparseSetView bas
 
 template<typename T, IsMemoryStrategy Strategy>
 struct ViewTraits<SparseSetView<T, Strategy>> {
-    static constexpr ViewCapability capabilities = 
-        ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::RANDOM_ACCESS | 
-        ViewCapability::ENTITY_ID_ACCESS;
+    static constexpr ViewCapability capabilities = SparseSetView<T, Strategy>::capabilities;
         
-    static constexpr BufferLayoutType supported_layouts = 
-        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr BufferLayoutType supported_layouts = SparseSetView<T, Strategy>::supported_layouts;
         
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
-    static constexpr DataType       supported_types      = DataType::ANY;
-    static constexpr uint32_t       lane_width           = 1;
+    static constexpr ViewStrategies supported_strategies = SparseSetView<T, Strategy>::supported_strategies;
+    static constexpr DataType       supported_types      = SparseSetView<T, Strategy>::supported_types;
+    static constexpr uint32_t       lane_width           = SparseSetView<T, Strategy>::lane_width;
 
     // Spatial Contracts
     static constexpr bool is_static_stencil = false; 

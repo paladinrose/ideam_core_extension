@@ -154,7 +154,7 @@ struct AOSOAView {
         const auto& selection = part.selection;
 
         // --- 1D LINEAR ACCESS PATH ---
-        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+        if constexpr (sizeof...(Coords) == 1) {
             size_t p_selection_index = static_cast<size_t>((p_coords, ...));
             
             #ifdef NDEBUG
@@ -228,17 +228,13 @@ static_assert(sizeof(AOSOAView<int, 8, FlatStrategy>) == 32, "AOSOAView base lay
 
 template<typename T, uint32_t LaneWidth, IsMemoryStrategy Strategy>
 struct ViewTraits<AOSOAView<T, LaneWidth, Strategy>> {
-    static constexpr ViewCapability capabilities = 
-        ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::SPATIAL_ACCESS | 
-        ViewCapability::SIMD_ACCESS;
+    static constexpr ViewCapability capabilities = AOSOAView<T, LaneWidth, Strategy>::capabilities;
         
-    static constexpr BufferLayoutType supported_layouts = 
-        BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr BufferLayoutType supported_layouts = AOSOAView<T, LaneWidth, Strategy>::supported_layouts;
         
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
-    static constexpr DataType       supported_types      = DataType::ANY;
-    static constexpr uint32_t       lane_width           = LaneWidth;
+    static constexpr ViewStrategies supported_strategies = AOSOAView<T, LaneWidth, Strategy>::supported_strategies;
+    static constexpr DataType       supported_types      = AOSOAView<T, LaneWidth, Strategy>::supported_types;
+    static constexpr uint32_t       lane_width           = AOSOAView<T, LaneWidth, Strategy>::lane_width;
 
     // Spatial Contracts
     static constexpr bool is_static_stencil = false; 

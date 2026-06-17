@@ -20,7 +20,7 @@ struct DirectionalQueryLogic {
     // --- DOD Contract Requirements ---
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3 | DataType::VECTOR4 | DataType::VECTOR4I | DataType::VECTOR4D;
+    static constexpr DataType required_types              = DataType::VECTOR2 | DataType::VECTOR3 | DataType::VECTOR4 | DataType::VECTOR2D | DataType::VECTOR3D | DataType::VECTOR4D;
     
     // --- Explicit Spatial Contracts ---
     static constexpr size_t dimensions = 0; // Point-based lookup

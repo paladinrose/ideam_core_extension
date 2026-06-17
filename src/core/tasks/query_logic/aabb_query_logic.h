@@ -31,7 +31,7 @@ struct AABBQueryLogic {
     static constexpr DataType required_types              = DataType::ANY_VECTOR2 | DataType::ANY_VECTOR3;
     
     // --- Explicit Spatial Contracts ---
-    static constexpr size_t dimensions = 0; // Point-based lookup
+    static constexpr size_t dimensions = 0;
     static constexpr bool requires_static_kernel = false;
     static constexpr size_t kernel_size = 0;
     
@@ -167,11 +167,21 @@ private:
     inline bool _evaluate(const T& p_val) const {
         if constexpr (std::is_same_v<T, godot::Vector2> || std::is_same_v<T, godot::Vector2i>) {
             return (p_val.x >= box_min.x && p_val.x <= box_max.x) &&
-                   (p_val.y >= box_min.y && p_val.y <= box_max.y);
-        } else {
+                (p_val.y >= box_min.y && p_val.y <= box_max.y);
+                
+        } else if constexpr (std::is_same_v<T, godot::Vector3> || std::is_same_v<T, godot::Vector3i>) {
             return (p_val.x >= box_min.x && p_val.x <= box_max.x) &&
-                   (p_val.y >= box_min.y && p_val.y <= box_max.y) &&
-                   (p_val.z >= box_min.z && p_val.z <= box_max.z);
+                (p_val.y >= box_min.y && p_val.y <= box_max.y) &&
+                (p_val.z >= box_min.z && p_val.z <= box_max.z);
+                
+        } else if constexpr (std::is_floating_point_v<T> || std::is_integral_v<T>) {
+            // Single-dimension fallback: checks the scalar value against the X bounds
+            return (p_val >= box_min.x && p_val <= box_max.x);
+            
+        } else {
+            // Fails the build if an unsupported type is passed into the template
+            static_assert(sizeof(T) == 0, "Unsupported type passed to bounding box check.");
+            return false;
         }
     }
 };

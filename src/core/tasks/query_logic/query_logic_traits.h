@@ -35,7 +35,7 @@ struct QueryLogicValidator {
         if ((T_Logic::required_types & VTraits::supported_types) == DataType::NONE) return false;
 
         // 4. Dimensionality Match
-        if (T_Logic::dimensions != VTraits::dimensions) return false;
+        if (T_Logic::dimensions != 0 && T_Logic::dimensions != VTraits::dimensions) return false;
 
         // 5. Stencil Kernel Contracts
         if (T_Logic::requires_static_kernel != VTraits::is_static_stencil) return false;

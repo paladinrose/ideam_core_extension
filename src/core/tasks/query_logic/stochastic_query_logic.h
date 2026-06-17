@@ -176,7 +176,7 @@ private:
         const uint64_t* unclaimed = r_selection.unclaimed_mask;
         if (!unclaimed) return;
 
-        uint32_t base_rng_state = seed_base ^ (p_view.get_version() * 0x27D4EB2D);
+        uint32_t base_rng_state = seed_base ^ (r_selection.manager_version * 0x27D4EB2D);
         const int64_t words = (r_selection.capacity + 63) >> 6;
 
         for (int64_t w = 0; w < words; ++w) {

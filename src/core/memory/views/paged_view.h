@@ -102,7 +102,7 @@ struct PagedView {
         size_t target_flat_idx = 0;
 
         // --- 1D LINEAR ACCESS PATH ---
-        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+        if constexpr (sizeof...(Coords) == 1) {
             // FIX: Use a comma fold expression to extract the single pack argument safely
             size_t p_selection_index = static_cast<size_t>((p_coords, ...));
             
@@ -185,17 +185,13 @@ static_assert(sizeof(PagedView<int, FlatStrategy>) == 48, "PagedView base layout
 
 template<typename T, IsMemoryStrategy Strategy>
 struct ViewTraits<PagedView<T, Strategy>> {
-    static constexpr ViewCapability capabilities = 
-        ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::SPATIAL_ACCESS | 
-        ViewCapability::VIRTUAL_MEMORY;
+    static constexpr ViewCapability capabilities = PagedView<T, Strategy>::capabilities;
         
-    static constexpr BufferLayoutType supported_layouts = 
-        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr BufferLayoutType supported_layouts = PagedView<T, Strategy>::supported_layouts;
         
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
-    static constexpr DataType       supported_types      = DataType::ANY;
-    static constexpr uint32_t       lane_width           = 1;
+    static constexpr ViewStrategies supported_strategies = PagedView<T, Strategy>::supported_strategies;
+    static constexpr DataType       supported_types      = PagedView<T, Strategy>::supported_types;
+    static constexpr uint32_t       lane_width           = PagedView<T, Strategy>::lane_width;
 
     // Spatial Contracts
     static constexpr bool is_static_stencil = false; 

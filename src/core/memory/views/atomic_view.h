@@ -104,7 +104,7 @@ struct AtomicView {
         const auto& selection = part.selection;
 
         // --- 1D LINEAR ACCESS PATH ---
-        if constexpr (sizeof...(Coords) == 1 && !Strategy::is_spatial) {
+        if constexpr (sizeof...(Coords) == 1) {
             size_t p_selection_index = static_cast<size_t>((p_coords, ...));
             
             #ifdef NDEBUG
@@ -185,16 +185,13 @@ static_assert(sizeof(AtomicView<int, FlatStrategy>) == 32, "AtomicView base layo
 
 template<typename T, IsMemoryStrategy Strategy>
 struct ViewTraits<AtomicView<T, Strategy>> {
-    static constexpr ViewCapability capabilities = 
-        ViewCapability::LINEAR_ACCESS | 
-        ViewCapability::SPATIAL_ACCESS;
+    static constexpr ViewCapability capabilities = AtomicView<T, Strategy>::capabilities;
         
-    static constexpr BufferLayoutType supported_layouts = 
-        BufferLayoutType::FLAT | BufferLayoutType::AOS | BufferLayoutType::SOA;
+    static constexpr BufferLayoutType supported_layouts = AtomicView<T, Strategy>::supported_layouts;
         
-    static constexpr ViewStrategies supported_strategies = ViewStrategies::ANY;
-    static constexpr DataType       supported_types      = DataType::ANY;
-    static constexpr uint32_t       lane_width           = 1;
+    static constexpr ViewStrategies supported_strategies = AtomicView<T, Strategy>::supported_strategies;
+    static constexpr DataType       supported_types      = AtomicView<T, Strategy>::supported_types;
+    static constexpr uint32_t       lane_width           = AtomicView<T, Strategy>::lane_width;
 
     // Spatial Contracts
     static constexpr bool is_static_stencil = false; 
