@@ -101,36 +101,61 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline T _read_view(const T_View& p_view, int64_t idx) const {
-        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
-            return *reinterpret_cast<const T*>(p_view[idx]);
-        } else if constexpr (requires { static_cast<T>(p_view[idx]); }) {
-            return static_cast<T>(p_view[idx]);
-        } else {
-            return T{}; 
+    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+        // --- DOD PROXY UNWRAPPING ---
+        if constexpr (requires { p_view[idx].read(); }) {
+            return p_view[idx].read();
+        } 
+        // --- STANDARD RESOLUTION ---
+        else {
+            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
+            using DecayedType = std::decay_t<RawType>;
+            
+            if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+            } else {
+                return static_cast<DecayedType>(p_view[idx]);
+            }
         }
     }
 
-    template <Comparison O>
+    // --- Compile-Time Operator Sniffing ---
+    template <Comparison O, typename T_Val>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
     #else
         [[gnu::always_inline]]
     #endif
-    inline bool _evaluate(const T& p_val) const {
-        if constexpr (O == Comparison::EQUAL)         return p_val == target_value;
-        if constexpr (O == Comparison::NOT_EQUAL)     return p_val != target_value;
-        if constexpr (O == Comparison::LESS)          return p_val < target_value;
-        if constexpr (O == Comparison::LESS_EQUAL)    return p_val <= target_value;
-        if constexpr (O == Comparison::GREATER)       return p_val > target_value;
-        if constexpr (O == Comparison::GREATER_EQUAL) return p_val >= target_value;
-        
-        if constexpr (std::is_integral_v<T>) {
-            if constexpr (O == Comparison::BIT_AND)   return (p_val & target_value) != 0;
-            if constexpr (O == Comparison::BIT_OR)    return (p_val | target_value) != 0;
-            if constexpr (O == Comparison::BIT_XOR)   return (p_val ^ target_value) != 0;
+    inline bool _evaluate(const T_Val& p_val) const {
+        // Using C++20 'requires' to gracefully cull unsupported operators 
+        // at compile-time. Zero runtime overhead.
+        if constexpr (O == Comparison::EQUAL) {
+            if constexpr (requires { p_val == target_value; }) return p_val == target_value;
+        } 
+        else if constexpr (O == Comparison::NOT_EQUAL) {
+            if constexpr (requires { p_val != target_value; }) return p_val != target_value;
+        } 
+        else if constexpr (O == Comparison::LESS) {
+            if constexpr (requires { p_val < target_value; }) return p_val < target_value;
+        } 
+        else if constexpr (O == Comparison::LESS_EQUAL) {
+            if constexpr (requires { p_val <= target_value; }) return p_val <= target_value;
+        } 
+        else if constexpr (O == Comparison::GREATER) {
+            if constexpr (requires { p_val > target_value; }) return p_val > target_value;
+        } 
+        else if constexpr (O == Comparison::GREATER_EQUAL) {
+            if constexpr (requires { p_val >= target_value; }) return p_val >= target_value;
+        } 
+        // Bitwise operations specifically restricted to integral types
+        else if constexpr (std::is_integral_v<T_Val> && std::is_integral_v<T>) {
+            if constexpr (O == Comparison::BIT_AND)      return (p_val & target_value) != 0;
+            else if constexpr (O == Comparison::BIT_OR)  return (p_val | target_value) != 0;
+            else if constexpr (O == Comparison::BIT_XOR) return (p_val ^ target_value) != 0;
         }
-        return false;
+        
+        // Safe fallback if the math operator is undefined for the data type.
+        return false; 
     }
 
     template <Comparison O, typename T_View>

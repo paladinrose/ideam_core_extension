@@ -92,6 +92,7 @@ struct AABBQueryLogic {
     }
 
 private:
+
     template <typename T_View>
     #if defined(_MSC_VER)
         [[msvc::forceinline]]
@@ -99,13 +100,22 @@ private:
         [[gnu::always_inline]]
     #endif
     inline auto _read_view(const T_View& p_view, int64_t idx) const {
-        using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
-        using DecayedType = std::decay_t<RawType>;
-        
-        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
-            return *reinterpret_cast<const DecayedType*>(p_view[idx]);
-        } else {
-            return static_cast<DecayedType>(p_view[idx]);
+        // --- DOD PROXY UNWRAPPING ---
+        // Statically detects if the View returns a proxy object (like SwapElementProxy)
+        // and aggressively unwraps it into registers before evaluation.
+        if constexpr (requires { p_view[idx].read(); }) {
+            return p_view[idx].read();
+        } 
+        // --- STANDARD RESOLUTION ---
+        else {
+            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
+            using DecayedType = std::decay_t<RawType>;
+            
+            if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+            } else {
+                return static_cast<DecayedType>(p_view[idx]);
+            }
         }
     }
 
