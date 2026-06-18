@@ -121,7 +121,6 @@ private:
         const uint64_t* unclaimed = r_selection.unclaimed_mask;
         if (!unclaimed) return;
 
-        // Note: The SwapView naturally exposes .get_current(i) and .get_previous(i)
         const int64_t words = (r_selection.capacity + 63) >> 6;
         for (int64_t w = 0; w < words; ++w) {
             uint64_t mask = unclaimed[w];
@@ -131,13 +130,25 @@ private:
                 
                 if (global_index >= r_selection.capacity) break;
 
-                // CORRECTED: Cast state payloads before evaluating threshold delta
-                T current_val = _safe_cast(p_view.get_current(global_index));
-                T previous_val = _safe_cast(p_view.get_previous(global_index));
-                T delta = current_val - previous_val;
+                // 1. Leverage the zero-overhead SwapElementProxy returned by operator[]
+                auto proxy = p_view[global_index];
                 
-                if (delta >= eruption_threshold) {
-                    p_ctx.queue_selection_command(target_buffer_id, global_index);
+                // 2. In double-buffering delta evaluation:
+                // read() -> State(T-1) [The baseline]
+                // write() -> State(T) [The freshly updated value]
+                T previous_val = _safe_cast(proxy.read());
+                T current_val  = _safe_cast(proxy.write());
+                
+                // 3. Concept-Driven Guard: Only compile if T supports subtraction
+                // AND the >= operator evaluates to a standard boolean.
+                if constexpr (requires(T a, T b) {
+                    { a - b };
+                    { a >= b } -> std::convertible_to<bool>;
+                }) {
+                    T delta = current_val - previous_val;
+                    if (delta >= eruption_threshold) {
+                        p_ctx.queue_selection_command(target_buffer_id, global_index);
+                    }
                 }
                 
                 mask &= (mask - 1);

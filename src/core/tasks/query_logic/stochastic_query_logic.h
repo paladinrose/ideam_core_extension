@@ -134,7 +134,7 @@ private:
 
         for (int64_t i = 0; i < r_selection.capacity; ++i) {
             float prob = global_probability;
-            if constexpr (!std::is_void_v<T> && !std::is_same_v<T, uint8_t>) {
+            if constexpr (std::convertible_to<T, float> && !std::is_same_v<T, uint8_t>) {
                 prob = static_cast<float>(_read_view(p_view, i));
             }
 
@@ -160,7 +160,7 @@ private:
             uint32_t local_state = base_rng_state ^ static_cast<uint32_t>(idx * 0x9E3779B9);
             
             float prob = global_probability;
-            if constexpr (!std::is_void_v<T> && !std::is_same_v<T, uint8_t>) {
+            if constexpr (std::convertible_to<T, float> && !std::is_same_v<T, uint8_t>) {
                 prob = static_cast<float>(_read_view(p_view, idx));
             }
 
@@ -191,7 +191,7 @@ private:
                 uint32_t local_state = base_rng_state ^ static_cast<uint32_t>(global_index * 0x9E3779B9);
 
                 float prob = global_probability;
-                if constexpr (!std::is_void_v<T> && !std::is_same_v<T, uint8_t>) {
+                if constexpr (std::convertible_to<T, float> && !std::is_same_v<T, uint8_t>) {
                     prob = static_cast<float>(_read_view(p_view, global_index));
                 }
 

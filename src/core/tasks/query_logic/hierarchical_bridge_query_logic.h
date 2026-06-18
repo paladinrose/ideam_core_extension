@@ -88,6 +88,7 @@ private:
         [[gnu::always_inline]]
     #endif
     inline bool _has_active_parent(int64_t child_idx, const T_View& p_view) const {
+        //PROBLEM
         int64_t parent_idx = p_view.get_parent_index(child_idx);
         if (parent_idx < 0 || parent_idx >= parent_selection->capacity) return false;
 
