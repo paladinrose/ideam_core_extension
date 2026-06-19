@@ -78,7 +78,13 @@ struct alignas(64) DataScatterTransformLogic {
         // The Hot Loop: Random read (source), Linear write (main_view).
         // This is why we scatter: to pay the random-access penalty exactly once per frame.
         for (int64_t i = 0; i < count; ++i) {
-            main_view[i] = source_data[indices[i]];
+            if constexpr (std::is_pointer_v<decltype(main_view[i])>) {
+                // If it's a raw pointer, cast and dereference to write to memory
+                *reinterpret_cast<T*>(main_view[i]) = source_data[indices[i]];
+            } else {
+                // Fallback for standard references or proxy objects with overloaded operator=
+                main_view[i] = source_data[indices[i]];
+            }
         }
     }
 };

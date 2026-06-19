@@ -73,14 +73,14 @@ struct alignas(64) NoiseInjectionTransformLogic {
 
     template <typename T_View, typename T_Strategy>
     inline void execute(const TaskContextPOD& context, const T_View& main_view) const {
-        GrantPartPOD pos_part = context.get_grant_part(target_buffer_id);
+        GrantPartPOD* pos_part = context.get_grant_part(target_buffer_id);
         if (!pos_part) return; // Safety check
         
         const int64_t count = pos_part->selection.element_count;
         const float scale = magnitude * static_cast<float>(context.delta);
         
         // Fast temporal shifting based on engine tick
-        const uint32_t temporal_seed = seed ^ (pos_part.buffer_version_at_issue * 0x1B873593);
+        const uint32_t temporal_seed = seed ^ (pos_part->buffer_version_at_issue * 0x1B873593);
 
         for (int64_t i = 0; i < count; ++i) {
             // Unroll PCG hashes for X, Y, Z

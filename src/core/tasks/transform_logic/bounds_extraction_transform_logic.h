@@ -78,7 +78,8 @@ struct alignas(64) BoundsExtractionTransformLogic {
         }
 
         if (local_result.element_count > 0) {
-            local_result.centroid = (local_result.min_bounds + local_result.max_bounds) / static_cast<T>(2.0);
+            //local_result.centroid = (local_result.min_bounds + local_result.max_bounds) / static_cast<T>(2.0);
+            local_result.centroid = (local_result.min_bounds + local_result.max_bounds) * 0.5;
         }
 
         // Lock-free write to the pre-assigned output port
@@ -118,7 +119,7 @@ private:
 
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                _accumulate(r_res, p_view[i]);
+                _accumulate(r_res, _read_view(p_view, i));
                 r_res.element_count++;
             }
         }
@@ -130,7 +131,7 @@ private:
         const int64_t count = r_sel.element_count;
 
         for (int64_t i = 0; i < count; ++i) {
-            _accumulate(r_res, p_view[indices[i]]);
+            _accumulate(r_res, _read_view(p_view, indices[i]));
         }
         r_res.element_count = count;
     }
@@ -140,9 +141,41 @@ private:
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
-            _accumulate(r_res, p_view[i]);
+            _accumulate(r_res, _read_view(p_view, i));
         }
         r_res.element_count = r_sel.element_count;
+    }
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+        // --- DOD PROXY UNWRAPPING ---
+        // Statically detects if the View returns a proxy object (like SwapElementProxy)
+        // and aggressively unwraps it into registers before evaluation.
+        if constexpr (requires { p_view[idx].read(); }) {
+            return p_view[idx].read();
+        } 
+        // --- ATOMIC REFERENCE UNWRAPPING ---
+        // Statically detects C++20 std::atomic_ref (or std::atomic) and loads 
+        // the value directly into registers to prevent type-deduction failures.
+        else if constexpr (requires { p_view[idx].load(); }) {
+            return p_view[idx].load();
+        }
+        // --- STANDARD RESOLUTION ---
+        else {
+            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
+            using DecayedType = std::decay_t<RawType>;
+            
+            if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+            } else {
+                return static_cast<DecayedType>(p_view[idx]);
+            }
+        }
     }
 };
 

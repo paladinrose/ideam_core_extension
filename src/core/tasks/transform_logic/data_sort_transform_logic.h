@@ -107,7 +107,7 @@ struct DataSortTransformLogic {
         // We use std::stable_sort to maintain deterministic rendering/processing order for tied values.
         std::stable_sort(output_destination->begin(), output_destination->end(), 
             [this, &p_view](int64_t a, int64_t b) {
-                return _compare(p_view[a], p_view[b]);
+                return _compare(_read_view(p_view, a), _read_view(p_view, b));
             }
         );
     }
@@ -125,6 +125,38 @@ private:
             return (direction == SortDirection::ASCENDING) ? (mag_a < mag_b) : (mag_a > mag_b);
         }
         return false;
+    }
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+        // --- DOD PROXY UNWRAPPING ---
+        // Statically detects if the View returns a proxy object (like SwapElementProxy)
+        // and aggressively unwraps it into registers before evaluation.
+        if constexpr (requires { p_view[idx].read(); }) {
+            return p_view[idx].read();
+        } 
+        // --- ATOMIC REFERENCE UNWRAPPING ---
+        // Statically detects C++20 std::atomic_ref (or std::atomic) and loads 
+        // the value directly into registers to prevent type-deduction failures.
+        else if constexpr (requires { p_view[idx].load(); }) {
+            return p_view[idx].load();
+        }
+        // --- STANDARD RESOLUTION ---
+        else {
+            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
+            using DecayedType = std::decay_t<RawType>;
+            
+            if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+            } else {
+                return static_cast<DecayedType>(p_view[idx]);
+            }
+        }
     }
 };
 

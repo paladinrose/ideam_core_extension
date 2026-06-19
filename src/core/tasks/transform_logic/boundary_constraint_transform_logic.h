@@ -7,6 +7,7 @@
 #include "../i_native_task.h"
 #include "transform_logic_traits.h"
 #include <godot_cpp/variant/vector3.hpp>
+#include <godot_cpp/variant/vector3i.hpp>
 
 namespace ideam::core {
 
@@ -125,7 +126,7 @@ struct alignas(64) BoundaryConstraintTransformLogic {
         const int64_t count = sel->element_count;
         for (int64_t i = 0; i < count; ++i) {
             // Simple cull-check via dense array iteration
-            T pos = main_view[i];
+            T pos = _read_view(main_view, i);
             bool modified = false;
 
             // X-Axis
@@ -140,7 +141,13 @@ struct alignas(64) BoundaryConstraintTransformLogic {
             if (pos.z < bounds_min.z)      { pos.z = _resolve(bounds_min.z, bounds_max.z, pos.z, i, velocities, 2); modified = true; }
             else if (pos.z > bounds_max.z) { pos.z = _resolve(bounds_max.z, bounds_min.z, pos.z, i, velocities, 2); modified = true; }
 
-            if (modified) main_view[i] = pos;
+            if (modified) {
+                if constexpr (std::is_pointer_v<decltype(main_view[i])>) {
+                    *reinterpret_cast<T*>(main_view[i]) = pos;
+                } else {
+                    main_view[i] = pos; // For standard references or proxies with operator=
+                }
+            }
         }
     }
 
@@ -160,6 +167,38 @@ private:
             return limit;
         }
         return limit;
+    }
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+        // --- DOD PROXY UNWRAPPING ---
+        // Statically detects if the View returns a proxy object (like SwapElementProxy)
+        // and aggressively unwraps it into registers before evaluation.
+        if constexpr (requires { p_view[idx].read(); }) {
+            return p_view[idx].read();
+        } 
+        // --- ATOMIC REFERENCE UNWRAPPING ---
+        // Statically detects C++20 std::atomic_ref (or std::atomic) and loads 
+        // the value directly into registers to prevent type-deduction failures.
+        else if constexpr (requires { p_view[idx].load(); }) {
+            return p_view[idx].load();
+        }
+        // --- STANDARD RESOLUTION ---
+        else {
+            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
+            using DecayedType = std::decay_t<RawType>;
+            
+            if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+            } else {
+                return static_cast<DecayedType>(p_view[idx]);
+            }
+        }
     }
 };
 
