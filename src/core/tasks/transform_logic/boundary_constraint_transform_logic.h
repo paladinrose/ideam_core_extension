@@ -122,7 +122,7 @@ struct alignas(64) BoundaryConstraintTransformLogic {
             if (vel_part) velocities = reinterpret_cast<T*>(vel_part->raw_base_ptr);
         }
 
-        const int64_t count = main_view.count;
+        const int64_t count = sel->element_count;
         for (int64_t i = 0; i < count; ++i) {
             // Simple cull-check via dense array iteration
             T pos = main_view[i];

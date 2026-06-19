@@ -88,7 +88,7 @@ struct alignas(64) EulerIntegrationTransformLogic {
         const float dt = static_cast<float>(context.delta) * time_scale;
 
         // 2. The Hot Loop
-        const int64_t count = pos_view.count;
+        const int64_t count = vel_part->selection.element_count;
         for (int64_t i = 0; i < count; ++i) {
             // SwapView.get_current(i) reads the old state
             // SwapView[i] = ... writes to the new state buffer

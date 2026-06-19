@@ -106,6 +106,12 @@ private:
         if constexpr (requires { p_view[idx].read(); }) {
             return p_view[idx].read();
         } 
+        // --- ATOMIC REFERENCE UNWRAPPING ---
+        // Statically detects C++20 std::atomic_ref (or std::atomic) and loads 
+        // the value directly into registers to prevent type-deduction failures.
+        else if constexpr (requires { p_view[idx].load(); }) {
+            return p_view[idx].load();
+        }
         // --- STANDARD RESOLUTION ---
         else {
             using RawType = std::remove_pointer_t<decltype(p_view[idx])>;

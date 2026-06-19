@@ -144,7 +144,7 @@ struct alignas(64) FastNoiseLiteTransformLogic {
     }
     
     // 4. Execution Payload
-    template <typename T_View>
+    template <typename T_View, typename T_Strategy>
     void execute(const TaskContextPOD& context, const T_View& view) const {
         for (auto it = view.begin(); it != view.end(); ++it) {
             FastNoiseLiteTargetPOD& target = *it;
