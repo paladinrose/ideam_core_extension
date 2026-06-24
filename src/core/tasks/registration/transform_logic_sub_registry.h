@@ -69,7 +69,7 @@ namespace {
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundsExtraction, C, S> { using Type = BoundsExtractionTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::DataScatter, C, S> { using Type = DataScatterTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::DataSort, C, S> { using Type = DataSortTransformLogic<C>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::FastNoiseLite, C, S> { using Type = FastNoiseLiteTransformLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::NoiseInjection, C, S> { using Type = NoiseInjectionTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { 

@@ -108,8 +108,8 @@ private:
             if (p_val > r_res.max_bounds) r_res.max_bounds = p_val;
         } else {
             // For vectors, requires component-wise min/max overloads
-            r_res.min_bounds = min(r_res.min_bounds, p_val);
-            r_res.max_bounds = max(r_res.max_bounds, p_val);
+            r_res.min_bounds = component_min(r_res.min_bounds, p_val);
+            r_res.max_bounds = component_max(r_res.max_bounds, p_val);
         }
     }
 

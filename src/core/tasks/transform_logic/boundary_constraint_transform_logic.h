@@ -205,8 +205,8 @@ private:
             *reinterpret_cast<T*>(p_view[idx]) = value;
         } 
         // --- DOD PROXY WRITE ---
-        else if constexpr (requires { p_view[idx].write(value); }) {
-            p_view[idx].write(value);
+        else if constexpr (requires { p_view[idx].write(); }) {
+            p_view[idx] = value;
         } 
         // --- ATOMIC REFERENCE STORE ---
         else if constexpr (requires { p_view[idx].store(value); }) {

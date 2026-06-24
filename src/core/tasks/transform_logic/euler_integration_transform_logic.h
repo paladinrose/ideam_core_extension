@@ -11,9 +11,9 @@
 #include <godot_cpp/variant/vector3.hpp>
 
 namespace ideam::core {
-
+template<typename T>
 struct alignas(64) EulerIntegrationTransformLogic {
-    using ValueType       = godot::Vector3;
+    using ValueType       = T;
     using DefaultStrategy = FlatStrategy;
     // We use SwapView so we can safely read T and write T+1
     using DefaultView     = SwapView<ValueType, DefaultStrategy>;
@@ -21,7 +21,7 @@ struct alignas(64) EulerIntegrationTransformLogic {
     // --- DOD Contract Requirements ---
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::SWAP_ACCESS;
     static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
-    static constexpr DataType required_types              = DataType::ANY_VECTOR3; // Tightened from ANY_NUMERIC for safety
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
     
     // --- Explicit Spatial Contracts ---
     static constexpr size_t dimensions = 0; // Point-based lookup
@@ -77,22 +77,29 @@ struct alignas(64) EulerIntegrationTransformLogic {
         }
     }
 
-    template <typename T_View, typename T_Strategy>
-    inline void execute(const TaskContextPOD& context,  const T_View& pos_view) const {
-        // 1. Grab the secondary buffer (Velocity)
-        const GrantPartPOD* vel_part = context.get_grant_part(velocity_buffer_id);
-        if (!vel_part) return;
-
-        // Note: In a real implementation we'd verify the selections align.
-        const ValueType* velocities = reinterpret_cast<const ValueType*>(vel_part->raw_base_ptr);
+    template <typename T_PosView, typename T_VelView>
+    inline void execute(const TaskContextPOD& context, const T_PosView& pos_view, const T_VelView& vel_view) const {
         const float dt = static_cast<float>(context.delta) * time_scale;
 
-        // 2. The Hot Loop
-        const int64_t count = vel_part->selection.element_count;
+        // We assume pos_view dictates our iteration bounds for this transformation.
+        // In a strict execution graph, context would provide the selection mask length.
+        const GrantPartPOD* pos_part = context.get_grant_part(position_buffer_id);
+        if (!pos_part) return;
+
+        const int64_t count = pos_part->selection.element_count;
+
+        // The Hot Loop: Branchless, cache-linear (if Strategy permits), and heavily optimizable by Clang/MSVC.
         for (int64_t i = 0; i < count; ++i) {
-            // SwapView.get_current(i) reads the old state
-            // SwapView[i] = ... writes to the new state buffer
-            pos_view[i] = pos_view.get_current(i) + (velocities[i] * dt);
+            
+            // 1. Unpack Current States
+            ValueType current_pos = _read_view<T_PosView>(pos_view, i);
+            ValueType current_vel = _read_view<T_VelView>(vel_view, i);
+            
+            // 2. Execute Math
+            ValueType new_pos = current_pos + (current_vel * dt);
+            
+            // 3. Route to Next State
+            _write_view<T_PosView>(pos_view, i, new_pos);
         }
     }
     
@@ -104,25 +111,21 @@ struct alignas(64) EulerIntegrationTransformLogic {
     #else
         [[gnu::always_inline]]
     #endif
-    inline T _read_view(const T_View& p_view, int64_t idx) const {
+    inline ValueType _read_view(const T_View& p_view, int64_t idx) const {
         // --- DOD PROXY UNWRAPPING ---
-        // Statically detects if the View returns a proxy object
         if constexpr (requires { p_view[idx].read(); }) {
-            return static_cast<T>(p_view[idx].read());
+            return static_cast<ValueType>(p_view[idx].read());
         } 
         // --- ATOMIC REFERENCE UNWRAPPING ---
         else if constexpr (requires { p_view[idx].load(); }) {
-            return static_cast<T>(p_view[idx].load());
+            return static_cast<ValueType>(p_view[idx].load());
         }
-        // --- STANDARD RESOLUTION ---
+        // --- POINTER / STANDARD RESOLUTION ---
         else {
             if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
-                // We bypass intermediate decay and cast the generic buffer pointer directly to T*.
-                // This ensures we read the full sizeof(T) block from the cache line in a single fetch.
-                return *reinterpret_cast<const T*>(p_view[idx]);
+                return *reinterpret_cast<const ValueType*>(p_view[idx]);
             } else {
-                // If it's a value or a reference proxy, invoke its conversion operator.
-                return static_cast<T>(p_view[idx]);
+                return static_cast<ValueType>(p_view[idx]);
             }
         }
     }
@@ -133,13 +136,14 @@ struct alignas(64) EulerIntegrationTransformLogic {
     #else
         [[gnu::always_inline]]
     #endif
-    inline void _write_view(const T_View& p_view, int64_t idx, const T& value) const {
+    inline void _write_view(const T_View& p_view, int64_t idx, const ValueType& value) const {
         if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
-            *reinterpret_cast<T*>(p_view[idx]) = value;
+            *reinterpret_cast<ValueType*>(p_view[idx]) = value;
         } 
         // --- DOD PROXY WRITE ---
-        else if constexpr (requires { p_view[idx].write(value); }) {
-            p_view[idx].write(value);
+        // Notice we assign directly to the return of write(), or rely on the proxy's operator=
+        else if constexpr (requires { p_view[idx].write(); }) {
+            p_view[idx] = value; 
         } 
         // --- ATOMIC REFERENCE STORE ---
         else if constexpr (requires { p_view[idx].store(value); }) {
@@ -147,7 +151,7 @@ struct alignas(64) EulerIntegrationTransformLogic {
         } 
         // --- STANDARD REFERENCE FALLBACK ---
         else {
-            (void)(p_view[idx] = value); 
+            p_view[idx] = value; 
         }
     }
 };

@@ -7,6 +7,7 @@
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "transform_logic_traits.h"
+#include "../../memory/vector_traits.h"
 
 #include <limits>
 #include <type_traits>
@@ -21,14 +22,16 @@ enum class AccumulationMode : uint8_t {
     COUNT_NON_ZERO
 };
 
+// Templated to allow the value to match the underlying buffer type natively.
+template <typename T>
 struct AccumulationResult {
-    double value = 0.0;
+    T value{};
     int64_t count = 0;
 };
 
 /**
  * ValueAccumulationTransformLogic<T>
- * High-speed pure math reduction kernel for numeric properties.
+ * High-speed pure math reduction kernel for numeric and vector properties.
  */
 template <typename T>
 struct alignas(64) ValueAccumulationTransformLogic {
@@ -38,8 +41,9 @@ struct alignas(64) ValueAccumulationTransformLogic {
 
     // --- DOD Contract Requirements ---
     static constexpr ViewCapability required_capabilities = ViewCapability::LINEAR_ACCESS | ViewCapability::RANDOM_ACCESS;
-    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR; // Upgraded from FLAT | AOS | SOA
-    static constexpr DataType required_types              = DataType::ANY_NUMERIC;        // Cleaned up to use aggregate mask
+    static constexpr BufferLayoutType required_layouts    = BufferLayoutType::ANY_LINEAR;
+    // Upgraded to natively permit Vector types alongside scalar numerics
+    static constexpr DataType required_types              = DataType::ANY_NUMERIC | DataType::GODOT_VECTOR_TYPES;
     
     // --- Explicit Spatial Contracts ---
     static constexpr size_t dimensions = 0; // Point-based lookup
@@ -51,7 +55,7 @@ struct alignas(64) ValueAccumulationTransformLogic {
     // --- Configuration ---
     AccumulationMode mode = AccumulationMode::SUM;
     uint32_t primary_buffer_id = INVALID_ID;
-    AccumulationResult* output_destination = nullptr;
+    AccumulationResult<T>* output_destination = nullptr;
 
     static godot::Array get_ui_properties() {
         godot::Array props;
@@ -60,7 +64,6 @@ struct alignas(64) ValueAccumulationTransformLogic {
         mode_prop["name"] = "mode";
         mode_prop["type"] = godot::Variant::INT;
         mode_prop["hint"] = godot::PROPERTY_HINT_ENUM;
-        // Map the C++ enum sequence strictly to the Godot dropdown index
         mode_prop["hint_string"] = "Sum,Average,Min,Max,Count Non Zero";
         props.push_back(mode_prop);
 
@@ -76,7 +79,6 @@ struct alignas(64) ValueAccumulationTransformLogic {
             mode = static_cast<AccumulationMode>(static_cast<uint8_t>(p_props["mode"]));
         }
     }
-        
     
     // --- The Transform Execution ---
     template <typename T_View, typename T_Strategy>
@@ -86,9 +88,10 @@ struct alignas(64) ValueAccumulationTransformLogic {
         const MemoryBufferSelectionPOD* sel = context.get_selection(primary_buffer_id);
         if (!sel || !sel->is_valid()) return;
 
-        double local_acc = 0.0;
-        if (mode == AccumulationMode::MIN) local_acc = std::numeric_limits<double>::max();
-        if (mode == AccumulationMode::MAX) local_acc = std::numeric_limits<double>::lowest();
+        // Initialize natively using the vector_traits bounds
+        T local_acc{};
+        if (mode == AccumulationMode::MIN) local_acc = get_max_bound<T>();
+        if (mode == AccumulationMode::MAX) local_acc = get_lowest_bound<T>();
 
         // Branchless dispatch to the correct mathematical loop
         switch (mode) {
@@ -100,7 +103,7 @@ struct alignas(64) ValueAccumulationTransformLogic {
         }
 
         if (mode == AccumulationMode::AVERAGE && sel->element_count > 0) {
-            local_acc /= static_cast<double>(sel->element_count);
+            divide_components_by_scalar(local_acc, static_cast<double>(sel->element_count));
         }
 
         output_destination->value = local_acc;
@@ -109,7 +112,7 @@ struct alignas(64) ValueAccumulationTransformLogic {
 
 private:
     template <AccumulationMode M, typename T_View>
-    inline void _dispatch(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, double& r_acc) const {
+    inline void _dispatch(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, T& r_acc) const {
         if (r_sel.mode == SelectionMode::DENSE)        _loop_dense<M>(r_sel, p_view, r_acc);
         else if (r_sel.mode == SelectionMode::SPARSE)  _loop_sparse<M>(r_sel, p_view, r_acc);
         else if (r_sel.mode == SelectionMode::RANGE)   _loop_range<M>(r_sel, p_view, r_acc);
@@ -121,41 +124,51 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline void _step(double& r_acc, double p_val) const {
-        if constexpr (M == AccumulationMode::SUM || M == AccumulationMode::AVERAGE) r_acc += p_val;
-        else if constexpr (M == AccumulationMode::MIN) { if (p_val < r_acc) r_acc = p_val; }
-        else if constexpr (M == AccumulationMode::MAX) { if (p_val > r_acc) r_acc = p_val; }
-        else if constexpr (M == AccumulationMode::COUNT_NON_ZERO) { if (p_val != 0.0) r_acc += 1.0; }
-    }
-
-    template <AccumulationMode M, typename T_View>
-    inline void _loop_dense(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, double& r_acc) const {
-        const uint64_t* bitset = r_sel.data.bitset;
-        const int64_t cap = r_sel.capacity;
-
-        for (int64_t i = 0; i < cap; ++i) {
-            if (bitset[i >> 6] & (1ULL << (i & 63))) {
-                _step<M>(r_acc, static_cast<double>(_read_view(p_view, i)));
+    inline void _step(T& r_acc, const T& p_val) const {
+        if constexpr (M == AccumulationMode::SUM || M == AccumulationMode::AVERAGE) {
+            add_components(r_acc, p_val);
+        }
+        else if constexpr (M == AccumulationMode::MIN) {
+            r_acc = component_min(r_acc, p_val);
+        }
+        else if constexpr (M == AccumulationMode::MAX) {
+            r_acc = component_max(r_acc, p_val);
+        }
+        else if constexpr (M == AccumulationMode::COUNT_NON_ZERO) {
+            if (is_not_zero(p_val)) {
+                increment_all_components(r_acc);
             }
         }
     }
 
     template <AccumulationMode M, typename T_View>
-    inline void _loop_sparse(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, double& r_acc) const {
-        const int64_t* indices = r_sel.data.indices;
-        const int64_t count = r_sel.element_count;
+    inline void _loop_dense(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, T& r_acc) const {
+        const uint64_t* bitset = r_sel.data.bitset;
+        const int64_t cap = r_sel.capacity;
 
-        for (int64_t i = 0; i < count; ++i) {
-            _step<M>(r_acc, static_cast<double>(_read_view(p_view, indices[i])));
+        for (int64_t i = 0; i < cap; ++i) {
+            if (bitset[i >> 6] & (1ULL << (i & 63))) {
+                _step<M>(r_acc, _read_view(p_view, i));
+            }
         }
     }
 
     template <AccumulationMode M, typename T_View>
-    inline void _loop_range(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, double& r_acc) const {
+    inline void _loop_sparse(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, T& r_acc) const {
+        const int64_t* indices = r_sel.data.indices;
+        const int64_t count = r_sel.element_count;
+
+        for (int64_t i = 0; i < count; ++i) {
+            _step<M>(r_acc, _read_view(p_view, indices[i]));
+        }
+    }
+
+    template <AccumulationMode M, typename T_View>
+    inline void _loop_range(const MemoryBufferSelectionPOD& r_sel, const T_View& p_view, T& r_acc) const {
         const int64_t end = r_sel.start_index + r_sel.element_count;
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
-            _step<M>(r_acc, static_cast<double>(_read_view(p_view, i)));
+            _step<M>(r_acc, _read_view(p_view, i));
         }
     }
 
@@ -165,28 +178,21 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
         // --- DOD PROXY UNWRAPPING ---
-        // Statically detects if the View returns a proxy object (like SwapElementProxy)
-        // and aggressively unwraps it into registers before evaluation.
         if constexpr (requires { p_view[idx].read(); }) {
-            return p_view[idx].read();
+            return static_cast<T>(p_view[idx].read());
         } 
         // --- ATOMIC REFERENCE UNWRAPPING ---
-        // Statically detects C++20 std::atomic_ref (or std::atomic) and loads 
-        // the value directly into registers to prevent type-deduction failures.
         else if constexpr (requires { p_view[idx].load(); }) {
-            return p_view[idx].load();
+            return static_cast<T>(p_view[idx].load());
         }
         // --- STANDARD RESOLUTION ---
         else {
-            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
-            using DecayedType = std::decay_t<RawType>;
-            
             if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
-                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+                return *reinterpret_cast<const T*>(p_view[idx]);
             } else {
-                return static_cast<DecayedType>(p_view[idx]);
+                return static_cast<T>(p_view[idx]);
             }
         }
     }
@@ -194,4 +200,4 @@ private:
 
 } // namespace ideam::core
 
- // IDEAM_CORE_VALUE_ACCUMULATION_TRANSFORM_LOGIC_H
+// IDEAM_CORE_VALUE_ACCUMULATION_TRANSFORM_LOGIC_H
