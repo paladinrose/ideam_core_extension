@@ -142,11 +142,7 @@ struct alignas(64) BoundaryConstraintTransformLogic {
             else if (pos.z > bounds_max.z) { pos.z = _resolve(bounds_max.z, bounds_min.z, pos.z, i, velocities, 2); modified = true; }
 
             if (modified) {
-                if constexpr (std::is_pointer_v<decltype(main_view[i])>) {
-                    *reinterpret_cast<T*>(main_view[i]) = pos;
-                } else {
-                    main_view[i] = pos; // For standard references or proxies with operator=
-                }
+                _write_view(main_view, i, pos);
             }
         }
     }
@@ -175,31 +171,53 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
         // --- DOD PROXY UNWRAPPING ---
-        // Statically detects if the View returns a proxy object (like SwapElementProxy)
-        // and aggressively unwraps it into registers before evaluation.
+        // Statically detects if the View returns a proxy object
         if constexpr (requires { p_view[idx].read(); }) {
-            return p_view[idx].read();
+            return static_cast<T>(p_view[idx].read());
         } 
         // --- ATOMIC REFERENCE UNWRAPPING ---
-        // Statically detects C++20 std::atomic_ref (or std::atomic) and loads 
-        // the value directly into registers to prevent type-deduction failures.
         else if constexpr (requires { p_view[idx].load(); }) {
-            return p_view[idx].load();
+            return static_cast<T>(p_view[idx].load());
         }
         // --- STANDARD RESOLUTION ---
         else {
-            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
-            using DecayedType = std::decay_t<RawType>;
-            
             if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
-                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+                // We bypass intermediate decay and cast the generic buffer pointer directly to T*.
+                // This ensures we read the full sizeof(T) block from the cache line in a single fetch.
+                return *reinterpret_cast<const T*>(p_view[idx]);
             } else {
-                return static_cast<DecayedType>(p_view[idx]);
+                // If it's a value or a reference proxy, invoke its conversion operator.
+                return static_cast<T>(p_view[idx]);
             }
         }
     }
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void _write_view(const T_View& p_view, int64_t idx, const T& value) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            *reinterpret_cast<T*>(p_view[idx]) = value;
+        } 
+        // --- DOD PROXY WRITE ---
+        else if constexpr (requires { p_view[idx].write(value); }) {
+            p_view[idx].write(value);
+        } 
+        // --- ATOMIC REFERENCE STORE ---
+        else if constexpr (requires { p_view[idx].store(value); }) {
+            p_view[idx].store(value);
+        } 
+        // --- STANDARD REFERENCE FALLBACK ---
+        else {
+            (void)(p_view[idx] = value); 
+        }
+    }
+
 };
 
 } // namespace ideam::core

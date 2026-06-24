@@ -2,6 +2,7 @@
 
 #include "../../memory/memory_manager_dod.h"
 #include "../../memory/memory_buffer_selection_pod.h"
+#include "../../memory/vector_traits.h"
 #include "../../memory/views/single_element_view.h"
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
@@ -93,8 +94,8 @@ private:
             r_res.max_bounds = std::numeric_limits<T>::lowest();
         } else {
             // Assumes vector types have a filled constructor or constants
-            r_res.min_bounds = T(std::numeric_limits<float>::max());
-            r_res.max_bounds = T(std::numeric_limits<float>::lowest());
+            r_res.min_bounds = get_max_bound<T>();
+            r_res.max_bounds = get_lowest_bound<T>();
         }
         r_res.centroid = T{};
         r_res.element_count = 0;
@@ -152,28 +153,25 @@ private:
     #else
         [[gnu::always_inline]]
     #endif
-    inline auto _read_view(const T_View& p_view, int64_t idx) const {
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
         // --- DOD PROXY UNWRAPPING ---
-        // Statically detects if the View returns a proxy object (like SwapElementProxy)
-        // and aggressively unwraps it into registers before evaluation.
+        // Statically detects if the View returns a proxy object
         if constexpr (requires { p_view[idx].read(); }) {
-            return p_view[idx].read();
+            return static_cast<T>(p_view[idx].read());
         } 
         // --- ATOMIC REFERENCE UNWRAPPING ---
-        // Statically detects C++20 std::atomic_ref (or std::atomic) and loads 
-        // the value directly into registers to prevent type-deduction failures.
         else if constexpr (requires { p_view[idx].load(); }) {
-            return p_view[idx].load();
+            return static_cast<T>(p_view[idx].load());
         }
         // --- STANDARD RESOLUTION ---
         else {
-            using RawType = std::remove_pointer_t<decltype(p_view[idx])>;
-            using DecayedType = std::decay_t<RawType>;
-            
             if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
-                return *reinterpret_cast<const DecayedType*>(p_view[idx]);
+                // We bypass intermediate decay and cast the generic buffer pointer directly to T*.
+                // This ensures we read the full sizeof(T) block from the cache line in a single fetch.
+                return *reinterpret_cast<const T*>(p_view[idx]);
             } else {
-                return static_cast<DecayedType>(p_view[idx]);
+                // If it's a value or a reference proxy, invoke its conversion operator.
+                return static_cast<T>(p_view[idx]);
             }
         }
     }

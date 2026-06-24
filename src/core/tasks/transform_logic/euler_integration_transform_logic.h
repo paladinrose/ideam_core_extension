@@ -95,6 +95,61 @@ struct alignas(64) EulerIntegrationTransformLogic {
             pos_view[i] = pos_view.get_current(i) + (velocities[i] * dt);
         }
     }
+    
+    private:
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline T _read_view(const T_View& p_view, int64_t idx) const {
+        // --- DOD PROXY UNWRAPPING ---
+        // Statically detects if the View returns a proxy object
+        if constexpr (requires { p_view[idx].read(); }) {
+            return static_cast<T>(p_view[idx].read());
+        } 
+        // --- ATOMIC REFERENCE UNWRAPPING ---
+        else if constexpr (requires { p_view[idx].load(); }) {
+            return static_cast<T>(p_view[idx].load());
+        }
+        // --- STANDARD RESOLUTION ---
+        else {
+            if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+                // We bypass intermediate decay and cast the generic buffer pointer directly to T*.
+                // This ensures we read the full sizeof(T) block from the cache line in a single fetch.
+                return *reinterpret_cast<const T*>(p_view[idx]);
+            } else {
+                // If it's a value or a reference proxy, invoke its conversion operator.
+                return static_cast<T>(p_view[idx]);
+            }
+        }
+    }
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void _write_view(const T_View& p_view, int64_t idx, const T& value) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            *reinterpret_cast<T*>(p_view[idx]) = value;
+        } 
+        // --- DOD PROXY WRITE ---
+        else if constexpr (requires { p_view[idx].write(value); }) {
+            p_view[idx].write(value);
+        } 
+        // --- ATOMIC REFERENCE STORE ---
+        else if constexpr (requires { p_view[idx].store(value); }) {
+            p_view[idx].store(value);
+        } 
+        // --- STANDARD REFERENCE FALLBACK ---
+        else {
+            (void)(p_view[idx] = value); 
+        }
+    }
 };
 
 } // namespace ideam::core
