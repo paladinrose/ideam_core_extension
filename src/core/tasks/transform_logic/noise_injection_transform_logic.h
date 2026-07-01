@@ -73,7 +73,7 @@ struct alignas(64) NoiseInjectionTransformLogic {
 
     template <typename T_View, typename T_Strategy>
     inline void execute(const TaskContextPOD& context, const T_View& main_view) const {
-        GrantPartPOD* pos_part = context.get_grant_part(target_buffer_id);
+        const GrantPartPOD* pos_part = context.get_grant_part(target_buffer_id);
         if (!pos_part) return; // Safety check
         
         const int64_t count = pos_part->selection.element_count;
@@ -93,7 +93,7 @@ struct alignas(64) NoiseInjectionTransformLogic {
             noise.y = _hash_to_float_range(state_y) * scale;
             noise.z = _hash_to_float_range(state_z) * scale;
 
-            main_view[i] += noise;
+            _write_view(main_view, i, noise);
         }
     }
 
@@ -114,6 +114,31 @@ private:
         uint32_t mantissa = (state & 0x007FFFFF) | 0x40000000;
         return std::bit_cast<float>(mantissa) - 3.0f; 
     }
+
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void _write_view(const T_View& p_view, int64_t idx, const T& value) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            *reinterpret_cast<T*>(p_view[idx]) = value;
+        } 
+        // --- DOD PROXY WRITE ---
+        else if constexpr (requires { p_view[idx].write(); }) {
+            p_view[idx] = value;
+        } 
+        // --- ATOMIC REFERENCE STORE ---
+        else if constexpr (requires { p_view[idx].store(value); }) {
+            p_view[idx].store(value);
+        } 
+        // --- STANDARD REFERENCE FALLBACK ---
+        else {
+            (void)(p_view[idx] = value); 
+        }
+    }
+    
 };
 
 } // namespace ideam::core

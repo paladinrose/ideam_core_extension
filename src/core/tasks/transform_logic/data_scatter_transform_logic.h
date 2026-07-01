@@ -78,13 +78,32 @@ struct alignas(64) DataScatterTransformLogic {
         // The Hot Loop: Random read (source), Linear write (main_view).
         // This is why we scatter: to pay the random-access penalty exactly once per frame.
         for (int64_t i = 0; i < count; ++i) {
-            if constexpr (std::is_pointer_v<decltype(main_view[i])>) {
-                // If it's a raw pointer, cast and dereference to write to memory
-                *reinterpret_cast<T*>(main_view[i]) = source_data[indices[i]];
-            } else {
-                // Fallback for standard references or proxy objects with overloaded operator=
-                main_view[i] = source_data[indices[i]];
-            }
+            _write_view(main_view, i, source_data[indices[i]]);
+        }
+    }
+
+private:
+template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void _write_view(const T_View& p_view, int64_t idx, const T& value) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            *reinterpret_cast<T*>(p_view[idx]) = value;
+        } 
+        // --- DOD PROXY WRITE ---
+        else if constexpr (requires { p_view[idx].write(); }) {
+            p_view[idx] = value;
+        } 
+        // --- ATOMIC REFERENCE STORE ---
+        else if constexpr (requires { p_view[idx].store(value); }) {
+            p_view[idx].store(value);
+        } 
+        // --- STANDARD REFERENCE FALLBACK ---
+        else {
+            (void)(p_view[idx] = value); 
         }
     }
 };
