@@ -166,20 +166,20 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
             
             bool has_combos = logic_def.has("valid_combinations");
         
-            godot::UtilityFunctions::print(
-                " -> Task Item: ", logic_str, 
-                " | check_layout variable state: ", check_layout ? "TRUE" : "FALSE",
-                " | Has valid_combinations key: ", has_combos ? "YES" : "NO"
-            );
+            //godot::UtilityFunctions::print(
+                //" -> Task Item: ", logic_str, 
+                //" | check_layout variable state: ", check_layout ? "TRUE" : "FALSE",
+                //" | Has valid_combinations key: ", has_combos ? "YES" : "NO"
+            //);
 
             if (check_layout && has_combos) {
                 PackedInt64Array valid_hashes = logic_def["valid_combinations"];
                 bool has_compatible_strategy = false;
                 
-                godot::UtilityFunctions::print(
-                    " ====> Entering Hash Verification Loop for ", logic_str, 
-                    " with ", valid_hashes.size(), " combinations."
-                );
+                //godot::UtilityFunctions::print(
+                    //" ====> Entering Hash Verification Loop for ", logic_str, 
+                   //" with ", valid_hashes.size(), " combinations."
+                //);
                 
                 uint32_t valid_print_count = 5;
                 uint32_t current_print = 0;
@@ -221,13 +221,13 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
                     
                     if (current_print < valid_print_count) {
                         // --- THE SANITY PRINT PIPELINE ---
-                        godot::UtilityFunctions::print(
-                            "Category: ", p_category, 
-                            " | Hash: ", hash, 
-                            " | Unpacked S_Index: ", s_index, 
-                            " | Requirement Mask: ", static_cast<int>(layout_requirement),
-                            " | Pass Validation: ", match ? "YES" : "NO"
-                        );
+                        //godot::UtilityFunctions::print(
+                            //"Category: ", p_category, 
+                            //" | Hash: ", hash, 
+                            //" | Unpacked S_Index: ", s_index, 
+                            //" | Requirement Mask: ", static_cast<int>(layout_requirement),
+                            //" | Pass Validation: ", match ? "YES" : "NO"
+                        //);
                         current_print++;
                     }
 

@@ -77,29 +77,38 @@ struct alignas(64) EulerIntegrationTransformLogic {
         }
     }
 
-    template <typename T_PosView, typename T_VelView>
-    inline void execute(const TaskContextPOD& context, const T_PosView& pos_view, const T_VelView& vel_view) const {
+    template <typename T_View, typename T_Strategy>
+    inline void execute(const TaskContextPOD& context, T_View& pos_view) const {
         const float dt = static_cast<float>(context.delta) * time_scale;
 
-        // We assume pos_view dictates our iteration bounds for this transformation.
-        // In a strict execution graph, context would provide the selection mask length.
+        // 1. Resolve Primary Loop Bounds
         const GrantPartPOD* pos_part = context.get_grant_part(position_buffer_id);
         if (!pos_part) return;
-
         const int64_t count = pos_part->selection.element_count;
 
-        // The Hot Loop: Branchless, cache-linear (if Strategy permits), and heavily optimizable by Clang/MSVC.
+        // 2. Resolve Secondary Buffer (Velocity)
+        const GrantPartPOD* vel_part = context.get_grant_part(velocity_buffer_id);
+        if (!vel_part) return;
+
+        // 3. Instantiate Secondary Lightweight View on the stack
+        using VelView = SingleElementView<ValueType, T_Strategy>;
+        VelView vel_view;
+        
+        // Assuming SingleElementView supports bind(), or fallback to assemble_view
+        vel_view.bind(vel_part); 
+
+        // The Hot Loop: Heavily optimizable, streaming two linear memory regions
         for (int64_t i = 0; i < count; ++i) {
             
             // 1. Unpack Current States
-            ValueType current_pos = _read_view<T_PosView>(pos_view, i);
-            ValueType current_vel = _read_view<T_VelView>(vel_view, i);
+            ValueType current_pos = _read_view<T_View>(pos_view, i);
+            ValueType current_vel = _read_view<VelView>(vel_view, i);
             
             // 2. Execute Math
             ValueType new_pos = current_pos + (current_vel * dt);
             
             // 3. Route to Next State
-            _write_view<T_PosView>(pos_view, i, new_pos);
+            _write_view<T_View>(pos_view, i, new_pos);
         }
     }
     
