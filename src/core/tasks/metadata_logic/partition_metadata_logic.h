@@ -33,6 +33,8 @@ struct PartitionMetadataLogic {
 
     static constexpr size_t transient_workspace_bytes     = 0;
 
+    static constexpr std::string_view display_name = "Partition";
+
     struct Mapping {
         T source_value;
         int32_t partition_id;

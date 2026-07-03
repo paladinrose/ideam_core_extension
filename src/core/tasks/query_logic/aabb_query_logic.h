@@ -41,6 +41,8 @@ struct AABBQueryLogic {
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
+    static constexpr std::string_view display_name = "AABB";
+    
     godot::Vector3 box_min;
     godot::Vector3 box_max;
     uint32_t target_buffer_id = 0; 

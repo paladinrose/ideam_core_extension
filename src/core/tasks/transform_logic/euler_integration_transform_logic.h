@@ -30,6 +30,8 @@ struct alignas(64) EulerIntegrationTransformLogic {
     
     static constexpr size_t transient_workspace_bytes     = 0;
 
+    static constexpr std::string_view display_name = "Euler Integration";
+
     // --- Configuration ---
     uint32_t position_buffer_id = INVALID_ID; // The Primary View
     uint32_t velocity_buffer_id = INVALID_ID; // The Secondary View

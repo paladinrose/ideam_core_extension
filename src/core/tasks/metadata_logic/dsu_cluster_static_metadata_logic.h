@@ -41,6 +41,8 @@ struct DSUClusterStaticMetadataLogic {
     
     static constexpr size_t transient_workspace_bytes     = 0; // User must set via Graph to `capacity * 20`
 
+    static constexpr std::string_view display_name = "DSU Cluster (Static)";
+    
     // --- Configuration ---
     ClusterStaticCompareMode mode = ClusterStaticCompareMode::ABSOLUTE_VALUE;
     

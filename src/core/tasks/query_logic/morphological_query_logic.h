@@ -40,6 +40,8 @@ struct MorphologicalQueryLogic {
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
+    static constexpr std::string_view display_name = "Morphological";
+    
     uint32_t target_buffer_id = 0;
     int32_t iterations = 1;
 

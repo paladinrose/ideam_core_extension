@@ -38,6 +38,8 @@ struct StencilDilationBridgeQueryLogic {
     static constexpr bool supports_cull = false; // Stencils are used for dilation/addition
     static constexpr bool supports_addition = true;
 
+    static constexpr std::string_view display_name = "Stencil Dilation Bridge";
+    
     int32_t radius = 1;
 
     const MemoryBufferSelectionPOD* source_selection = nullptr; 

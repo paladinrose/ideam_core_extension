@@ -63,6 +63,9 @@ concept IsTransformLogic = requires {
 
     // Sub-system configurations
     { T::transient_workspace_bytes } -> std::convertible_to<size_t>;
+
+    // UI Integration
+    { T::display_name } -> std::convertible_to<std::string_view>;
     { T::get_ui_properties() } -> std::same_as<godot::Array>;
     { std::declval<T>().apply_properties(std::declval<const godot::Dictionary&>()) } -> std::same_as<void>;
     

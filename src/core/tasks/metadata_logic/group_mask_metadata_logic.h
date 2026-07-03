@@ -40,6 +40,8 @@ struct GroupMaskMetadataLogic {
 
     static constexpr size_t transient_workspace_bytes     = 0;
 
+    static constexpr std::string_view display_name = "Group Mask";
+    
     struct Mapping {
         T target_value;
         uint32_t bit_flag;

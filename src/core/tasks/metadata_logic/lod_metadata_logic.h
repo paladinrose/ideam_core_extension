@@ -34,6 +34,8 @@ struct LODMetadataLogic {
 
     static constexpr size_t transient_workspace_bytes     = 0;
 
+    static constexpr std::string_view display_name = "Level of Detail (LOD)";
+    
     struct Mapping {
         T target_value;
         uint8_t lod_level;

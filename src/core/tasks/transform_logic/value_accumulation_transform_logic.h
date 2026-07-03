@@ -52,6 +52,8 @@ struct alignas(64) ValueAccumulationTransformLogic {
     
     static constexpr size_t transient_workspace_bytes     = 0;
 
+    static constexpr std::string_view display_name = "Value Accumulation";
+    
     // --- Configuration ---
     AccumulationMode mode = AccumulationMode::SUM;
     uint32_t primary_buffer_id = INVALID_ID;

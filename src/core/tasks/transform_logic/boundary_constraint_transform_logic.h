@@ -39,6 +39,8 @@ struct alignas(64) BoundaryConstraintTransformLogic {
 
     static constexpr size_t transient_workspace_bytes     = 0;
 
+    static constexpr std::string_view display_name = "Boundary Constraint";
+    
     // --- Configuration ---
     uint32_t position_buffer_id = INVALID_ID;
     uint32_t velocity_buffer_id = INVALID_ID; // Required only for BOUNCE

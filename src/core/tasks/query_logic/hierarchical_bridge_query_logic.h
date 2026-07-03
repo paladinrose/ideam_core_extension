@@ -23,8 +23,11 @@ struct HierarchicalBridgeQueryLogic {
     static constexpr bool requires_static_kernel = false;
     static constexpr size_t kernel_size = 0;
     static constexpr size_t transient_workspace_bytes = 0;
+    
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
+
+    static constexpr std::string_view display_name = "Hierarchical Bridge";
 
     // --- State Payload ---
     const MemoryBufferSelectionPOD* parent_selection = nullptr;

@@ -35,6 +35,8 @@ struct FrustumQueryLogic {
 
     static constexpr uint32_t MAX_PLANES = 6;
 
+    static constexpr std::string_view display_name = "Frustum";
+    
     uint32_t target_buffer_id = 0;
     uint32_t column_id = 0;
     uint32_t num_planes = 0;

@@ -43,6 +43,8 @@ struct alignas(64) BoundsExtractionTransformLogic {
     
     static constexpr size_t transient_workspace_bytes     = 0;
 
+    static constexpr std::string_view display_name = "Bounds Extraction";
+    
     // --- Configuration ---
     uint32_t target_buffer_id = INVALID_ID;
     BoundsResult<T>* output_destination = nullptr;

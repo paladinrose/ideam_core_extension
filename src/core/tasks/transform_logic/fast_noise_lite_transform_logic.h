@@ -33,6 +33,8 @@ struct alignas(64) FastNoiseLiteTransformLogic {
     static constexpr size_t kernel_size = 0;
     static constexpr size_t transient_workspace_bytes = 0; 
 
+    static constexpr std::string_view display_name = "FastNoiseLite";
+    
     RealFastNoiseLite fast_noise_lite;
     RealFastNoiseLite::RotationType3D rotation_type = RealFastNoiseLite::RotationType3D_None;
 

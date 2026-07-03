@@ -38,6 +38,8 @@ struct BitmaskQueryLogic {
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
+    static constexpr std::string_view display_name = "Bitmask";
+    
     enum BitOp : uint8_t {
         MATCH_ALL, // (value & mask) == mask
         MATCH_ANY, // (value & mask) != 0

@@ -30,6 +30,8 @@ struct DataComparisonQueryLogic {
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
+    static constexpr std::string_view display_name = "Data Comparison";
+    
     enum class Operator : uint8_t { EQUAL, NOT_EQUAL, LESS_THAN, LESS_EQUAL, GREATER_THAN, GREATER_EQUAL };
 
     uint32_t target_buffer_id = 0;

@@ -29,6 +29,8 @@ struct ComponentQueryLogic {
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
+    static constexpr std::string_view display_name = "Component";
+    
     uint32_t target_buffer_id = 0; 
     uint32_t component_buffer_id = 0; 
 

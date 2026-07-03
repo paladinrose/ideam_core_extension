@@ -237,7 +237,8 @@ private:
                         godot::Dictionary dict;
                         // Instantiate the property array exactly once per logic struct type
                         dict["properties"] = L_Type::get_ui_properties();
-                        dict["valid_combinations"] = godot::PackedInt64Array(); 
+                        dict["valid_combinations"] = godot::PackedInt64Array();
+                        dict["name"] = godot::String(L_Type::display_name.data()); 
                         (*p_matrix)[logic_key] = dict;
                     }
 

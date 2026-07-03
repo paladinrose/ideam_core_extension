@@ -38,6 +38,8 @@ struct alignas(64) StencilConvolutionTransformLogic {
     // Demand enough transient memory to build our SoA weights array for the hot loop
     static constexpr size_t transient_workspace_bytes = KernelSize * sizeof(T);
 
+    static constexpr std::string_view display_name = "Stencil Convolution";
+    
     // --- Configuration ---
     uint32_t grid_buffer_id = INVALID_ID;
     

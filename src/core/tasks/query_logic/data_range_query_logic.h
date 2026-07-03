@@ -31,6 +31,8 @@ struct DataRangeQueryLogic {
     static constexpr bool supports_cull = true;
     static constexpr bool supports_addition = true;
 
+    static constexpr std::string_view display_name = "Data Range";
+    
     enum class RangeMode : uint8_t { INCLUSIVE, EXCLUSIVE };
 
     uint32_t target_buffer_id = 0;
