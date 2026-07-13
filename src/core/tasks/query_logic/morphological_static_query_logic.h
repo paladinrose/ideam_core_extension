@@ -57,6 +57,13 @@ struct MorphologicalStaticQueryLogic {
         iter_prop["hint_string"] = "1,100,1"; 
         props.push_back(iter_prop);
 
+        godot::Dictionary point_count_prop;
+        point_count_prop["name"] = "point_count";
+        point_count_prop["type"] = godot::Variant::INT;
+        point_count_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        point_count_prop["hint_string"] = "logic_options"; 
+        props.push_back(point_count_prop);
+        
         return props;
     }
 

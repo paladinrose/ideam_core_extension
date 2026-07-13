@@ -17,7 +17,6 @@ enum class QueryLogicID : uint32_t {
     Archetype,
     Bitmask,
     Boolean,
-    Border,
     ColorRGBA,
     ColorHSVA,
     Component,
@@ -58,6 +57,8 @@ public:
     static constexpr size_t S_COUNT = static_cast<size_t>(MemoryStrategy::Count);
     static constexpr size_t T_COUNT = static_cast<size_t>(MemoryTypes::Count);
     
+    static const std::array<LogicVariantGroup, L_COUNT> logic_variants;
+
     static constexpr size_t SUB_MATRIX_SIZE = O_COUNT * V_COUNT * S_COUNT * T_COUNT;
 
     using SubMatrix = std::array<QueryTaskFactoryFn, SUB_MATRIX_SIZE>;

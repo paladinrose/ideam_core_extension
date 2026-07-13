@@ -23,10 +23,7 @@ void QueryTaskResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_type_id"), &QueryTaskResource::get_type_id);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "type_id"), "set_type_id", "get_type_id");
 
-    godot::ClassDB::bind_method(godot::D_METHOD("set_logic_id", "logic_id"), &QueryTaskResource::set_logic_id);
-    godot::ClassDB::bind_method(godot::D_METHOD("get_logic_id"), &QueryTaskResource::get_logic_id);
-    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "logic_id"), "set_logic_id", "get_logic_id"); 
-
+    
 }
 
 void QueryTaskResource::set_op_id(int p_id) {
@@ -61,11 +58,5 @@ int QueryTaskResource::get_type_id() const {
     return static_cast<int>(type_id);
 }
 
-void QueryTaskResource::set_logic_id(uint32_t p_id) {
-    logic_id = p_id;
-}
 
-uint32_t QueryTaskResource::get_logic_id() const {
-    return logic_id;
-}
 } // namespace ideam::godot_ext

@@ -19,7 +19,7 @@ private:
     uint32_t view_id = 0;
     uint32_t strategy_id = 0;
     uint32_t type_id = 0;
-    uint32_t logic_id = 0;
+    //uint32_t logic_id = 0;
 
 protected:
     static void _bind_methods();
@@ -38,8 +38,8 @@ public:
     void set_type_id(int p_id);
     int get_type_id() const;
 
-    void set_logic_id(uint32_t p_id);
-    uint32_t get_logic_id() const;
+    
+
 };
 
 } // namespace ideam::godot_ext

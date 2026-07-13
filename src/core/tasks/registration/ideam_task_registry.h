@@ -105,6 +105,12 @@ struct TaskUIFactories {
     std::function<godot_ext::TaskGraphNode*()> node_factory;
 };
 
+struct LogicVariantGroup {
+        bool is_primary;
+        uint32_t variant_count;
+        const char* const* labels; // Pointer to an array of C-strings
+    };
+
 using NativeTaskFactory = std::function<std::unique_ptr<INativeTask>()>;
 
 class IdeamTaskRegistry : public godot::Object {

@@ -11,7 +11,6 @@
 #include "../query_logic/archetype_query_logic.h"
 #include "../query_logic/bitmask_query_logic.h"
 #include "../query_logic/boolean_query_logic.h"
-#include "../query_logic/border_query_logic.h"
 #include "../query_logic/color_rgba_query_logic.h"
 #include "../query_logic/color_hsva_query_logic.h"
 #include "../query_logic/component_query_logic.h"
@@ -85,7 +84,6 @@ namespace {
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Archetype, C, S> { using Type = ArchetypeQueryLogic; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Bitmask, C, S> { using Type = BitmaskQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Boolean, C, S> { using Type = BooleanQueryLogic<C>; static constexpr bool is_valid = true; };
-    template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Border, C, S> { using Type = BorderQueryLogic<C, S>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::ColorRGBA, C, S> { using Type = ColorRGBAQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::ColorHSVA, C, S> { using Type = ColorHSVAQueryLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::Component, C, S> { using Type = ComponentQueryLogic; static constexpr bool is_valid = true; };
@@ -281,6 +279,18 @@ private:
                         dict["properties"] = L_Type::get_ui_properties();
                         dict["valid_combinations"] = godot::PackedInt64Array(); 
                         dict["name"] = godot::String(L_Type::display_name.data());
+
+                        const auto& variant_info = QueryTaskRegistry::logic_variants[static_cast<size_t>(L)];
+                        if (variant_info.is_primary && variant_info.variant_count > 1) {
+                            dict["variant_count"] = variant_info.variant_count;
+                            
+                            godot::Array ui_labels;
+                            for (uint32_t i = 0; i < variant_info.variant_count; ++i) {
+                                ui_labels.push_back(godot::String(variant_info.labels[i]));
+                            }
+                            dict["variant_labels"] = ui_labels;
+                        }
+
                         (*p_matrix)[logic_key] = dict;
                     }
 

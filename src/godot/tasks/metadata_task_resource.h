@@ -37,9 +37,7 @@ public:
 
     void set_type_id(int p_id);
     int get_type_id() const;
-
-    void set_logic_id(uint32_t p_id);
-    uint32_t get_logic_id() const;
+    
 };
 
 } // namespace ideam::godot_ext

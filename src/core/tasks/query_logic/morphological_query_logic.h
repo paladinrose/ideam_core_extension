@@ -2,7 +2,7 @@
 
 #include "../../memory/memory_common.h"
 #include "../../memory/memory_buffer_selection_pod.h"
-#include "../../memory/views/stencil_view.h" // Switched to dynamic StencilView
+#include "../../memory/views/stencil_view.h" 
 #include "../../memory/views/strategies.h"
 #include "../i_native_task.h"
 #include "query_logic_traits.h"
@@ -23,7 +23,7 @@ template <typename T, typename T_Strategy>
 struct MorphologicalQueryLogic {
     using ValueType       = T; 
     using DefaultStrategy = T_Strategy;
-    using DefaultView     = StencilView<T, T_Strategy>; // No PointCount required
+    using DefaultView     = StencilView<T, T_Strategy>;
 
     // --- DOD Contract Requirements ---
     static constexpr ViewCapability required_capabilities = ViewCapability::STENCIL_ACCESS | ViewCapability::SPATIAL_ACCESS;
@@ -32,8 +32,8 @@ struct MorphologicalQueryLogic {
     
     // --- Explicit Spatial Contracts ---
     static constexpr size_t dimensions = T_Strategy::dimensions;
-    static constexpr bool requires_static_kernel = false; // Changed to false
-    static constexpr size_t kernel_size = 0;              // Changed to 0
+    static constexpr bool requires_static_kernel = false; 
+    static constexpr size_t kernel_size = 0;              
     
     static constexpr size_t transient_workspace_bytes     = 0;
 
@@ -42,6 +42,8 @@ struct MorphologicalQueryLogic {
 
     static constexpr std::string_view display_name = "Morphological";
     
+    int32_t radius = 1;
+
     uint32_t target_buffer_id = 0;
     int32_t iterations = 1;
 
@@ -55,6 +57,13 @@ struct MorphologicalQueryLogic {
         iter_prop["hint_string"] = "1,100,1"; 
         props.push_back(iter_prop);
 
+        godot::Dictionary radius_prop;
+        radius_prop["name"] = "radius";
+        radius_prop["type"] = godot::Variant::INT;
+        radius_prop["hint"] = godot::PROPERTY_HINT_RANGE;
+        radius_prop["hint_string"] = "1,5,1,prefer_slider"; // min,max,step
+        props.push_back(radius_prop);
+
         return props;
     }
 
@@ -63,6 +72,9 @@ struct MorphologicalQueryLogic {
     void apply_properties(const godot::Dictionary& p_props) noexcept {
         if (p_props.has("iterations")) {
             iterations = static_cast<int32_t>(p_props["iterations"]);
+        }
+        if (p_props.has("radius")) {
+            radius = static_cast<int32_t>(static_cast<int64_t>(p_props["radius"]));
         }
     }
 
@@ -93,7 +105,7 @@ private:
     }
 
     // --- Dynamic Geometric Unroller ---
-    // Safely translates a Von Neumann iteration into explicit spatial coordinates 
+    // Safely translates an expanded Von Neumann iteration into explicit spatial coordinates 
     // for the StencilView's variadic neighbor() function.
     template <typename T_View, typename F>
     #if defined(_MSC_VER)
@@ -103,26 +115,36 @@ private:
     #endif
     inline void _evaluate_von_neumann(const T_View& p_view, F&& p_callback) const {
         if constexpr (T_Strategy::dimensions == 1) {
-            for (intptr_t step : {-1, 1}) { 
+            for (intptr_t step = 1; step <= radius; ++step) { 
                 p_callback(p_view.neighbor(step)); 
+                p_callback(p_view.neighbor(-step));
             }
         } else if constexpr (T_Strategy::dimensions == 2) {
-            for (intptr_t step : {-1, 1}) {
+            for (intptr_t step = 1; step <= radius; ++step) {
                 p_callback(p_view.neighbor(step, 0));
+                p_callback(p_view.neighbor(-step, 0));
                 p_callback(p_view.neighbor(0, step));
+                p_callback(p_view.neighbor(0, -step));
             }
         } else if constexpr (T_Strategy::dimensions == 3) {
-            for (intptr_t step : {-1, 1}) {
+            for (intptr_t step = 1; step <= radius; ++step) {
                 p_callback(p_view.neighbor(step, 0, 0));
+                p_callback(p_view.neighbor(-step, 0, 0));
                 p_callback(p_view.neighbor(0, step, 0));
+                p_callback(p_view.neighbor(0, -step, 0));
                 p_callback(p_view.neighbor(0, 0, step));
+                p_callback(p_view.neighbor(0, 0, -step));
             }
         } else if constexpr (T_Strategy::dimensions == 4) {
-            for (intptr_t step : {-1, 1}) {
+            for (intptr_t step = 1; step <= radius; ++step) {
                 p_callback(p_view.neighbor(step, 0, 0, 0));
+                p_callback(p_view.neighbor(-step, 0, 0, 0));
                 p_callback(p_view.neighbor(0, step, 0, 0));
+                p_callback(p_view.neighbor(0, -step, 0, 0));
                 p_callback(p_view.neighbor(0, 0, step, 0));
+                p_callback(p_view.neighbor(0, 0, -step, 0));
                 p_callback(p_view.neighbor(0, 0, 0, step));
+                p_callback(p_view.neighbor(0, 0, 0, -step));
             }
         }
     }

@@ -20,7 +20,8 @@ IdeamGraphNode::~IdeamGraphNode() {
 void IdeamGraphNode::_bind_methods() {
     ADD_SIGNAL(MethodInfo("context_clicked", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "IdeamGraphNode"), PropertyInfo(Variant::VECTOR2, "at")));
     ADD_SIGNAL(MethodInfo("property_changed", PropertyInfo(Variant::STRING_NAME, "blueprint_id"), PropertyInfo(Variant::STRING_NAME, "property_name"), PropertyInfo(Variant::NIL, "new_value")));
-    ADD_SIGNAL(MethodInfo("delete_request", PropertyInfo(Variant::STRING_NAME, "blueprint_id")));
+    ADD_SIGNAL(MethodInfo("delete_requested", PropertyInfo(Variant::STRING_NAME, "node_name")));
+    ADD_SIGNAL(MethodInfo("duplicate_requested", PropertyInfo(Variant::STRING_NAME, "node_name")));
     ADD_SIGNAL(MethodInfo("connections_requested", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "IdeamGraphNode")));
 
     ClassDB::bind_method(D_METHOD("initialize", "node_res"), &IdeamGraphNode::initialize);
@@ -187,7 +188,9 @@ TypedArray<String> IdeamGraphNode::get_context_menu_options() const {
 
 void IdeamGraphNode::select_context_menu_option(int p_option_id) {
     if (p_option_id == 0) {
-        emit_signal("delete_request", get_blueprint_id());
+        emit_signal("delete_requested", get_node_resource()->get_node_name());
+    } else if (p_option_id == 1) {
+        emit_signal("duplicate_requested", get_node_resource()->get_node_name());
     }
 }
 

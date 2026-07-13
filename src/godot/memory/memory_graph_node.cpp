@@ -6,6 +6,7 @@
 #include <godot_cpp/classes/theme.hpp>
 #include <godot_cpp/classes/font.hpp>
 #include <godot_cpp/classes/h_box_container.hpp>
+#include <godot_cpp/classes/popup_menu.hpp>
 
 #include <godot_cpp/classes/style_box.hpp>
 #include <godot_cpp/classes/style_box_texture.hpp>
@@ -36,6 +37,9 @@ void MemoryGraphNode::_bind_methods() {
     // New Signal definition
     ADD_SIGNAL(MethodInfo("memory_grant_requested", 
         PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGraphNode")));
+    
+    ADD_SIGNAL(MethodInfo("active_grants_requested", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGraphNode")));
+
     // [Memz] Manually bind external DOD bitflags to int64_t to safely cross the engine boundary.
     // This keeps src/core/ entirely agnostic of Godot's reflection macros.
     ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_NONE"), static_cast<int64_t>(core::BufferLayoutType::NONE));
@@ -120,10 +124,47 @@ void MemoryGraphNode::_build_ui() {
     request_grant_btn->set_tooltip_text("Request New Memory Grant from Manager");
     request_grant_btn->connect("pressed", Callable(this, "_on_request_grant_pressed"));
     memory_controls_hb->add_child(request_grant_btn);
+
+    grant_selector_btn = memnew(OptionButton);
+    grant_selector_btn->set_text("Assign Grant...");
+    grant_selector_btn->set_h_size_flags(SIZE_EXPAND_FILL);
+    grant_selector_btn->get_popup()->connect("about_to_popup", Callable(this, "_on_grant_dropdown_about_to_popup"));
+    grant_selector_btn->connect("item_selected", Callable(this, "_on_grant_selected"));
+    memory_controls_hb->add_child(grant_selector_btn);
 }
 
 void MemoryGraphNode::_on_request_grant_pressed() {
     emit_signal("memory_grant_requested", this);
+}
+
+void MemoryGraphNode::_on_grant_dropdown_about_to_popup() {
+    emit_signal("active_grants_requested", this);
+}
+
+void MemoryGraphNode::populate_grant_dropdown(const godot::TypedArray<MemoryGrantResource>& p_grants) {
+    grant_selector_btn->clear();
+    cached_dropdown_grants = p_grants;
+    
+    if (p_grants.is_empty()) {
+        grant_selector_btn->add_item("No Grants Available");
+        grant_selector_btn->set_item_disabled(0, true);
+        return;
+    }
+    
+    for (int i = 0; i < p_grants.size(); ++i) {
+        godot::Ref<MemoryGrantResource> grant = p_grants[i];
+        if (grant.is_valid()) {
+            godot::String name = grant->get_grant_name().is_empty() ? godot::String("Unnamed Grant") : godot::String(grant->get_grant_name());
+            grant_selector_btn->add_item(name, i);
+        }
+    }
+}
+
+void MemoryGraphNode::_on_grant_selected(int p_index) {
+    if (p_index >= 0 && p_index < cached_dropdown_grants.size()) {
+        godot::Ref<MemoryGrantResource> selected_grant = cached_dropdown_grants[p_index];
+        receive_memory_grant(selected_grant);
+    }
 }
 
 void MemoryGraphNode::receive_connection_info(const godot::Dictionary& p_info) {
@@ -156,6 +197,9 @@ void MemoryGraphNode::receive_memory_grant(const godot::Ref<MemoryGrantResource>
         
         if (p_grant.is_valid()) {
             inspect_memory_btn->set_disabled(false);
+
+            godot::String grant_name = p_grant->get_grant_name().is_empty() ? "Unnamed Grant" : p_grant->get_grant_name();
+            inspect_memory_btn->set_text(godot::String("Grant: ") + grant_name);
 
             godot::TypedArray<GrantPartResource> parts = p_grant->get_configured_parts();
             for (int i = 0; i < parts.size(); ++i) {

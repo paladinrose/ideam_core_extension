@@ -48,7 +48,7 @@ protected:
     void _on_bool_toggled(bool p_pressed, const godot::StringName& p_prop_name);
     void _on_spinbox_value_changed(double p_value, const godot::StringName& p_prop_name);
     void _on_hex_text_submitted(const godot::String& p_text, const godot::StringName& p_prop_name);
-    void _on_option_item_selected(int p_index, const godot::StringName& p_prop_name);
+    void _on_option_item_selected(int p_index, const godot::StringName& p_prop_name, godot::Object* p_btn);
     void _on_bitfield_toggled(bool p_pressed, const godot::StringName& p_prop_name, int p_bit_index, int p_current_mask);
     void _on_vector_component_changed(double p_value, const godot::StringName& p_prop_name, int p_component, godot::Variant p_current_vector);
     void _on_color_changed(const godot::Color& p_color, const godot::StringName& p_prop_name);

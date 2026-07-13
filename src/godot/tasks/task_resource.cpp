@@ -35,6 +35,18 @@ void TaskResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_task_properties"), &TaskResource::get_task_properties);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::DICTIONARY, "task_properties"), "set_task_properties", "get_task_properties");
 
+    godot::ClassDB::bind_method(godot::D_METHOD("set_logic_id", "logic_id"), &TaskResource::set_logic_id);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_logic_id"), &TaskResource::get_logic_id);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "logic_id"), "set_logic_id", "get_logic_id"); 
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_base_logic_id", "base_logic_id"), &TaskResource::set_base_logic_id);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_base_logic_id"), &TaskResource::get_base_logic_id);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "base_logic_id"), "set_base_logic_id", "get_base_logic_id");
+    
+    godot::ClassDB::bind_method(godot::D_METHOD("set_logic_variant_labels", "labels"), &TaskResource::set_logic_variant_labels);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_logic_variant_labels"), &TaskResource::get_logic_variant_labels);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::PACKED_STRING_ARRAY, "logic_variant_labels"), "set_logic_variant_labels", "get_logic_variant_labels"); 
+
     godot::ClassDB::bind_method(godot::D_METHOD("validate_for_compilation"), &TaskResource::validate_for_compilation);
 }
 
@@ -94,4 +106,27 @@ bool TaskResource::validate_for_compilation() const {
     return true;
 }
 
+void TaskResource::set_logic_id(uint32_t p_id) {
+    logic_id = p_id;
+}
+
+uint32_t TaskResource::get_logic_id() const {
+    return logic_id;
+}
+
+void TaskResource::set_base_logic_id(uint32_t p_id) {
+    base_logic_id = p_id;
+}
+
+uint32_t TaskResource::get_base_logic_id() const {
+    return base_logic_id;
+}
+
+void TaskResource::set_logic_variant_labels(const godot::PackedStringArray& p_labels) {
+    logic_variant_labels = p_labels;
+}
+
+godot::PackedStringArray TaskResource::get_logic_variant_labels() const {
+    return logic_variant_labels;   
+}
 } // namespace ideam::godot_ext

@@ -52,7 +52,8 @@ struct StencilDilationBridgeQueryLogic {
         godot::Dictionary rad_prop;
         rad_prop["name"] = "radius";
         rad_prop["type"] = godot::Variant::INT;
-        rad_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        rad_prop["hint"] = godot::PROPERTY_HINT_RANGE;
+        rad_prop["hint_string"] = "1,5,1,prefer_slider"; // min,max,step
         props.push_back(rad_prop);
 
         godot::Dictionary col_prop;

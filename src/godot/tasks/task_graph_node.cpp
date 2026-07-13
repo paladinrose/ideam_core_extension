@@ -18,6 +18,7 @@ void TaskGraphNode::_bind_methods() {
     
     ClassDB::bind_method(D_METHOD("_on_custom_param_changed", "param_name", "value"), &TaskGraphNode::_on_custom_param_changed);
     ClassDB::bind_method(D_METHOD("_on_buffer_option_selected", "index", "prop_name", "btn"), &TaskGraphNode::_on_buffer_option_selected);
+    ClassDB::bind_method(D_METHOD("_on_logic_option_selected", "index"), &TaskGraphNode::_on_logic_option_selected);
 }
 
 Ref<TaskResource> TaskGraphNode::get_task_node_resource() const {
@@ -147,7 +148,7 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
     for (int i = 0; i < r_properties.size(); ++i) {
         Dictionary prop = r_properties[i];
 
-        // 1. Resolve dynamic 'T' types
+        // Resolve dynamic 'T' types
         if (prop.has("type") && prop["type"].get_type() == Variant::STRING && String(prop["type"]) == "T") {
             if (prop.has("type_hints")) {
                 Dictionary hints = prop["type_hints"];
@@ -169,13 +170,15 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
             }
         }
 
-        // 2. Recursively resolve nested structs (e.g., Array of GroupMaskMapping)
+        // Recursively resolve nested structs (e.g., Array of GroupMaskMapping)
         if (prop.has("struct_properties")) {
             Array sub_schema = prop["struct_properties"];
             // Recurse down into the struct's definition
             _reify_property_schema(sub_schema, p_current_type_id);
             prop["struct_properties"] = sub_schema;
         }
+
+        // Handle any port overrides encoded in the property dictionary
         if (prop.has("port_override")) {
             uint64_t mask = prop["port_override"];
             
@@ -200,41 +203,92 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
                 if (enable_right) update_memory_port(slot, false, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(layout_right)));
             }
         }
-        // Write the mutated dictionary back to the array. 
-        // (Required because extracting `prop` creates a shallow Variant copy of the dictionary ref)
-        r_properties[i] = prop;
 
-        if (static_cast<int>(prop["type"]) == godot::Variant::INT && godot::String(prop["hint_string"]) == "buffer_option") {
-            godot::StringName prop_name = prop["name"];
-            
-            godot::OptionButton* opt_btn = memnew(godot::OptionButton);
-            custom_parameters_container->add_child(opt_btn);
-            
-            BufferOptionBinding binding;
-            binding.property_name = prop_name;
-            binding.button = opt_btn;
+        // --- SPECIAL CASE HANDLING ---
+        bool consume_property = false;
 
-            // Extract valid layout dimensions from the Grant Resource
-            if (grant_res.is_valid()) {
-                godot::TypedArray<GrantPartResource> parts = grant_res->get_configured_parts();
-                binding.buffer_ids.resize(parts.size());
+        // Check if the property is an ENUM to process special UI layout cases
+        if (prop.has("hint") && static_cast<int>(prop["hint"]) == godot::PROPERTY_HINT_ENUM) {
+            godot::String hint_str = prop["hint_string"];
+
+            if (hint_str == "buffer_option") {
+                godot::StringName prop_name = prop["name"];
                 
-                for (int j = 0; j < parts.size(); ++j) {
-                    godot::Ref<GrantPartResource> part = parts[j];
-                    if (part.is_valid()) {
-                        binding.buffer_ids.set(j, part->get_buffer_id());
+                godot::OptionButton* opt_btn = memnew(godot::OptionButton);
+                custom_parameters_container->add_child(opt_btn);
+                
+                BufferOptionBinding binding;
+                binding.property_name = prop_name;
+                binding.button = opt_btn;
+
+                // Extract valid layout dimensions from the Grant Resource
+                if (grant_res.is_valid()) {
+                    godot::TypedArray<GrantPartResource> parts = grant_res->get_configured_parts();
+                    binding.buffer_ids.resize(parts.size());
+                    
+                    for (int j = 0; j < parts.size(); ++j) {
+                        godot::Ref<GrantPartResource> part = parts[j];
+                        if (part.is_valid()) {
+                            binding.buffer_ids.set(j, part->get_buffer_id());
+                        }
                     }
                 }
+
+                // Bind the signal with payload injection (prop_name and the button pointer)
+                opt_btn->connect("item_selected", godot::Callable(this, "_on_buffer_option_selected").bind(prop_name, opt_btn));
+
+                buffer_option_bindings.push_back(binding);
+                
+                // Flag to remove the property from the schema so the RuntimeInspector ignores it
+                consume_property = true;
+            } 
+            else if (hint_str == "logic_options"){
+                godot::OptionButton* opt_btn = memnew(godot::OptionButton);
+                custom_parameters_container->add_child(opt_btn);
+                
+                godot::PackedStringArray labels = task_res->get_logic_variant_labels();
+                for (int j = 0; j < labels.size(); ++j) {
+                    opt_btn->add_item(labels[j], j);
+                }
+
+                // Delta calculates the active enum offset (e.g., LOD_3Level - LOD_1Level = Index 2)
+                int current_selection = task_res->get_logic_id() - task_res->get_base_logic_id();
+                if (current_selection >= 0 && current_selection < opt_btn->get_item_count()) {
+                    opt_btn->select(current_selection);
+                }
+
+                // Bind the signal to a new generic handler
+                opt_btn->connect("item_selected", godot::Callable(this, "_on_logic_option_selected"));
+
+                //This changes the compiled task type that will be selected, during baking. As such, we consume this property and add a custom drop down, as with the "buffer_option" case above.
+                consume_property = true;
             }
-
-            // Bind the signal with payload injection (prop_name and the button pointer)
-            opt_btn->connect("item_selected", godot::Callable(this, "_on_buffer_option_selected").bind(prop_name, opt_btn));
-
-            buffer_option_bindings.push_back(binding);
             
-            // Remove the property from the schema so the RuntimeInspector ignores it
+            // Add future full-override cases here
+            // else if (hint_str == "some_other_custom_control") { 
+            //     consume_property = true;
+            // }
+            // Add future modifying cases here
+            // else if (hint_str == "modify_options_only") {
+            //     prop["hint_string"] = "DynamicOption1,DynamicOption2";
+            //     // Do NOT set consume_property to true here, so it writes back to r_properties
+            // }
+        }
+
+        // --- END OF SPECIAL CASE HANDLING ---
+
+        if (consume_property) {
+            // We fully handled this control manually, so remove it from the inspector's pipeline
             r_properties.remove_at(i);
-        }   
+            
+            // CRITICAL: Decrement index because the array just shrank, 
+            // preventing the loop from skipping the next element.
+            i--; 
+        } else {
+            // Write the mutated dictionary back to the array. 
+            // (Required because extracting `prop` creates a shallow Variant copy of the dictionary ref)
+            r_properties[i] = prop;
+        }
     }
 
     // If we registered any async dropdowns, request the current topological names
@@ -336,6 +390,24 @@ void TaskGraphNode::receive_buffer_names_list(const godot::TypedArray<godot::Str
             btn->select(0);
         }
     }
+}
+
+void TaskGraphNode::_on_logic_option_selected(int p_index) {
+    godot::Ref<TaskResource> task_res = get_task_node_resource();
+    if (task_res.is_null()) return;
+
+    // Project the enum forward based on the user's dropdown index
+    uint32_t new_id = task_res->get_base_logic_id() + p_index;
+    if (task_res->get_logic_id() == new_id) return;
+
+    task_res->set_logic_id(new_id);
+    
+    // Route to GraphEdit to mutate the TaskResource dictionary and handle undo/redo
+    emit_property_changed(godot::StringName("logic_id"), new_id);
+
+    // CRITICAL: A new logic_id means the 'properties' schema in the registry has changed. 
+    // We must rebuild the UI to drop old inspector values and fetch the new ones.
+    _rebuild_dynamic_ui(); 
 }
 
 } // namespace ideam::godot_ext

@@ -5,6 +5,7 @@
 #include "memory_inspectors.h"
 #include "../../core/memory/memory_buffer_pod.h"
 #include <godot_cpp/classes/button.hpp>
+#include <godot_cpp/classes/option_button.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
 #include <godot_cpp/classes/texture_rect.hpp>
 #include <unordered_map>
@@ -53,6 +54,9 @@ private:
     godot::Button* request_grant_btn = nullptr;
     godot::TextureRect* telemetry_badge = nullptr;
 
+    godot::OptionButton* grant_selector_btn = nullptr;
+    godot::TypedArray<MemoryGrantResource> cached_dropdown_grants;
+
     // Active visual states
     LayoutHeaderState header_state = HEADER_VALID;
     TelemetryBadgeState telemetry_state = TELEMETRY_INACTIVE;
@@ -76,6 +80,9 @@ protected:
     void _on_inspect_memory_pressed();
     void _on_request_grant_pressed();
     
+    void _on_grant_dropdown_about_to_popup();
+    void _on_grant_selected(int p_index);
+
 public:
     MemoryGraphNode();
     virtual ~MemoryGraphNode() override = default;
@@ -106,6 +113,8 @@ public:
     virtual void receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names);
     virtual void receive_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant);
 
+    void populate_grant_dropdown(const godot::TypedArray<MemoryGrantResource>& p_grants);
+    
     virtual void receive_connection_info(const godot::Dictionary& p_info) override;
 };
 

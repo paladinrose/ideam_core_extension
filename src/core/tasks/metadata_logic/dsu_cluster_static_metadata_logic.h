@@ -65,6 +65,14 @@ struct DSUClusterStaticMetadataLogic {
         mode_prop["hint_string"] = "Absolute Value,Angular,Bitmask Match";
         props.push_back(mode_prop);
 
+        // *. Point Count (Determined by user dropdown before being baked into the Task)
+        godot::Dictionary point_count_prop;
+        point_count_prop["name"] = "point_count";
+        point_count_prop["type"] = godot::Variant::INT;
+        point_count_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        point_count_prop["hint_string"] = "logic_options";
+        props.push_back(point_count_prop);
+        
         // 2. Tolerance
         godot::Dictionary tol_prop;
         tol_prop["name"] = "tolerance";

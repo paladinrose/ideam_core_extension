@@ -67,6 +67,8 @@ public:
     void clear_all_emulated_grants();
     void recalculate_emulated_grants();
 
+    // Add the missing setter under your getters
+void set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants) { active_emulated_grants = p_grants; }
     godot::TypedArray<MemoryGrantResource> get_active_emulated_grants() const { return active_emulated_grants; }
 };
 

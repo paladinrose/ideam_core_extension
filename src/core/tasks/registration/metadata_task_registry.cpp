@@ -4,6 +4,46 @@
 
 namespace ideam::core {
 
+namespace { // Translation Unit Firewall
+    // --- UI Labels for OptionButtons ---
+    constexpr const char* dsu_static_labels[] = { "Moore (R1)", "Von Neumann (R1)" };
+    constexpr const char* group_mask_labels[] = { "1-Bit", "2-Bit", "3-Bit", "4-Bit" };
+    constexpr const char* lod_labels[] = { "1 Level", "2 Levels", "3 Levels", "4 Levels" };
+    constexpr const char* partition_labels[] = { "1 Partition", "2 Partitions", "3 Partitions", "4 Partitions" };
+} // namespace
+
+// --- Populate the Variant Map ---
+const std::array<LogicVariantGroup, MetadataTaskRegistry::L_COUNT> MetadataTaskRegistry::logic_variants = {{
+    // DSUCluster_Static_Moore_R1
+    { true, 2, dsu_static_labels },
+    // DSUCluster_Static_VonNeumann_R1
+    { false, 0, nullptr },
+    
+    // DSUCluster
+    { true, 1, nullptr }, // Standard 1-to-1 logic mapping, no dropdown needed
+    
+    // GroupMask_1Bit
+    { true, 4, group_mask_labels },
+    // GroupMask_2Bit, 3Bit, 4Bit
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    
+    // LOD_1Level
+    { true, 4, lod_labels },
+    // LOD_2Level, 3Level, 4Level
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    
+    // Partition_1
+    { true, 4, partition_labels },
+    // Partition_2, 3, 4
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    { false, 0, nullptr }
+}};
+
 std::array<const MetadataTaskRegistry::SubMatrix*, MetadataTaskRegistry::L_COUNT> MetadataTaskRegistry::logic_matrices = {};
 
 

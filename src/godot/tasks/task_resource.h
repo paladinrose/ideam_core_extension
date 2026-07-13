@@ -53,6 +53,16 @@ private:
     godot::StringName task_name;
    
 protected:
+
+    uint32_t logic_id = 0;
+    
+    // The primary/root ID for this family of logics (e.g., the ID of LOD_1Level)
+    uint32_t base_logic_id = 0; 
+    
+    // Cached UI strings for the dropdown
+    godot::PackedStringArray logic_variant_labels;
+
+    
     static void _bind_methods();
 
 public:
@@ -75,6 +85,14 @@ public:
     void set_task_properties(const godot::Dictionary& p_props);
     virtual godot::Dictionary get_task_properties() const;
 
+    void set_logic_id(uint32_t p_id);
+    uint32_t get_logic_id() const;
+
+    void set_base_logic_id(uint32_t p_id);
+    uint32_t get_base_logic_id() const;
+    
+    void set_logic_variant_labels(const godot::PackedStringArray& p_labels);
+    godot::PackedStringArray get_logic_variant_labels() const;
     // --- DOD Compilation Interface ---
     
     /**

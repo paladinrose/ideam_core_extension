@@ -76,7 +76,7 @@ uint64_t MetadataTaskGraphNode::_calculate_flat_index() const {
     uint32_t t_id = static_cast<uint32_t>(type_dropdown->get_selected_id());
 
     // Matrix Dimensions: V_COUNT (16) * S_COUNT (9) * T_COUNT (17)
-    return (v_id * 153) + (s_id * 17) + t_id;
+    return (v_id * core::MetadataTaskRegistry::V_COUNT) + (s_id * core::MetadataTaskRegistry::S_COUNT) + t_id;
 }
 
 void MetadataTaskGraphNode::_update_matrix_guardrails() {
@@ -108,19 +108,19 @@ void MetadataTaskGraphNode::_update_matrix_guardrails() {
 
     // Evaluate and prune Views based on current Strategy & Type
     for (int v = 0; v < view_dropdown->get_item_count(); ++v) {
-        uint64_t test_hash = (v * 153) + (current_s * 17) + current_t;
+        uint64_t test_hash = (v * core::MetadataTaskRegistry::V_COUNT) + (current_s * core::MetadataTaskRegistry::S_COUNT) + current_t;
         view_dropdown->set_item_disabled(v, !is_valid(test_hash));
     }
 
     // Evaluate and prune Strategies based on current View & Type
     for (int s = 0; s < strategy_dropdown->get_item_count(); ++s) {
-        uint64_t test_hash = (current_v * 153) + (s * 17) + current_t;
+        uint64_t test_hash = (current_v * core::MetadataTaskRegistry::V_COUNT) + (s * core::MetadataTaskRegistry::S_COUNT) + current_t;
         strategy_dropdown->set_item_disabled(s, !is_valid(test_hash));
     }
 
     // Evaluate and prune Types based on current View & Strategy
     for (int t = 0; t < type_dropdown->get_item_count(); ++t) {
-        uint64_t test_hash = (current_v * 153) + (current_s * 17) + t;
+        uint64_t test_hash = (current_v * core::MetadataTaskRegistry::V_COUNT) + (current_s * core::MetadataTaskRegistry::S_COUNT) + t;
         type_dropdown->set_item_disabled(t, !is_valid(test_hash));
     }
 

@@ -1,4 +1,5 @@
 #include "transform_task_graph_node.h"
+#include "../../core/tasks/registration/transform_task_registry.h"
 #include "../../core/tasks/registration/ideam_task_registry.h"
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -74,7 +75,7 @@ uint64_t TransformTaskGraphNode::_calculate_flat_index() const {
     uint32_t t_id = static_cast<uint32_t>(type_dropdown->get_selected_id());
 
     // Matrix Dimensions: V_COUNT (16) * S_COUNT (9) * T_COUNT (17)
-    return (v_id * 153) + (s_id * 17) + t_id;
+    return (v_id * core::TransformTaskRegistry::V_COUNT) + (s_id * core::TransformTaskRegistry::S_COUNT) + t_id;
 }
 
 void TransformTaskGraphNode::_update_matrix_guardrails() {
@@ -106,19 +107,19 @@ void TransformTaskGraphNode::_update_matrix_guardrails() {
 
     // Evaluate and prune Views based on current Strategy & Type
     for (int v = 0; v < view_dropdown->get_item_count(); ++v) {
-        uint64_t test_hash = (v * 153) + (current_s * 17) + current_t;
+        uint64_t test_hash = (v * core::TransformTaskRegistry::V_COUNT) + (current_s * core::TransformTaskRegistry::S_COUNT) + current_t;
         view_dropdown->set_item_disabled(v, !is_valid(test_hash));
     }
 
     // Evaluate and prune Strategies based on current View & Type
     for (int s = 0; s < strategy_dropdown->get_item_count(); ++s) {
-        uint64_t test_hash = (current_v * 153) + (s * 17) + current_t;
+        uint64_t test_hash = (current_v * core::TransformTaskRegistry::V_COUNT) + (s * core::TransformTaskRegistry::S_COUNT) + current_t;
         strategy_dropdown->set_item_disabled(s, !is_valid(test_hash));
     }
 
     // Evaluate and prune Types based on current View & Strategy
     for (int t = 0; t < type_dropdown->get_item_count(); ++t) {
-        uint64_t test_hash = (current_v * 153) + (current_s * 17) + t;
+        uint64_t test_hash = (current_v * core::TransformTaskRegistry::V_COUNT) + (current_s * core::TransformTaskRegistry::S_COUNT) + t;
         type_dropdown->set_item_disabled(t, !is_valid(test_hash));
     }
 

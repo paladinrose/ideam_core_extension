@@ -18,7 +18,7 @@ void MemoryGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_connection_to_empty", "from_node", "from_port", "release_position"), &MemoryGraphEdit::_on_connection_to_empty);
     ClassDB::bind_method(D_METHOD("_on_node_memory_grant_requested", "node"), &MemoryGraphEdit::_on_node_memory_grant_requested);
     ClassDB::bind_method(D_METHOD("_on_grant_window_payload_submitted", "node_name", "buffer_ids"), &MemoryGraphEdit::_on_grant_window_payload_submitted);
-    
+    ClassDB::bind_method(D_METHOD("_on_active_grants_requested", "node"), &MemoryGraphEdit::_on_active_grants_requested);
 }
 
 MemoryGraphEdit::MemoryGraphEdit() {
@@ -271,8 +271,8 @@ void MemoryGraphEdit::_draw_custom_edges() {
         if (!from_n || !to_n) continue;
 
         // Obtain node local positions and translate to canvas space
-        Vector2 from_pos = (from_n->get_position_offset() + from_n->get_output_port_position(from_port) - scroll) * zoom;
-        Vector2 to_pos = (to_n->get_position_offset() + to_n->get_input_port_position(to_port) - scroll) * zoom;
+        Vector2 from_pos = from_n->get_position() + (from_n->get_output_port_position(from_port) * zoom);
+        Vector2 to_pos = to_n->get_position() + (to_n->get_input_port_position(to_port) * zoom);
 
         // Spline curvature controls
         float distance = Math::abs(to_pos.x - from_pos.x);
@@ -486,6 +486,17 @@ void MemoryGraphEdit::_on_grant_window_payload_submitted(const StringName& p_nod
     }
 }
 
+void MemoryGraphEdit::_on_active_grants_requested(godot::Object* p_node) {
+    MemoryGraphNode* requesting_node = Object::cast_to<MemoryGraphNode>(p_node);
+    if (!requesting_node || current_blueprint.is_null()) return;
+
+    Ref<MemoryManagerResource> manager = current_blueprint->get_memory_manager();
+    if (manager.is_null()) return;
+
+    // Fetch serialized array and pass it back to the UI element
+    requesting_node->populate_grant_dropdown(manager->get_active_emulated_grants());
+}
+
 void MemoryGraphEdit::_on_connection_to_empty(const godot::StringName &p_from_node, int p_from_port, const godot::Vector2 &p_release_position) {
     // Cache the dragging source context immediately before showing the type context popup menu
     drag_source_node = p_from_node;
@@ -494,7 +505,7 @@ void MemoryGraphEdit::_on_connection_to_empty(const godot::StringName &p_from_no
     // Cache screen coordinates for placement calculations
     memory_popup_position = p_release_position; 
     
-    _show_popup(p_release_position);
+    _show_popup(p_release_position, true);
 }
 
 } // namespace ideam::godot_ext

@@ -21,7 +21,8 @@ using namespace godot;
 namespace ideam::godot_ext {
 
 void TaskGraphEdit::_bind_methods() {
-    // Relying on the base class's _popup_select routing instead of a custom intercept
+    ClassDB::bind_method(D_METHOD("_on_node_duplicate_requested", "node_name"), &TaskGraphEdit::_on_node_duplicate_requested);
+    ClassDB::bind_method(D_METHOD("_on_node_delete_requested", "node_name"), &TaskGraphEdit::_on_node_delete_requested);
 }
 
 TaskGraphEdit::TaskGraphEdit() {
@@ -240,14 +241,16 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
                 if (!has_compatible_strategy) continue;
             }
             
+            String display_name = (p_category == CATEGORY_MANUAL) ? logic_str : String(logic_def.get("name", logic_str));
+            
             SpawnDescriptor desc;
             desc.category = p_category;
             desc.logic_id = logic_id;
-            desc.task_name = StringName(logic_str);
+            desc.task_name = StringName(display_name);
             mutable_this->spawn_options_cache.push_back(desc);
             
-            String display_name = (p_category == CATEGORY_MANUAL) ? logic_str : String(logic_def.get("name", logic_str));
-            p_submenu->add_item(display_name, current_global_id);
+            if (!_menu_has_option(p_submenu, display_name)) { p_submenu->add_item(display_name, current_global_id); }
+            
             current_global_id++;
         }
     };
@@ -258,6 +261,19 @@ TypedArray<String> TaskGraphEdit::_get_new_node_types() const {
     process_matrix(core::IdeamTaskRegistry::get_ui_utility_matrix(), CATEGORY_MANUAL, utility_menu);
 
     return TypedArray<String>();
+}
+
+bool TaskGraphEdit::_menu_has_option(PopupMenu *p_menu, const String &p_option) const {
+    int32_t count = p_menu->get_item_count();
+    
+    for (int32_t i = 0; i < count; ++i) {
+        // Compare the existing label with your target string
+        if (p_menu->get_item_text(i) == p_option) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
@@ -317,6 +333,7 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     // Apply the configured properties to our safely typed wrapper
     new_res->set_node_name(unique_name);
     new_res->set_task_name(desc.task_name);
+    new_res->set_base_logic_id(desc.logic_id);
 
     // Apply scroll offset compensation
     Vector2 spawn_pos = popup_position;
@@ -325,8 +342,46 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
     }
     new_res->set_position_offset(spawn_pos);
 
+    // Retrieve the matching registry matrix to snatch the cached UI labels
+    godot::Dictionary matrix;
+    if (desc.category == CATEGORY_METADATA) matrix = core::IdeamTaskRegistry::get_ui_metadata_matrix();
+    else if (desc.category == CATEGORY_TRANSFORM) matrix = core::IdeamTaskRegistry::get_ui_transform_matrix();
+    else if (desc.category == CATEGORY_QUERY) matrix = core::IdeamTaskRegistry::get_ui_query_matrix();
+
+    godot::String logic_str = godot::String::num_int64(desc.logic_id);
+    if (matrix.has(logic_str)) {
+        godot::Dictionary logic_def = matrix[logic_str];
+        if (logic_def.has("variant_labels")) {
+            godot::PackedStringArray labels = logic_def["variant_labels"];
+            new_res->set_logic_variant_labels(labels);
+        }
+    }
+
     // Push to the data blueprint (which should trigger a UI graph sync downstream)
     current_blueprint->action_add_node(new_res);
+
+    if (!drag_source_node.is_empty()) {
+        godot::Dictionary edge;
+        edge["from"] = drag_source_node;
+        edge["from_port"] = drag_source_port;
+        edge["to"] = unique_name;
+        // Default to the first input port on the new node
+        edge["to_port"] = 0; 
+        edge["access_mode"] = static_cast<int>(core::BufferAccessMode::READ);
+        
+        current_blueprint->action_add_edge(edge);
+        
+        // Reset tracking markers
+        drag_source_node = godot::StringName();
+        drag_source_port = -1;
+        
+        // Sync Visuals
+        if (current_blueprint.is_valid()) {
+            // Because TaskGraphEdit inherits from MemoryGraphEdit, it has access to these
+            _refresh_edge_cache(); 
+            queue_redraw();
+        }
+    }
 }
 
 IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNodeResource>& p_node_res) {
@@ -367,14 +422,51 @@ IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNod
         // natively resolve to the base class's bound method.
         
         new_node->connect("memory_grant_requested", godot::Callable(this, "_on_node_memory_grant_requested"));
+        new_node->connect("active_grants_requested", godot::Callable(this, "_on_active_grants_requested"));
         new_node->connect("buffer_names_requested", godot::Callable(this, "_on_buffer_names_requested"));
         new_node->connect("connections_requested", godot::Callable(this, "_on_node_connections_requested"));
+        new_node->connect("duplicate_requested", godot::Callable(this, "_on_node_duplicate_requested"));
+        new_node->connect("delete_requested", godot::Callable(this, "_on_node_delete_requested"));
     } else {
         godot::UtilityFunctions::printerr("TaskGraphEdit: Failed to resolve UI GraphNode class for data payload: ", res_class);
     }
 
     // Return the newly instantiated node so the IdeamGraphEdit sync loop can position/add it to the tree
     return new_node;
+}
+
+void TaskGraphEdit::_on_node_duplicate_requested(const godot::StringName& p_node_name) {
+    if (current_blueprint.is_null()) return;
+
+    // 1. Resolve the requesting node
+    godot::Node* target_node = get_node_or_null(godot::NodePath(p_node_name));
+    TaskGraphNode* task_node = godot::Object::cast_to<TaskGraphNode>(target_node);
+    if (!task_node) return;
+
+    // 2. Extract the data payload
+    godot::Ref<TaskResource> source_res = task_node->get_task_node_resource();
+    if (source_res.is_null()) return;
+
+    // 3. Deep duplicate the underlying Resource
+    // Using true ensures nested properties/dictionaries are copied natively
+    godot::Ref<TaskResource> duplicated_res = source_res->duplicate(true);
+
+    // 4. Assign a new unique topological identity
+    godot::StringName unique_name = godot::String("TaskNode_") + godot::String::num_int64(godot::UtilityFunctions::randi());
+    duplicated_res->set_node_name(unique_name);
+
+    // 5. Apply a visual offset so it doesn't perfectly occlude the original node
+    godot::Vector2 new_pos = duplicated_res->get_position_offset() + godot::Vector2(30.0f, 30.0f);
+    duplicated_res->set_position_offset(new_pos);
+
+    // 6. Push to the data blueprint (which triggers your UI sync downstream)
+    current_blueprint->action_add_node(duplicated_res);
+}
+
+void TaskGraphEdit::_on_node_delete_requested(const godot::StringName& p_node_name) {
+    if (current_blueprint.is_null()) return;
+
+    current_blueprint->action_remove_node(p_node_name);
 }
 
 } // namespace ideam::godot_ext

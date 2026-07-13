@@ -26,7 +26,7 @@ void RuntimeInspector::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_bool_toggled", "pressed", "prop_name"), &RuntimeInspector::_on_bool_toggled);
     ClassDB::bind_method(D_METHOD("_on_spinbox_value_changed", "value", "prop_name"), &RuntimeInspector::_on_spinbox_value_changed);
     ClassDB::bind_method(D_METHOD("_on_hex_text_submitted", "text", "prop_name"), &RuntimeInspector::_on_hex_text_submitted);
-    ClassDB::bind_method(D_METHOD("_on_option_item_selected", "index", "prop_name"), &RuntimeInspector::_on_option_item_selected);
+    ClassDB::bind_method(D_METHOD("_on_option_item_selected", "index", "prop_name", "btn"), &RuntimeInspector::_on_option_item_selected);
     ClassDB::bind_method(D_METHOD("_on_bitfield_toggled", "pressed", "prop_name", "bit_index", "current_mask"), &RuntimeInspector::_on_bitfield_toggled);
     ClassDB::bind_method(D_METHOD("_on_vector_component_changed", "value", "prop_name", "component", "current_vector"), &RuntimeInspector::_on_vector_component_changed);
     ClassDB::bind_method(D_METHOD("_on_color_changed", "color", "prop_name"), &RuntimeInspector::_on_color_changed);
@@ -214,14 +214,29 @@ Control* RuntimeInspector::_create_enum_dropdown(const Dictionary& p_prop, const
         String hint_str = p_prop["hint_string"];
         PackedStringArray options = hint_str.split(",");
         for (int i = 0; i < options.size(); ++i) {
-            ob->add_item(options[i], i);
+            String option = options[i];
+            if (option.contains(":")) {
+                // Explicit mapping (e.g., "Moore (8 Points):8")
+                PackedStringArray parts = option.split(":");
+                ob->add_item(parts[0], parts[1].to_int());
+            } else {
+                // Fallback to implicit index
+                ob->add_item(option, i);
+            }
         }
     }
+    
     if (p_value.get_type() != Variant::NIL) {
-        ob->select(static_cast<int>(p_value));
+        int target_id = static_cast<int>(p_value);
+        int item_idx = ob->get_item_index(target_id);
+        if (item_idx != -1) {
+            ob->select(item_idx);
+        }
     }
+    
     StringName prop_name = p_prop["name"];
-    ob->connect("item_selected", Callable(this, "_on_option_item_selected").bind(prop_name));
+    // Bind the OptionButton pointer so the callback can extract the true ID
+    ob->connect("item_selected", Callable(this, "_on_option_item_selected").bind(prop_name, ob));
     return ob;
 }
 
@@ -483,8 +498,12 @@ void RuntimeInspector::_on_hex_text_submitted(const String& p_text, const String
     _emit_property_changed(p_prop_name, static_cast<int>(val));
 }
 
-void RuntimeInspector::_on_option_item_selected(int p_index, const StringName& p_prop_name) {
-    _emit_property_changed(p_prop_name, p_index);
+void RuntimeInspector::_on_option_item_selected(int p_index, const StringName& p_prop_name, Object* p_btn) {
+    OptionButton* ob = Object::cast_to<OptionButton>(p_btn);
+    if (!ob) return;
+    
+    int actual_id = ob->get_item_id(p_index);
+    _emit_property_changed(p_prop_name, actual_id);
 }
 
 void RuntimeInspector::_on_bitfield_toggled(bool p_pressed, const StringName& p_prop_name, int p_bit_index, int p_current_mask) {

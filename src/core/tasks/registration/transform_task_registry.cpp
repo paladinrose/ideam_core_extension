@@ -4,6 +4,45 @@
 
 namespace ideam::core {
 
+namespace { // Translation Unit Firewall
+    // --- UI Labels for OptionButtons ---
+    constexpr const char* stencil_labels[] = { 
+        "Moore (R1)", "Moore (R2)", "Moore (R3)", 
+        "Von Neumann (R1)", "Von Neumann (R2)", "Von Neumann (R3)" 
+    };
+} // namespace
+
+// --- Populate the Variant Map ---
+const std::array<LogicVariantGroup, TransformTaskRegistry::L_COUNT> TransformTaskRegistry::logic_variants = {{
+    // BoundaryConstraint
+    { true, 1, nullptr },
+    // BoundsExtraction
+    { true, 1, nullptr },
+    // DataScatter
+    { true, 1, nullptr },
+    // DataSort
+    { true, 1, nullptr },
+    // EulerIntegration
+    { true, 1, nullptr },
+    // FastNoiseLite
+    { true, 1, nullptr },
+    // NoiseInjection
+    { true, 1, nullptr },
+    
+    // Stencil_Moore_R1
+    { true, 6, stencil_labels },
+    // Stencil_Moore_R2, R3
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    // Stencil_VonNeumann_R1, R2, R3
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    
+    // ValueAccumulation
+    { true, 1, nullptr }
+}};
+
 std::array<const TransformTaskRegistry::SubMatrix*, TransformTaskRegistry::L_COUNT> TransformTaskRegistry::logic_matrices = {};
 
 namespace { // Translation Unit Firewall

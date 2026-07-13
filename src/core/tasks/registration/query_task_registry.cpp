@@ -3,6 +3,79 @@
 #include <utility>
 
 namespace ideam::core {
+namespace { // Translation Unit Firewall
+    // --- UI Labels for OptionButtons ---
+    constexpr const char* color_labels[] = { "RGBA", "HSVA" };
+    constexpr const char* morphological_static_labels[] = { 
+        "Moore (R1)", "Moore (R2)", "Moore (R3)", 
+        "Von Neumann (R1)", "Von Neumann (R2)", "Von Neumann (R3)" 
+    };
+} // namespace
+
+// --- Populate the Variant Map ---
+const std::array<LogicVariantGroup, QueryTaskRegistry::L_COUNT> QueryTaskRegistry::logic_variants = {{
+    // AABB
+    { true, 1, nullptr },
+    // Archetype
+    { true, 1, nullptr },
+    // Bitmask
+    { true, 1, nullptr },
+    // Boolean
+    { true, 1, nullptr },
+    
+    // ColorRGBA
+    { true, 2, color_labels },
+    // ColorHSVA
+    { false, 0, nullptr },
+    
+    // Component
+    { true, 1, nullptr },
+    // DataComparison
+    { true, 1, nullptr },
+    // DataRange
+    { true, 1, nullptr },
+    // Directional
+    { true, 1, nullptr },
+    // Distance
+    { true, 1, nullptr },
+    // EventRingBridge
+    { true, 1, nullptr },
+    // Frustum
+    { true, 1, nullptr },
+    // HierarchicalBridge
+    { true, 1, nullptr },
+    // Limit
+    { true, 1, nullptr },
+    // Morphological
+    { true, 1, nullptr },
+    
+    // Morphological_Static_Moore_R1
+    { true, 6, morphological_static_labels },
+    // Morphological_Static_Moore_R2, R3
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    // Morphological_Static_VonNeumann_R1, R2, R3
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    { false, 0, nullptr },
+    
+    // PagedToTiledBridge
+    { true, 1, nullptr },
+    // Predicate
+    { true, 1, nullptr },
+    // RelationalBridge
+    { true, 1, nullptr },
+    // SpatialInclusionBridge
+    { true, 1, nullptr },
+    // SpatialProjectionBridge
+    { true, 1, nullptr },
+    // StencilDilationBridge
+    { true, 1, nullptr },
+    // Stochastic
+    { true, 1, nullptr },
+    // SwapEruptionBridge
+    { true, 1, nullptr }
+}};
 
 std::array<const QueryTaskRegistry::SubMatrix*, QueryTaskRegistry::L_COUNT> QueryTaskRegistry::logic_matrices = {};
 

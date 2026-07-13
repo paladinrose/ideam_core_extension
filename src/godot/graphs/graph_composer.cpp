@@ -72,6 +72,7 @@ GraphComposer::GraphComposer() {
 
     // Populate initial state
     _refresh_theme_list();
+    _apply_default_composer_theme();
     active_sessions.reserve(8); 
 }
 
@@ -83,22 +84,33 @@ void GraphComposer::_notification(int p_what) {}
 
 void GraphComposer::_refresh_theme_list() {
     theme_selector->clear();
-    
-    // Add default entry
-    theme_selector->add_item("Default Theme");
-    theme_selector->set_item_metadata(0, ""); // Empty path for default
-    
-    theme_selector->add_separator();
 
     TypedArray<String> paths = theme_registry->get_theme_paths();
+    int valid_theme_count = 0;
+
     for (int i = 0; i < paths.size(); ++i) {
         String path = paths[i];
-        // The index will auto-increment. We use get_file() for a clean UI name.
+
+        // Fail-safe: Skip empty paths or paths that no longer exist on disk
+        if (path.is_empty() || !ResourceLoader::get_singleton()->exists(path)) {
+            UtilityFunctions::printerr("GraphComposer: Theme path missing or invalid, skipping: ", path);
+            continue;
+        }
+
         theme_selector->add_item(path.get_file()); 
         
-        // Store the absolute path in the item's metadata for easy retrieval
         int item_idx = theme_selector->get_item_count() - 1;
         theme_selector->set_item_metadata(item_idx, path);
+        valid_theme_count++;
+    }
+
+    // Fail-detector: No valid themes found in the registry
+    if (valid_theme_count == 0) {
+        theme_selector->add_item("No Themes Found");
+        theme_selector->set_item_metadata(0, ""); // Empty string signals no theme
+        theme_selector->set_disabled(true);
+    } else {
+        theme_selector->set_disabled(false);
     }
 }
 
@@ -116,26 +128,46 @@ void GraphComposer::_on_theme_selected(int p_index) {
     int current_tab = tab_container->get_current_tab();
     if (current_tab < 0) return;
 
-    // Apply the theme and update DOD state tracker
+    String theme_path = theme_selector->get_item_metadata(p_index);
+    Ref<Theme> loaded_theme;
+
+    // Only attempt to load if we have a valid path (bypasses the "No Themes Found" state)
+    if (!theme_path.is_empty()) {
+        loaded_theme = ResourceLoader::get_singleton()->load(theme_path);
+    }
+
     for (auto& session : active_sessions) {
         if (session.tab_index == current_tab) {
             session.theme_index = p_index;
 
-            if (p_index == 0) {
-                // Strip custom theme
-                session.editor_node->set_theme(nullptr); 
+            if (loaded_theme.is_valid()) {
+                session.editor_node->set_theme(loaded_theme);
             } else {
-                // Apply custom theme
-                String theme_path = theme_selector->get_item_metadata(p_index);
-                Ref<Theme> loaded_theme = ResourceLoader::get_singleton()->load(theme_path);
+                // Strip custom theme (fallback to Godot's default)
+                session.editor_node->set_theme(nullptr); 
                 
-                if (loaded_theme.is_valid()) {
-                    session.editor_node->set_theme(loaded_theme);
-                } else {
+                if (!theme_path.is_empty()) {
                     UtilityFunctions::printerr("GraphComposer: Failed to load theme at ", theme_path);
                 }
             }
             break;
+        }
+    }
+}
+
+void GraphComposer::_apply_default_composer_theme() {
+    if (theme_selector->get_item_count() > 0) {
+        String first_path = theme_selector->get_item_metadata(0);
+        
+        if (!first_path.is_empty()) {
+            Ref<Theme> default_theme = ResourceLoader::get_singleton()->load(first_path);
+            if (default_theme.is_valid()) {
+                // Applies the theme to the entire GraphComposer UI
+                set_theme(default_theme); 
+            }
+        } else {
+            // Strip any existing theme if no valid themes are available
+            set_theme(nullptr);
         }
     }
 }
@@ -145,12 +177,15 @@ void GraphComposer::_on_load_theme_pressed() {
 }
 
 void GraphComposer::_on_theme_file_selected(const String& p_path) {
-    // Add, save, and refresh UI
     theme_registry->add_theme_path(p_path);
     theme_registry->save_registry();
     _refresh_theme_list();
-    
-    // Automatically select the newly added theme for the current tab
+
+    // If this is the ONLY theme now (we just escaped the fail-detector state), skin the composer
+    if (theme_selector->get_item_count() == 1) {
+        _apply_default_composer_theme();
+    }
+
     int new_index = theme_selector->get_item_count() - 1;
     theme_selector->select(new_index);
     _on_theme_selected(new_index);

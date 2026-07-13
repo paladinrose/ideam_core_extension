@@ -22,14 +22,13 @@ IdeamGraphEdit::~IdeamGraphEdit() {
 void IdeamGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_request_connect", "from_node", "from_port", "to_node", "to_port"), &IdeamGraphEdit::_request_connect);
     ClassDB::bind_method(D_METHOD("_request_disconnect", "from_node", "from_port", "to_node", "to_port"), &IdeamGraphEdit::_request_disconnect);
-    ClassDB::bind_method(D_METHOD("_show_popup", "at"), &IdeamGraphEdit::_show_popup);
+    ClassDB::bind_method(D_METHOD("_show_popup", "at", "from_empty"), &IdeamGraphEdit::_show_popup);
     ClassDB::bind_method(D_METHOD("_popup_select", "id"), &IdeamGraphEdit::_popup_select);
     ClassDB::bind_method(D_METHOD("node_context_clicked", "node"), &IdeamGraphEdit::node_context_clicked);
     ClassDB::bind_method(D_METHOD("_on_blueprint_changed"), &IdeamGraphEdit::_on_blueprint_changed);
     ClassDB::bind_method(D_METHOD("_on_end_node_move"), &IdeamGraphEdit::_on_end_node_move);
     
     ClassDB::bind_method(D_METHOD("_on_node_property_changed", "node_name", "property_name", "new_value"), &IdeamGraphEdit::_on_node_property_changed);
-    ClassDB::bind_method(D_METHOD("_on_node_delete_request", "node_name"), &IdeamGraphEdit::_on_node_delete_request);
     ClassDB::bind_method(D_METHOD("_on_node_connections_requested", "node"), &IdeamGraphEdit::_on_node_connections_requested);
 
     ClassDB::bind_method(D_METHOD("_frame_attached", "element", "frame"), &IdeamGraphEdit::_frame_attached);
@@ -133,15 +132,17 @@ IdeamGraphNode* IdeamGraphEdit::_create_graph_node(const Ref<IdeamGraphNodeResou
     return nullptr;
 }
 
-void IdeamGraphEdit::_show_popup(const Vector2 &p_at) {
+void IdeamGraphEdit::_show_popup(const Vector2 &p_at, bool p_from_empty) {
     _create_popup();
     context_popup->clear();
     context_node = nullptr; 
     popup_position = p_at;
 
-    context_popup->add_item("Create Node Group", MENU_CREATE_GROUP);
-    context_popup->add_separator("Spawn Node Types");
-
+    if (!p_from_empty) {
+        
+        context_popup->add_item("Create Node Group", MENU_CREATE_GROUP);
+        context_popup->add_separator("Spawn Node Types");
+    }
     TypedArray<String> types = _get_new_node_types();
     for (int i = 0; i < types.size(); ++i) {
         context_popup->add_item(types[i], MENU_SPAWN_NODE_START + i);
@@ -168,7 +169,8 @@ void IdeamGraphEdit::node_context_clicked(Object* p_node) {
     }
 
     if (context_popup->get_item_count() > 0) {
-        context_popup->set_position(get_viewport()->get_mouse_position());
+        Vector2 screen_mouse_pos = get_screen_position() + get_local_mouse_position();
+        context_popup->set_position(screen_mouse_pos);
         context_popup->popup();
     }
 }
@@ -208,10 +210,7 @@ TypedArray<String> IdeamGraphEdit::_get_new_node_types() const { return TypedArr
 
 void IdeamGraphEdit::_spawn_node_by_type(int p_type_id) {}
 
-void IdeamGraphEdit::_on_node_delete_request(const StringName& p_node_name) {
-    if (current_blueprint.is_null()) return;
-    current_blueprint->action_remove_node(p_node_name);
-}
+
 
 void IdeamGraphEdit::_on_node_property_changed(const StringName& p_node_name, const StringName& p_property_name, const Variant& p_new_value) {
     if (current_blueprint.is_null() || is_syncing_ui) return;
@@ -317,7 +316,6 @@ void IdeamGraphEdit::_on_blueprint_changed() {
             ign = _create_graph_node(n_res);
             
             if (ign) {
-                // Assuming _create_graph_node configures the node name correctly
                 add_child(ign);
                 ign->set_theme(get_theme());
                 ign->initialize(n_res);

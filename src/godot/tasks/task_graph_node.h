@@ -98,6 +98,8 @@ protected:
     // Generalized signal router for dynamic controls connected by sub-nodes
     void _on_custom_param_changed(const godot::StringName& p_param_name, const godot::Variant& p_value);
 
+    void _on_logic_option_selected(int p_index);
+    
 public:
     TaskGraphNode();
     virtual ~TaskGraphNode() override = default;

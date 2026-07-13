@@ -221,6 +221,18 @@ private:
                         dict["properties"] = L_Type::get_ui_properties();
                         dict["valid_combinations"] = godot::PackedInt64Array(); 
                         dict["name"] = godot::String(L_Type::display_name.data());
+
+                        const auto& variant_info = MetadataTaskRegistry::logic_variants[static_cast<size_t>(L)];
+                        if (variant_info.is_primary && variant_info.variant_count > 1) {
+                            dict["variant_count"] = variant_info.variant_count;
+                            
+                            godot::Array ui_labels;
+                            for (uint32_t i = 0; i < variant_info.variant_count; ++i) {
+                                ui_labels.push_back(godot::String(variant_info.labels[i]));
+                            }
+                            dict["variant_labels"] = ui_labels;
+                        }
+                        
                         (*p_matrix)[logic_key] = dict;
                     }
 

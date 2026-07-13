@@ -60,6 +60,13 @@ struct alignas(64) StencilConvolutionTransformLogic {
         cw_prop["type"] = "T"; 
         props.push_back(cw_prop);
 
+        godot::Dictionary kernel_size_prop;
+        kernel_size_prop["name"] = "kernel_size";
+        kernel_size_prop["type"] = godot::Variant::INT;
+        kernel_size_prop["hint"] = godot::PROPERTY_HINT_ENUM;
+        kernel_size_prop["hint_string"] = "logic_options";
+        props.push_back(kernel_size_prop);
+        
         godot::Dictionary kw_prop;
         kw_prop["name"] = "kernel_weights";
         kw_prop["type"] = godot::Variant::ARRAY;

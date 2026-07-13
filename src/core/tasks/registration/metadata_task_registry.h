@@ -39,11 +39,14 @@ using MetadataTaskFactoryFn = INativeTask* (*)();
 
 class MetadataTaskRegistry {
 public:
+
     static constexpr size_t L_COUNT = static_cast<size_t>(MetadataLogicID::Count);
     static constexpr size_t V_COUNT = static_cast<size_t>(MemoryView::Count);
     static constexpr size_t S_COUNT = static_cast<size_t>(MemoryStrategy::Count);
     static constexpr size_t T_COUNT = static_cast<size_t>(MemoryTypes::Count);
     
+    static const std::array<LogicVariantGroup, L_COUNT> logic_variants;
+
     // --- DOD Matrix Bounds (3D Sub-Matrix) ---
     // Metadata tasks lack the 'QueryOp' dimension.
     static constexpr size_t SUB_MATRIX_SIZE = V_COUNT * S_COUNT * T_COUNT;

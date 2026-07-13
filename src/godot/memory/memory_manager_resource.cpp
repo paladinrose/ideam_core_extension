@@ -42,7 +42,10 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("release_emulated_grant", "grant"), &MemoryManagerResource::release_emulated_grant);
     ClassDB::bind_method(D_METHOD("clear_all_emulated_grants"), &MemoryManagerResource::clear_all_emulated_grants);
     ClassDB::bind_method(D_METHOD("recalculate_emulated_grants"), &MemoryManagerResource::recalculate_emulated_grants);
+    
     ClassDB::bind_method(D_METHOD("get_active_emulated_grants"), &MemoryManagerResource::get_active_emulated_grants);
+    ClassDB::bind_method(D_METHOD("set_active_emulated_grants", "grants"), &MemoryManagerResource::set_active_emulated_grants);
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "active_emulated_grants", PROPERTY_HINT_ARRAY_TYPE, "MemoryGrantResource"), "set_active_emulated_grants", "get_active_emulated_grants");
 }
 
 godot::TypedArray<godot::StringName> MemoryManagerResource::get_buffer_names() const {

@@ -70,7 +70,7 @@ protected:
     void _on_grant_window_payload_submitted(const godot::StringName& p_node_name, const godot::PackedInt32Array& p_buffer_ids);
     void _on_node_memory_grant_requested(godot::Object* p_node);
     void _on_buffer_names_requested(godot::Object* p_node, const godot::Array& p_buffer_ids);
-    
+    void _on_active_grants_requested(godot::Object* p_node);
     // Validation Rules
     bool _validate_write_collision(const godot::StringName &p_to_node, int p_to_port, core::BufferAccessMode p_incoming_mode);
     bool _validate_fork_grant(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);

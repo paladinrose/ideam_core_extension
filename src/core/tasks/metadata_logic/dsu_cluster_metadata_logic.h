@@ -46,7 +46,7 @@ struct DSUClusterMetadataLogic {
     // --- Configuration ---
     ClusterCompareMode mode = ClusterCompareMode::ABSOLUTE_VALUE;
     
-    int32_t radius = 1; // Dynamic footprint
+    int32_t radius = 1; 
 
     float tolerance = 0.1f;
     float cos_threshold = 1.0f;
@@ -71,7 +71,8 @@ struct DSUClusterMetadataLogic {
         godot::Dictionary radius_prop;
         radius_prop["name"] = "radius";
         radius_prop["type"] = godot::Variant::INT;
-        radius_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        radius_prop["hint"] = godot::PROPERTY_HINT_RANGE;
+        radius_prop["hint_string"] = "1,5,1,prefer_slider"; // min,max,step
         props.push_back(radius_prop);
 
         // 3. Tolerance
