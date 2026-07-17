@@ -14,7 +14,7 @@ void GameProperty::_bind_methods() {
     ADD_SIGNAL(godot::MethodInfo("value_no_longer_exhausted"));
     ADD_SIGNAL(godot::MethodInfo("modifier_added", godot::PropertyInfo(godot::Variant::OBJECT, "mod", godot::PROPERTY_HINT_NODE_TYPE, "GamePropertyModifier")));
     ADD_SIGNAL(godot::MethodInfo("modifier_removed", godot::PropertyInfo(godot::Variant::OBJECT, "mod", godot::PROPERTY_HINT_NODE_TYPE, "GamePropertyModifier")));
-    ADD_SIGNAL(godot::MethodInfo("relabled", godot::PropertyInfo(godot::Variant::STRING, "new_label")));
+    ADD_SIGNAL(godot::MethodInfo("relabeled", godot::PropertyInfo(godot::Variant::STRING, "new_label")));
     ADD_SIGNAL(godot::MethodInfo("max_value_changed", godot::PropertyInfo(godot::Variant::INT, "oldValue"), godot::PropertyInfo(godot::Variant::INT, "newValue")));
     ADD_SIGNAL(godot::MethodInfo("max_modifier_added", godot::PropertyInfo(godot::Variant::OBJECT, "maxMod", godot::PROPERTY_HINT_NODE_TYPE, "GamePropertyModifier")));
     ADD_SIGNAL(godot::MethodInfo("max_modifier_removed", godot::PropertyInfo(godot::Variant::OBJECT, "maxMod", godot::PROPERTY_HINT_NODE_TYPE, "GamePropertyModifier")));
@@ -26,6 +26,7 @@ void GameProperty::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_title", "title"), &GameProperty::set_title);
     godot::ClassDB::bind_method(godot::D_METHOD("get_title"), &GameProperty::get_title);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING, "title"), "set_title", "get_title");
+    ADD_SIGNAL(godot::MethodInfo("title_changed", godot::PropertyInfo(godot::Variant::STRING, "title")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_restrict_value_to_current_max_value", "restrict"), &GameProperty::set_restrict_value_to_current_max_value);
     godot::ClassDB::bind_method(godot::D_METHOD("get_restrict_value_to_current_max_value"), &GameProperty::get_restrict_value_to_current_max_value);
@@ -71,6 +72,7 @@ void GameProperty::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_min_value"), &GameProperty::get_min_value);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "min_value"), "set_min_value", "get_min_value");
 
+    
     // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("get_modded_value"), &GameProperty::get_modded_value);
     godot::ClassDB::bind_method(godot::D_METHOD("send_modded_value_label"), &GameProperty::send_modded_value_label);
@@ -95,37 +97,69 @@ GameProperty::GameProperty() {}
 GameProperty::~GameProperty() {}
 
 // Setters / Getters
-void GameProperty::set_title(const godot::String& p_title) { title = p_title; }
+void GameProperty::set_title(const godot::String& p_title) { 
+    if (p_title == title) return;
+    title = p_title; 
+    emit_signal("title_changed", title);
+}
 godot::String GameProperty::get_title() const { return title; }
 
-void GameProperty::set_restrict_value_to_current_max_value(bool p_restrict) { restrict_value_to_current_max_value = p_restrict; }
+void GameProperty::set_restrict_value_to_current_max_value(bool p_restrict) { 
+    if (p_restrict == restrict_value_to_current_max_value) return;
+    restrict_value_to_current_max_value = p_restrict; 
+}
 bool GameProperty::get_restrict_value_to_current_max_value() const { return restrict_value_to_current_max_value; }
 
-void GameProperty::set_restrict_value_to_current_min_value(bool p_restrict) { restrict_value_to_current_min_value = p_restrict; }
+void GameProperty::set_restrict_value_to_current_min_value(bool p_restrict) { 
+    if (p_restrict == restrict_value_to_current_min_value) return;
+    restrict_value_to_current_min_value = p_restrict; 
+}
 bool GameProperty::get_restrict_value_to_current_min_value() const { return restrict_value_to_current_min_value; }
 
-void GameProperty::set_allow_value_set(bool p_allow) { allow_value_set = p_allow; }
+void GameProperty::set_allow_value_set(bool p_allow) { 
+    if (p_allow == allow_value_set) return;
+    allow_value_set = p_allow; 
+}
 bool GameProperty::get_allow_value_set() const { return allow_value_set; }
 
-void GameProperty::set_allow_value_modifiers(bool p_allow) { allow_value_modifiers = p_allow; }
+void GameProperty::set_allow_value_modifiers(bool p_allow) { 
+    if (p_allow == allow_value_modifiers) return;
+    allow_value_modifiers = p_allow; 
+}
 bool GameProperty::get_allow_value_modifiers() const { return allow_value_modifiers; }
 
-void GameProperty::set_allow_max_value_set(bool p_allow) { allow_max_value_set = p_allow; }
+void GameProperty::set_allow_max_value_set(bool p_allow) { 
+    if (p_allow == allow_max_value_set) return;
+    allow_max_value_set = p_allow; 
+}
 bool GameProperty::get_allow_max_value_set() const { return allow_max_value_set; }
 
-void GameProperty::set_allow_max_modifiers(bool p_allow) { allow_max_modifiers = p_allow; }
+void GameProperty::set_allow_max_modifiers(bool p_allow) { 
+    if (p_allow == allow_max_modifiers) return;
+    allow_max_modifiers = p_allow; 
+}
 bool GameProperty::get_allow_max_modifiers() const { return allow_max_modifiers; }
 
-void GameProperty::set_allow_min_value_set(bool p_allow) { allow_min_value_set = p_allow; }
+void GameProperty::set_allow_min_value_set(bool p_allow) { 
+    if (p_allow == allow_min_value_set) return;
+    allow_min_value_set = p_allow; 
+}
 bool GameProperty::get_allow_min_value_set() const { return allow_min_value_set; }
 
-void GameProperty::set_allow_min_modifiers(bool p_allow) { allow_min_modifiers = p_allow; }
+void GameProperty::set_allow_min_modifiers(bool p_allow) { 
+    if (p_allow == allow_min_modifiers) return;
+    allow_min_modifiers = p_allow; 
+}
 bool GameProperty::get_allow_min_modifiers() const { return allow_min_modifiers; }
 
-void GameProperty::set_locked(bool p_locked) { locked = p_locked; }
+void GameProperty::set_locked(bool p_locked) { 
+    if (p_locked == locked) return;
+    locked = p_locked; }
 bool GameProperty::get_locked() const { return locked; }
 
-void GameProperty::set_is_exhausted(bool p_exhausted) { is_exhausted = p_exhausted; }
+void GameProperty::set_is_exhausted(bool p_exhausted) { 
+    if (p_exhausted == is_exhausted) return;
+    is_exhausted = p_exhausted; }
 bool GameProperty::get_is_exhausted() const { return is_exhausted; }
 
 void GameProperty::set_value(int cv) {
@@ -155,23 +189,37 @@ int GameProperty::get_value() const { return _value; }
 
 void GameProperty::set_max_value(int mv) {
     if (locked || !allow_max_value_set || mv == _max_value) return;
+    int old_value = _max_value;
     _max_value = mv;
+    emit_signal("max_value_changed", old_value, _max_value);
 }
 int GameProperty::get_max_value() const { return _max_value; }
 
 void GameProperty::set_min_value(int mv) {
     if (locked || !allow_min_value_set || mv == _min_value) return;
     _min_value = mv;
+    int old_value = _min_value;
+    _min_value = mv;
+    emit_signal("min_value_changed", old_value, _min_value);
 }
 int GameProperty::get_min_value() const { return _min_value; }
 
-void GameProperty::set_modifiers(const godot::TypedArray<GamePropertyModifier>& p_modifiers) { modifiers = p_modifiers; }
+void GameProperty::set_modifiers(const godot::TypedArray<GamePropertyModifier>& p_modifiers) { 
+    if (p_modifiers == modifiers) return;
+    modifiers = p_modifiers; 
+}
 godot::TypedArray<GamePropertyModifier> GameProperty::get_modifiers() const { return modifiers; }
 
-void GameProperty::set_max_modifiers(const godot::TypedArray<GamePropertyModifier>& p_modifiers) { max_modifiers = p_modifiers; }
+void GameProperty::set_max_modifiers(const godot::TypedArray<GamePropertyModifier>& p_modifiers) { 
+    if (p_modifiers == max_modifiers) return;
+    max_modifiers = p_modifiers; 
+}
 godot::TypedArray<GamePropertyModifier> GameProperty::get_max_modifiers() const { return max_modifiers; }
 
-void GameProperty::set_min_modifiers(const godot::TypedArray<GamePropertyModifier>& p_modifiers) { min_modifiers = p_modifiers; }
+void GameProperty::set_min_modifiers(const godot::TypedArray<GamePropertyModifier>& p_modifiers) { 
+    if (p_modifiers == min_modifiers) return;
+    min_modifiers = p_modifiers; 
+}
 godot::TypedArray<GamePropertyModifier> GameProperty::get_min_modifiers() const { return min_modifiers; }
 
 int GameProperty::get_modded_value() const {
@@ -185,7 +233,7 @@ int GameProperty::get_modded_value() const {
 }
 
 void GameProperty::send_modded_value_label() {
-    emit_signal("relabled", godot::Variant(get_modded_value()).operator godot::String());
+    emit_signal("relabeled", godot::Variant(get_modded_value()).operator godot::String());
 }
 
 int GameProperty::get_passive_value() const {

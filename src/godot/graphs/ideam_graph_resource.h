@@ -31,13 +31,21 @@ private:
     // Injected by the Inspector or GraphEdit UI
     godot::Object* undo_redo = nullptr;
 
+    godot::String consumer_key;
+
+    bool is_update_queued = false;
+
 protected:
     static void _bind_methods();
 
-    // The Virtual Pipeline: Child classes (MemoryGraphResource, TaskGraphResource) 
-    // will override this, call Super::_append_managed_profiles(r_profiles), 
+    godot::Ref<ManagedBufferProfile> node_profile;
+    godot::Ref<ManagedBufferProfile> edge_profile;
+    // Child classes (MemoryGraphResource, TaskGraphResource) 
+    // will override this, call Super::_ensure_managed_profiles(), 
     // and then push their own specific utility profiles.
-    virtual void _append_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const;
+    virtual void _ensure_managed_profiles();
+
+    virtual void _gather_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const;
 
     /**
      * @brief Resolves the incoming dependencies for a given node.
@@ -45,6 +53,7 @@ protected:
      * non-blocking data edges and strictly return structural execution dependencies.
      */
     virtual godot::TypedArray<godot::StringName> _get_node_dependencies(const godot::StringName& p_node) const;
+
 public:
     IdeamGraphResource() = default;
     virtual ~IdeamGraphResource() = default; // Ensure virtual destructor for inheritance
@@ -71,6 +80,8 @@ public:
     void set_volatile_edge_capacity(int p_cap);
     int get_volatile_edge_capacity() const { return volatile_edge_capacity; }
 
+    virtual void set_consumer_key(const godot::String& p_key);
+    virtual godot::String get_consumer_key();
     /**
      * @brief Performs a Kahn topological sort on the current UI state.
      * Returns an array of waves, where each wave is an array of StringNames representing 
@@ -82,7 +93,13 @@ public:
     godot::Object* get_undo_redo() const { return undo_redo; }
 
     // --- Handshake Orchestration ---
-    // Computes all profiles and registers them with the MemoryManagerResource
+    void set_node_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { node_profile = p_profile; emit_changed(); }
+    godot::Ref<ManagedBufferProfile> get_node_profile() const { return node_profile; }
+
+    void set_edge_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { edge_profile = p_profile; emit_changed(); }
+    godot::Ref<ManagedBufferProfile> get_edge_profile() const { return edge_profile; }
+   
+    void queue_update_managed_profiles();
     void update_managed_profiles();
 
     // --- Tier 1: Action Routers (Called by UI) ---

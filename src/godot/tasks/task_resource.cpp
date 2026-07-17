@@ -51,41 +51,37 @@ void TaskResource::_bind_methods() {
 }
 
 void TaskResource::set_execution_mode(int p_mode) {
+    if (p_mode == exec_mode) return;
     exec_mode = static_cast<ExecutionMode>(p_mode);
+    emit_changed();
 }
-
-int TaskResource::get_execution_mode() const {
-    return static_cast<int>(exec_mode);
-}
+int TaskResource::get_execution_mode() const { return static_cast<int>(exec_mode); }
 
 void TaskResource::set_is_active(bool p_active) {
+    if(p_active == is_active) return;
     is_active = p_active;
+    emit_changed();
 }
-
-bool TaskResource::get_is_active() const {
-    return is_active;
-}
+bool TaskResource::get_is_active() const { return is_active; }
 
 void TaskResource::set_task_type(int p_type) {
+    if (p_type == task_type) return;
     task_type = static_cast<TaskType>(p_type);
+    emit_changed();
 }
+int TaskResource::get_task_type() const { return static_cast<int>(task_type); }
 
 void TaskResource::set_task_name(const godot::StringName& p_name) {
+    if (p_name == task_name) return;
     task_name = p_name;
+    emit_changed();
 }
-
-godot::StringName TaskResource::get_task_name() const {
-    return task_name;
-}
-
-
-int TaskResource::get_task_type() const {
-    return static_cast<int>(task_type);
-}
+godot::StringName TaskResource::get_task_name() const { return task_name; }
 
 void TaskResource::set_task_properties(const godot::Dictionary& p_props) {
-    godot::UtilityFunctions::print("SETTING PROPS: ", p_props);
+    if (p_props == task_properties) return;
     task_properties = p_props.duplicate(); 
+    emit_changed();
 }
 
 godot::Dictionary TaskResource::get_task_properties() const {
@@ -107,26 +103,24 @@ bool TaskResource::validate_for_compilation() const {
 }
 
 void TaskResource::set_logic_id(uint32_t p_id) {
+    if(p_id == logic_id) return;
     logic_id = p_id;
+    emit_changed();
 }
-
-uint32_t TaskResource::get_logic_id() const {
-    return logic_id;
-}
+uint32_t TaskResource::get_logic_id() const { return logic_id; }
 
 void TaskResource::set_base_logic_id(uint32_t p_id) {
+    if (p_id == base_logic_id) return;
     base_logic_id = p_id;
+    emit_changed();
 }
-
-uint32_t TaskResource::get_base_logic_id() const {
-    return base_logic_id;
-}
+uint32_t TaskResource::get_base_logic_id() const { return base_logic_id; }
 
 void TaskResource::set_logic_variant_labels(const godot::PackedStringArray& p_labels) {
+    if (p_labels == logic_variant_labels) return;
     logic_variant_labels = p_labels;
+    emit_changed();
 }
+godot::PackedStringArray TaskResource::get_logic_variant_labels() const { return logic_variant_labels; }
 
-godot::PackedStringArray TaskResource::get_logic_variant_labels() const {
-    return logic_variant_labels;   
-}
 } // namespace ideam::godot_ext

@@ -19,7 +19,8 @@ void GamePropertyModifier::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_type", "type"), &GamePropertyModifier::set_type);
     godot::ClassDB::bind_method(godot::D_METHOD("get_type"), &GamePropertyModifier::get_type);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "type", godot::PROPERTY_HINT_ENUM, "Static,Timed,Timed Diminishing,Resource"), "set_type", "get_type");
-
+    ADD_SIGNAL(godot::MethodInfo("type_changed", godot::PropertyInfo(godot::Variant::INT, "type")));
+    
     godot::ClassDB::bind_method(godot::D_METHOD("set_value", "newValue"), &GamePropertyModifier::set_value);
     godot::ClassDB::bind_method(godot::D_METHOD("get_value"), &GamePropertyModifier::get_value);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "value"), "set_value", "get_value");
@@ -27,7 +28,8 @@ void GamePropertyModifier::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_time_limit", "time_limit"), &GamePropertyModifier::set_time_limit);
     godot::ClassDB::bind_method(godot::D_METHOD("get_time_limit"), &GamePropertyModifier::get_time_limit);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::FLOAT, "time_limit"), "set_time_limit", "get_time_limit");
-
+    ADD_SIGNAL(godot::MethodInfo("time_limit_changed", godot::PropertyInfo(godot::Variant::FLOAT, "time_limit")));
+    
     // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("modifier_start"), &GamePropertyModifier::modifier_start);
     godot::ClassDB::bind_method(godot::D_METHOD("game_process", "delta"), &GamePropertyModifier::game_process);
@@ -42,7 +44,11 @@ GamePropertyModifier::GamePropertyModifier() {}
 GamePropertyModifier::~GamePropertyModifier() {}
 
 // Setters / Getters
-void GamePropertyModifier::set_type(ModifierType p_type) { type = p_type; }
+void GamePropertyModifier::set_type(ModifierType p_type) { 
+    if (p_type == type) return;
+    type = p_type; 
+    emit_signal("type_changed", type);
+}
 ModifierType GamePropertyModifier::get_type() const { return type; }
 
 void GamePropertyModifier::set_value(int p_value) {
@@ -52,7 +58,11 @@ void GamePropertyModifier::set_value(int p_value) {
 }
 int GamePropertyModifier::get_value() const { return _value; }
 
-void GamePropertyModifier::set_time_limit(float p_limit) { time_limit = p_limit; }
+void GamePropertyModifier::set_time_limit(float p_limit) { 
+    if (p_limit == time_limit) return;
+    time_limit = p_limit; 
+    emit_signal("time_limit_changed", time_limit);
+}
 float GamePropertyModifier::get_time_limit() const { return time_limit; }
 
 // Class Functions

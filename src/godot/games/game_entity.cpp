@@ -18,33 +18,39 @@ void GameEntity::_bind_methods() {
     ADD_SIGNAL(godot::MethodInfo("game_exited"));
     ADD_SIGNAL(godot::MethodInfo("game_paused"));
     ADD_SIGNAL(godot::MethodInfo("game_continued"));
-    ADD_SIGNAL(godot::MethodInfo("entity_enabled"));
-    ADD_SIGNAL(godot::MethodInfo("entity_disabled"));
+    
 
     // Properties
     godot::ClassDB::bind_method(godot::D_METHOD("set_enabled", "enabled"), &GameEntity::set_enabled);
     godot::ClassDB::bind_method(godot::D_METHOD("get_enabled"), &GameEntity::get_enabled);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::BOOL, "enabled"), "set_enabled", "get_enabled");
+    ADD_SIGNAL(godot::MethodInfo("entity_enabled"));
+    ADD_SIGNAL(godot::MethodInfo("entity_disabled"));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_title", "title"), &GameEntity::set_title);
     godot::ClassDB::bind_method(godot::D_METHOD("get_title"), &GameEntity::get_title);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING, "title"), "set_title", "get_title");
+    ADD_SIGNAL(godot::MethodInfo("title_changed", godot::PropertyInfo(godot::Variant::STRING, "title")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_root_node", "root_node"), &GameEntity::set_root_node);
     godot::ClassDB::bind_method(godot::D_METHOD("get_root_node"), &GameEntity::get_root_node);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "root_node", godot::PROPERTY_HINT_NODE_TYPE, "Node"), "set_root_node", "get_root_node");
+    ADD_SIGNAL(godot::MethodInfo("root_node_changed", godot::PropertyInfo(godot::Variant::OBJECT, "root_node", godot::PROPERTY_HINT_NODE_TYPE, "Node")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_game", "game"), &GameEntity::set_game);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game"), &GameEntity::get_game);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game", godot::PROPERTY_HINT_NODE_TYPE, "Game"), "set_game", "get_game");
+    ADD_SIGNAL(godot::MethodInfo("game_changed", godot::PropertyInfo(godot::Variant::OBJECT, "game", godot::PROPERTY_HINT_NODE_TYPE, "Game")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_time_scale", "time_scale"), &GameEntity::set_time_scale);
     godot::ClassDB::bind_method(godot::D_METHOD("get_time_scale"), &GameEntity::get_time_scale);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::FLOAT, "time_scale"), "set_time_scale", "get_time_scale");
+    ADD_SIGNAL(godot::MethodInfo("time_scale_changed", godot::PropertyInfo(godot::Variant::FLOAT, "time_scale")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_gameplay_style", "style"), &GameEntity::set_gameplay_style);
     godot::ClassDB::bind_method(godot::D_METHOD("get_gameplay_style"), &GameEntity::get_gameplay_style);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "gameplay_style", godot::PROPERTY_HINT_RESOURCE_TYPE, "GameplayStyle"), "set_gameplay_style", "get_gameplay_style");
+    ADD_SIGNAL(godot::MethodInfo("gameplay_style_changed", godot::PropertyInfo(godot::Variant::OBJECT, "gameplay_style", godot::PROPERTY_HINT_RESOURCE_TYPE, "GameplayStyle")));
 
     // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("validate_game"), &GameEntity::validate_game);
@@ -99,10 +105,18 @@ void GameEntity::set_enabled(bool p_enabled) {
 
 bool GameEntity::get_enabled() const { return enabled; }
 
-void GameEntity::set_title(const godot::String& p_title) { title = p_title; }
+void GameEntity::set_title(const godot::String& p_title) {
+    if (title == p_title) return;
+    title = p_title; 
+    emit_signal("title_changed", title);
+}
 godot::String GameEntity::get_title() const { return title; }
 
-void GameEntity::set_root_node(godot::Node* p_root) { root_node = p_root; }
+void GameEntity::set_root_node(godot::Node* p_root) { 
+    if (root_node == p_root) return;
+    root_node = p_root; 
+    emit_signal("root_node_changed", root_node);
+}
 godot::Node* GameEntity::get_root_node() const { return root_node; }
 
 void GameEntity::set_game(Game* p_game) {
@@ -121,17 +135,30 @@ void GameEntity::set_game(Game* p_game) {
     if (_game) {
         enter_game();
     }
+
+    emit_signal("game_changed", _game);
 }
 Game* GameEntity::get_game() const { return _game; }
 
-void GameEntity::set_time_scale(float p_scale) { time_scale = p_scale; }
+void GameEntity::set_time_scale(float p_scale) {
+    if (time_scale == p_scale) return;
+    time_scale = p_scale; 
+    emit_signal("time_scale_changed", time_scale);
+}
 float GameEntity::get_time_scale() const { return time_scale; }
 
-void GameEntity::set_gameplay_style(const godot::Ref<GameplayStyle>& p_style) { gameplay_style = p_style; }
+void GameEntity::set_gameplay_style(const godot::Ref<GameplayStyle>& p_style) { 
+    if (gameplay_style == p_style) return;
+    gameplay_style = p_style; 
+    emit_signal("gameplay_style_changed", gameplay_style);
+}
 godot::Ref<GameplayStyle> GameEntity::get_gameplay_style() const { return gameplay_style; }
 
+void GameEntity::set_entity_is_paused(bool p_paused) { 
+    if (entity_is_paused == p_paused) return;
+    entity_is_paused = p_paused; 
+}
 bool GameEntity::get_entity_is_paused() const { return entity_is_paused; }
-void GameEntity::set_entity_is_paused(bool p_paused) { entity_is_paused = p_paused; }
 
 void GameEntity::validate_game() {
     if (!_game) {

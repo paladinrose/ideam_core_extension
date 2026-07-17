@@ -29,7 +29,9 @@ ThemeRegistry::~ThemeRegistry() {
 }
 
 void ThemeRegistry::set_theme_paths(const TypedArray<String>& p_paths) {
+    if (p_paths == theme_paths) return; // Avoid unnecessary updates
     theme_paths = p_paths;
+    emit_changed(); // Notify Godot that the resource has changed
 }
 
 TypedArray<String> ThemeRegistry::get_theme_paths() const {

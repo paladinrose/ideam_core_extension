@@ -74,16 +74,28 @@ GameAgentAction::GameAgentAction() {}
 GameAgentAction::~GameAgentAction() {}
 
 // Setters / Getters
-void GameAgentAction::set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces) { game_pieces = p_pieces; }
+void GameAgentAction::set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces) { 
+    if (p_pieces == game_pieces) return;
+    game_pieces = p_pieces; 
+}
 godot::TypedArray<GamePiece> GameAgentAction::get_game_pieces() const { return game_pieces; }
 
-void GameAgentAction::set_priority(int p_priority) { priority = p_priority; }
+void GameAgentAction::set_priority(int p_priority) { 
+    if (p_priority == priority) return;
+    priority = p_priority; 
+}
 int GameAgentAction::get_priority() const { return priority; }
 
-void GameAgentAction::set_competes_with_groups(const godot::TypedArray<godot::String>& p_groups) { competes_with_groups = p_groups; }
+void GameAgentAction::set_competes_with_groups(const godot::TypedArray<godot::String>& p_groups) { 
+    if (p_groups == competes_with_groups) return;
+    competes_with_groups = p_groups; 
+}
 godot::TypedArray<godot::String> GameAgentAction::get_competes_with_groups() const { return competes_with_groups; }
 
-void GameAgentAction::set_sequence(const godot::Array& p_sequence) { sequence = p_sequence; }
+void GameAgentAction::set_sequence(const godot::Array& p_sequence) { 
+    if (p_sequence == sequence) return;
+    sequence = p_sequence; 
+}
 godot::Array GameAgentAction::get_sequence() const { return sequence; }
 
 int GameAgentAction::get_current_sequence_id() const { return current_sequence_id; }

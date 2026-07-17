@@ -24,7 +24,9 @@ GameplayDifficulty::~GameplayDifficulty() {
 
 // Setters / Getters
 void GameplayDifficulty::set_difficulty_tags(const godot::TypedArray<godot::String> &p_tags) {
+    if (p_tags == difficulty_tags) return;
     difficulty_tags = p_tags;
+    emit_changed();
 }
 
 godot::TypedArray<godot::String> GameplayDifficulty::get_difficulty_tags() const {

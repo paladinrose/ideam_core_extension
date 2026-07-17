@@ -54,10 +54,16 @@ GameBoard::GameBoard() {}
 
 GameBoard::~GameBoard() {}
 
-void GameBoard::set_game_agents(const godot::TypedArray<GameAgent>& p_agents) { game_agents = p_agents; }
+void GameBoard::set_game_agents(const godot::TypedArray<GameAgent>& p_agents) { 
+    if (p_agents == game_agents) return;
+    game_agents = p_agents; 
+}
 godot::TypedArray<GameAgent> GameBoard::get_game_agents() const { return game_agents; }
 
-void GameBoard::set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces) { game_pieces = p_pieces; }
+void GameBoard::set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces) { 
+    if (p_pieces == game_pieces) return;
+    game_pieces = p_pieces; 
+}
 godot::TypedArray<GamePiece> GameBoard::get_game_pieces() const { return game_pieces; }
 
 void GameBoard::request_quit_game() {

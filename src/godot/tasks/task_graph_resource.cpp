@@ -19,19 +19,67 @@ void TaskGraphResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_selection_queue_capacity_elements", "elements"), &TaskGraphResource::set_selection_queue_capacity_elements);
     ClassDB::bind_method(D_METHOD("get_selection_queue_capacity_elements"), &TaskGraphResource::get_selection_queue_capacity_elements);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "selection_queue_capacity_elements"), "set_selection_queue_capacity_elements", "get_selection_queue_capacity_elements");
+
+    // --- Bind Explicit Profiles ---
+    ClassDB::bind_method(D_METHOD("set_exec_profile", "profile"), &TaskGraphResource::set_exec_profile);
+    ClassDB::bind_method(D_METHOD("get_exec_profile"), &TaskGraphResource::get_exec_profile);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "exec_profile", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferProfile"), "set_exec_profile", "get_exec_profile");
+
+    ClassDB::bind_method(D_METHOD("set_cmd_arena_profile", "profile"), &TaskGraphResource::set_cmd_arena_profile);
+    ClassDB::bind_method(D_METHOD("get_cmd_arena_profile"), &TaskGraphResource::get_cmd_arena_profile);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "cmd_arena_profile", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferProfile"), "set_cmd_arena_profile", "get_cmd_arena_profile");
+
+    ClassDB::bind_method(D_METHOD("set_sel_arena_profile", "profile"), &TaskGraphResource::set_sel_arena_profile);
+    ClassDB::bind_method(D_METHOD("get_sel_arena_profile"), &TaskGraphResource::get_sel_arena_profile);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "sel_arena_profile", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferProfile"), "set_sel_arena_profile", "get_sel_arena_profile");
 }
 
-void TaskGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const {
-    // 1. Inherit Topologies and Grant Registries from parent classes
-    MemoryGraphResource::_append_managed_profiles(r_profiles);
+void TaskGraphResource::set_command_arena_capacity_bytes(int p_bytes) {
+    if (p_bytes == command_arena_capacity_bytes) return;
+    command_arena_capacity_bytes = p_bytes;
+    if (get_is_volatile()) queue_update_managed_profiles();
+    emit_changed();
+}
+int TaskGraphResource::get_command_arena_capacity_bytes() const { return command_arena_capacity_bytes; }
+
+void TaskGraphResource::set_selection_queue_capacity_elements(int p_elements) {
+    if (p_elements == selection_queue_capacity_elements) return;
+    selection_queue_capacity_elements = p_elements;
+    if (get_is_volatile()) queue_update_managed_profiles();
+    emit_changed();
+}
+int TaskGraphResource::get_selection_queue_capacity_elements() const { return selection_queue_capacity_elements; }
+
+void TaskGraphResource::set_exec_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { 
+    if(p_profile == exec_profile) return;
+    exec_profile = p_profile; 
+    emit_changed(); 
+}
+godot::Ref<ManagedBufferProfile> TaskGraphResource::get_exec_profile() const { return exec_profile; }
+
+void TaskGraphResource::set_cmd_arena_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { 
+    if (p_profile == cmd_arena_profile) return;
+    cmd_arena_profile = p_profile; 
+    emit_changed(); 
+}
+godot::Ref<ManagedBufferProfile> TaskGraphResource::get_cmd_arena_profile() const { return cmd_arena_profile; }
+
+void TaskGraphResource::set_sel_arena_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { 
+    if (p_profile == sel_arena_profile) return;
+    sel_arena_profile = p_profile; 
+    emit_changed(); 
+}
+godot::Ref<ManagedBufferProfile> TaskGraphResource::get_sel_arena_profile() const { return sel_arena_profile; }
+
+void TaskGraphResource::_ensure_managed_profiles() {
+    // 1. Let the parent MemoryGraphResource instantiate/update its structures
+    MemoryGraphResource::_ensure_managed_profiles();
 
     constexpr int ALIGNMENT = 64;
     constexpr int PAGE_SIZE = 4096; 
     int node_cap = get_is_volatile() ? std::max(static_cast<int>(get_nodes().size()), get_volatile_node_capacity()) : static_cast<int>(get_nodes().size());
 
     // --- Profile 5: TaskGraph Execution State Arrays (SoA) ---
-    // Approximating the byte footprint of TaskGraphDOD's internal SoA vectors 
-    // (task_types, cpu_metadata, gpu_metadata, port_meta, baked_connections, transient_bytes_meta)
     int exec_bytes = node_cap * (
         sizeof(core::TaskTypeDOD) + 
         sizeof(core::TaskCPUMetadata) + 
@@ -42,43 +90,52 @@ void TaskGraphResource::_append_managed_profiles(godot::TypedArray<ManagedBuffer
     );
     int padded_exec_bytes = (exec_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    godot::Ref<ManagedBufferProfile> exec_profile;
-    exec_profile.instantiate();
-    exec_profile->set_consumer_name(get_name());
-    exec_profile->set_purpose("Task Execution State (SoA)");
-    exec_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT));
-    exec_profile->set_alignment(ALIGNMENT);
+    if (exec_profile.is_null()) {
+        exec_profile.instantiate();
+        exec_profile->set_purpose("Task Execution State (SoA)");
+        exec_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT));
+        exec_profile->set_alignment(ALIGNMENT);
+    }
+    
+    exec_profile->set_consumer_name(get_consumer_key());
     exec_profile->set_byte_footprint(padded_exec_bytes);
-    r_profiles.append(exec_profile);
 
     // --- Profile 6: Structural Command Arena ---
-    // Backs the `TaskGraphCommandPOD` for deferred element spawning and graph mutations
     int padded_cmd_arena = ((command_arena_capacity_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
     
-    godot::Ref<ManagedBufferProfile> cmd_arena_profile;
-    cmd_arena_profile.instantiate();
-    cmd_arena_profile->set_consumer_name(get_name());
-    cmd_arena_profile->set_purpose("Structural Command Arena");
-    cmd_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); // Updated to clarify intent
-    cmd_arena_profile->set_alignment(ALIGNMENT);
+    if (cmd_arena_profile.is_null()) {
+        cmd_arena_profile.instantiate();
+        cmd_arena_profile->set_purpose("Structural Command Arena");
+        cmd_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); 
+        cmd_arena_profile->set_alignment(ALIGNMENT);
+    }
+    
+    cmd_arena_profile->set_consumer_name(get_consumer_key());
     cmd_arena_profile->set_byte_footprint(padded_cmd_arena);
-    r_profiles.append(cmd_arena_profile);
 
     // --- Profile 7: Selection Command Queue ---
-    // Backs the `TaskSelectionCommandPOD` index queue for wave expansion
     int sel_bytes = selection_queue_capacity_elements * sizeof(int64_t);
-    // Align to 4KB Virtual Pages to match _ensure_buffer projection
     int padded_sel_arena = ((sel_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
 
-    godot::Ref<ManagedBufferProfile> sel_arena_profile;
-    sel_arena_profile.instantiate();
-    sel_arena_profile->set_consumer_name(get_name());
-    sel_arena_profile->set_purpose("Selection Command Queue");
-    sel_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); // Updated to clarify intent
-    sel_arena_profile->set_alignment(ALIGNMENT);
+    if (sel_arena_profile.is_null()) {
+        sel_arena_profile.instantiate();
+        sel_arena_profile->set_purpose("Selection Command Queue");
+        sel_arena_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); 
+        sel_arena_profile->set_alignment(ALIGNMENT);
+    }
+    
+    sel_arena_profile->set_consumer_name(get_consumer_key());
     sel_arena_profile->set_byte_footprint(padded_sel_arena);
-    r_profiles.append(sel_arena_profile);
+}
 
+void TaskGraphResource::_gather_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const {
+    // 1. Pack the Memory Graph profiles (and by extension, the base Graph profiles)
+    MemoryGraphResource::_gather_managed_profiles(r_profiles);
+
+    // 2. Pack the specific Task Graph profiles
+    if (exec_profile.is_valid()) r_profiles.append(exec_profile);
+    if (cmd_arena_profile.is_valid()) r_profiles.append(cmd_arena_profile);
+    if (sel_arena_profile.is_valid()) r_profiles.append(sel_arena_profile);
 }
 
 std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(

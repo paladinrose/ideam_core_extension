@@ -26,6 +26,12 @@ void GamePlayerManager::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_default_player_profile", "profile"), &GamePlayerManager::set_default_player_profile);
     godot::ClassDB::bind_method(godot::D_METHOD("get_default_player_profile"), &GamePlayerManager::get_default_player_profile);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "default_player_profile", godot::PROPERTY_HINT_RESOURCE_TYPE, "GamePlayerProfile"), "set_default_player_profile", "get_default_player_profile");
+    ADD_SIGNAL(godot::MethodInfo("default_player_profile_changed", godot::PropertyInfo(godot::Variant::OBJECT, "default_player_profile", godot::PROPERTY_HINT_RESOURCE_TYPE, "GamePlayerProfile")));
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_players", "players"), &GamePlayerManager::set_players);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_players"), &GamePlayerManager::get_players);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::ARRAY, "players", godot::PROPERTY_HINT_ARRAY_TYPE, "GamePlayer"), "set_players", "get_players");
+    ADD_SIGNAL(godot::MethodInfo("players_changed", godot::PropertyInfo(godot::Variant::ARRAY, "players", godot::PROPERTY_HINT_ARRAY_TYPE, "GamePlayer")));
 
     // Methods
     godot::ClassDB::bind_method(godot::D_METHOD("load_player_profile", "profile_path", "player"), &GamePlayerManager::load_player_profile);
@@ -53,11 +59,17 @@ GamePlayerManager* GamePlayerManager::get_singleton() {
 }
 
 // Setters / Getters
-void GamePlayerManager::set_use_player_profiles(bool p_use) { use_player_profiles = p_use; }
+void GamePlayerManager::set_use_player_profiles(bool p_use) { 
+    if (use_player_profiles == p_use) return;
+    use_player_profiles = p_use; 
+}
 bool GamePlayerManager::get_use_player_profiles() const { return use_player_profiles; }
 
-void GamePlayerManager::set_default_player_profile(const godot::Ref<GamePlayerProfile>& p_profile) { default_player_profile = p_profile; }
-
+void GamePlayerManager::set_default_player_profile(const godot::Ref<GamePlayerProfile>& p_profile) { 
+    if (default_player_profile == p_profile) return;
+    default_player_profile = p_profile; 
+    emit_signal("default_player_profile_changed", default_player_profile);
+}
 godot::Ref<GamePlayerProfile> GamePlayerManager::get_default_player_profile() const {
     // We cast away constness locally to safely lazy-load the default profile.
     GamePlayerManager* mutable_this = const_cast<GamePlayerManager*>(this);
@@ -68,7 +80,11 @@ godot::Ref<GamePlayerProfile> GamePlayerManager::get_default_player_profile() co
     return mutable_this->default_player_profile;
 }
 
-void GamePlayerManager::set_players(const godot::TypedArray<GamePlayer>& p_players) { players = p_players; }
+void GamePlayerManager::set_players(const godot::TypedArray<GamePlayer>& p_players) { 
+    if (players == p_players) return;
+    players = p_players; 
+    emit_signal("players_changed", players);
+}
 godot::TypedArray<GamePlayer> GamePlayerManager::get_players() const { return players; }
 
 

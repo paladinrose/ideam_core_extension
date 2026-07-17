@@ -46,29 +46,29 @@ public:
     MemoryBufferResource() = default;
     ~MemoryBufferResource() = default;
 
-    void set_buffer_name(const godot::StringName& p_name) { buffer_name = p_name; }
-    godot::StringName get_buffer_name() const { return buffer_name; }
+    void set_buffer_name(const godot::StringName& p_name);
+    godot::StringName get_buffer_name() const;
 
-    void set_layout_type(int p_type) { layout_type = static_cast<LayoutType>(p_type); }
-    int get_layout_type() const { return layout_type; }
+    void set_layout_type(int p_type);
+    int get_layout_type() const;
 
-    void set_max_elements(int p_elements) { max_elements = p_elements; }
-    int get_max_elements() const { return max_elements; }
+    void set_max_elements(int p_elements);
+    int get_max_elements() const;
 
-    void set_alignment(int p_align) { alignment = p_align; }
-    int get_alignment() const { return alignment; }
+    void set_alignment(int p_align);
+    int get_alignment() const;
 
-    void set_needs_gpu_compute(bool p_needs_gpu) { needs_gpu_compute = p_needs_gpu; }
-    bool get_needs_gpu_compute() const { return needs_gpu_compute; }
+    void set_needs_gpu_compute(bool p_needs_gpu);
+    bool get_needs_gpu_compute() const;
 
-    void set_enable_shadowing(bool p_shadow) { enable_shadowing = p_shadow; }
-    bool get_enable_shadowing() const { return enable_shadowing; }
+    void set_enable_shadowing(bool p_shadow);
+    bool get_enable_shadowing() const;
 
-    void set_selection_mode(int p_mode) { selection_mode = static_cast<SelectionMode>(p_mode); }
-    int get_selection_mode() const { return selection_mode; }
+    void set_selection_mode(int p_mode);
+    int get_selection_mode() const;
 
-    void set_columns(const godot::TypedArray<godot::Dictionary>& p_columns) { columns = p_columns; }
-    godot::TypedArray<godot::Dictionary> get_columns() const { return columns; }
+    void set_columns(const godot::TypedArray<godot::Dictionary>& p_columns);
+    godot::TypedArray<godot::Dictionary> get_columns() const;
 
     int calculate_projected_footprint_bytes() const;
 };

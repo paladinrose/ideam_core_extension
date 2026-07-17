@@ -40,23 +40,26 @@ void MemoryGrantResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("validate_for_compilation"), &MemoryGrantResource::validate_for_compilation);
 }
 
+void MemoryGrantResource::set_grant_name(const godot::StringName& p_name) { 
+    if (grant_name == p_name) return;
+    grant_name = p_name;
+    emit_changed();
+}
+godot::StringName MemoryGrantResource::get_grant_name() const { return grant_name; }
+
 void MemoryGrantResource::set_capacity_mode(int p_mode) {
+    if (p_mode == capacity_mode) return;
     capacity_mode = static_cast<GrantCapacity>(p_mode);
     emit_changed();
 }
-
-int MemoryGrantResource::get_capacity_mode() const {
-    return static_cast<int>(capacity_mode);
-}
+int MemoryGrantResource::get_capacity_mode() const { return static_cast<int>(capacity_mode); }
 
 void MemoryGrantResource::set_configured_parts(const godot::TypedArray<GrantPartResource>& p_parts) {
+    if (p_parts == configured_parts) return;
     configured_parts = p_parts;
     emit_changed();
 }
-
-godot::TypedArray<GrantPartResource> MemoryGrantResource::get_configured_parts() const {
-    return configured_parts;
-}
+godot::TypedArray<GrantPartResource> MemoryGrantResource::get_configured_parts() const { return configured_parts; }
 
 godot::PackedInt32Array MemoryGrantResource::get_buffer_ids() const {
     godot::PackedInt32Array ids;
@@ -86,10 +89,9 @@ bool MemoryGrantResource::add_part(const godot::Ref<GrantPartResource>& p_part) 
 }
 
 void MemoryGrantResource::remove_part(int p_index) {
-    if (p_index >= 0 && p_index < configured_parts.size()) {
-        configured_parts.remove_at(p_index);
-        emit_changed();
-    }
+    if (p_index < 0 || p_index >= configured_parts.size()) return;
+    configured_parts.remove_at(p_index);
+    emit_changed();
 }
 
 void MemoryGrantResource::clear_parts() {

@@ -56,13 +56,22 @@ bool GameInteraction::is_interaction_active() const {
     return interaction_active; 
 }
 
-void GameInteraction::set_instigator(const godot::Array& p_instigator) { instigator = p_instigator; }
+void GameInteraction::set_instigator(const godot::Array& p_instigator) { 
+    if (p_instigator == instigator) return;
+    instigator = p_instigator; 
+}
 godot::Array GameInteraction::get_instigator() const { return instigator; }
 
-void GameInteraction::set_cooperation(const godot::Array& p_cooperation) { cooperation = p_cooperation; }
+void GameInteraction::set_cooperation(const godot::Array& p_cooperation) { 
+    if (p_cooperation == cooperation) return;
+    cooperation = p_cooperation; 
+}
 godot::Array GameInteraction::get_cooperation() const { return cooperation; }
 
-void GameInteraction::set_competition(const godot::Array& p_competition) { competition = p_competition; }
+void GameInteraction::set_competition(const godot::Array& p_competition) { 
+    if (p_competition == competition) return;
+    competition = p_competition; 
+}
 godot::Array GameInteraction::get_competition() const { return competition; }
 
 // Class Functions

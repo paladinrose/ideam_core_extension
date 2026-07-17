@@ -23,19 +23,17 @@ void SubGraphTaskResource::_bind_methods() {
 }
 
 void SubGraphTaskResource::set_child_graph(const godot::Ref<TaskGraphResource>& p_graph) {
+    if (p_graph == child_graph) return;
     child_graph = p_graph;
+    emit_changed();
 }
-
-godot::Ref<TaskGraphResource> SubGraphTaskResource::get_child_graph() const {
-    return child_graph;
-}
+godot::Ref<TaskGraphResource> SubGraphTaskResource::get_child_graph() const { return child_graph; }
 
 void SubGraphTaskResource::set_grant_mappings(const godot::Dictionary& p_mappings) {
+    if (p_mappings == grant_mappings) return;
     grant_mappings = p_mappings;
+    emit_changed();
 }
-
-godot::Dictionary SubGraphTaskResource::get_grant_mappings() const {
-    return grant_mappings;
-}
+godot::Dictionary SubGraphTaskResource::get_grant_mappings() const { return grant_mappings; }
 
 } // namespace ideam::godot_ext

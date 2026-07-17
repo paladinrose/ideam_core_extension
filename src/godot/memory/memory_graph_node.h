@@ -70,6 +70,9 @@ protected:
     std::unordered_map<int, uint32_t> input_port_signatures;
     std::unordered_map<int, uint32_t> output_port_signatures;
 
+    std::unordered_map<int, core::BufferLayoutType> input_port_layouts;
+    std::unordered_map<int, core::BufferLayoutType> output_port_layouts;
+
     static void _bind_methods();
     virtual void _build_ui() override;
     
@@ -100,6 +103,8 @@ public:
     void register_port_signature(int p_port_idx, bool p_is_output, uint32_t p_trait_mask);
     uint32_t get_port_signature(int p_port_idx, bool p_is_output) const;
 
+    virtual void update_from_resource(const godot::Ref<IdeamGraphNodeResource>& p_node_res) override;
+    
     // --- Tier 2: State Mutations ---
     void update_telemetry(const godot::Ref<MemoryGrantInspector>& p_inspector);
     void set_header_state(LayoutHeaderState p_state);

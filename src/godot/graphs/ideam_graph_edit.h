@@ -44,6 +44,7 @@ protected:
     // UI Signal Handlers
     void _request_connect(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
     void _request_disconnect(const godot::StringName &p_from_node, int p_from_port, const godot::StringName &p_to_node, int p_to_port);
+    void _on_context_click(const godot::Vector2 &p_at);
     void _show_popup(const godot::Vector2 &p_at, bool p_from_empty = false);
     void _popup_select(int p_id);
     void _frame_attached(const godot::StringName& p_element, const godot::StringName& p_frame);

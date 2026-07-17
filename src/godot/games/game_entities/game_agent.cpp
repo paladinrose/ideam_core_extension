@@ -75,10 +75,16 @@ void GameAgent::set_player(GamePlayer* p_player) {
 }
 GamePlayer* GameAgent::get_player() const { return _player; }
 
-void GameAgent::set_player_parent_target(godot::Node* p_target) { player_parent_target = p_target; }
+void GameAgent::set_player_parent_target(godot::Node* p_target) { 
+    if (p_target == player_parent_target) return;
+    player_parent_target = p_target; 
+}
 godot::Node* GameAgent::get_player_parent_target() const { return player_parent_target; }
 
-void GameAgent::set_exclusivity(AgentExclusivity p_exclusivity) { exclusivity = p_exclusivity; }
+void GameAgent::set_exclusivity(AgentExclusivity p_exclusivity) { 
+    if (p_exclusivity == exclusivity) return;
+    exclusivity = p_exclusivity; 
+}
 AgentExclusivity GameAgent::get_exclusivity() const { return exclusivity; }
 
 void GameAgent::set_match_position(AgentMatching p_match) {
@@ -88,7 +94,10 @@ void GameAgent::set_match_position(AgentMatching p_match) {
 }
 AgentMatching GameAgent::get_match_position() const { return match_position; }
 
-void GameAgent::set_player_reposition_time(float p_time) { player_reposition_time = p_time; }
+void GameAgent::set_player_reposition_time(float p_time) { 
+    if (p_time == player_reposition_time) return;
+    player_reposition_time = p_time; 
+}
 float GameAgent::get_player_reposition_time() const { return player_reposition_time; }
 
 void GameAgent::set_match_rotation(AgentMatching p_match) {
@@ -98,7 +107,10 @@ void GameAgent::set_match_rotation(AgentMatching p_match) {
 }
 AgentMatching GameAgent::get_match_rotation() const { return match_rotation; }
 
-void GameAgent::set_player_reorient_time(float p_time) { player_reorient_time = p_time; }
+void GameAgent::set_player_reorient_time(float p_time) { 
+    if (p_time == player_reorient_time) return;
+    player_reorient_time = p_time; 
+}
 float GameAgent::get_player_reorient_time() const { return player_reorient_time; }
 
 void GameAgent::set_match_scale(AgentMatching p_match) {
@@ -108,19 +120,34 @@ void GameAgent::set_match_scale(AgentMatching p_match) {
 }
 AgentMatching GameAgent::get_match_scale() const { return match_scale; }
 
-void GameAgent::set_player_rescale_time(float p_time) { player_rescale_time = p_time; }
+void GameAgent::set_player_rescale_time(float p_time) { 
+    if (p_time == player_rescale_time) return;
+    player_rescale_time = p_time; 
+}
 float GameAgent::get_player_rescale_time() const { return player_rescale_time; }
 
-void GameAgent::set_actions(const godot::TypedArray<GameAgentAction>& p_actions) { actions = p_actions; }
+void GameAgent::set_actions(const godot::TypedArray<GameAgentAction>& p_actions) { 
+    if (p_actions == actions) return;
+    actions = p_actions; 
+}
 godot::TypedArray<GameAgentAction> GameAgent::get_actions() const { return actions; }
 
-void GameAgent::set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces) { game_pieces = p_pieces; }
+void GameAgent::set_game_pieces(const godot::TypedArray<GamePiece>& p_pieces) { 
+    if (p_pieces == game_pieces) return;
+    game_pieces = p_pieces; 
+}
 godot::TypedArray<GamePiece> GameAgent::get_game_pieces() const { return game_pieces; }
 
-void GameAgent::set_player_node_assignments(NodeRetargeter* p_assignments) { player_node_assignments = p_assignments; }
+void GameAgent::set_player_node_assignments(NodeRetargeter* p_assignments) { 
+    if (p_assignments == player_node_assignments) return;
+    player_node_assignments = p_assignments; 
+}
 NodeRetargeter* GameAgent::get_player_node_assignments() const { return player_node_assignments; }
 
-void GameAgent::set_player_signal_assignments(SignalConnector* p_assignments) { player_signal_assignments = p_assignments; }
+void GameAgent::set_player_signal_assignments(SignalConnector* p_assignments) { 
+    if (p_assignments == player_signal_assignments) return;
+    player_signal_assignments = p_assignments; 
+}
 SignalConnector* GameAgent::get_player_signal_assignments() const { return player_signal_assignments; }
 
 

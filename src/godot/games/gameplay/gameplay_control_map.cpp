@@ -38,7 +38,9 @@ GameplayControlMap::~GameplayControlMap() {
 
 // Setters / Getters
 void GameplayControlMap::set_root_input(const godot::String &p_input) {
+    if (p_input == root_input) return;
     root_input = p_input;
+    emit_changed();
 }
 
 godot::String GameplayControlMap::get_root_input() const {
@@ -46,7 +48,9 @@ godot::String GameplayControlMap::get_root_input() const {
 }
 
 void GameplayControlMap::set_priority(int p_priority) {
+    if (p_priority == priority) return;
     priority = p_priority;
+    emit_changed();
 }
 
 int GameplayControlMap::get_priority() const {
@@ -54,7 +58,9 @@ int GameplayControlMap::get_priority() const {
 }
 
 void GameplayControlMap::set_timeout(float p_timeout) {
+    if (p_timeout == timeout) return;
     timeout = p_timeout;
+    emit_changed();
 }
 
 float GameplayControlMap::get_timeout() const {

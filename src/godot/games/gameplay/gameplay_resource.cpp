@@ -19,7 +19,9 @@ GameplayResource::~GameplayResource() {
 }
 
 void GameplayResource::set_title(const godot::String &p_title) {
+    if (p_title == title) return;
     title = p_title;
+    emit_changed();
 }
 
 godot::String GameplayResource::get_title() const {

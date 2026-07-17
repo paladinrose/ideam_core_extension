@@ -19,31 +19,27 @@ void TransformTaskResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_type_id"), &TransformTaskResource::get_type_id);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "type_id"), "set_type_id", "get_type_id");
 
-    
 }
 
 void TransformTaskResource::set_view_id(int p_id) {
+    if (p_id == view_id) return;
     view_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int TransformTaskResource::get_view_id() const {
-    return static_cast<int>(view_id);
-}
+int TransformTaskResource::get_view_id() const { return static_cast<int>(view_id); }
 
 void TransformTaskResource::set_strategy_id(int p_id) {
+    if (p_id == strategy_id) return;
     strategy_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int TransformTaskResource::get_strategy_id() const {
-    return static_cast<int>(strategy_id);
-}
+int TransformTaskResource::get_strategy_id() const { return static_cast<int>(strategy_id); }
 
 void TransformTaskResource::set_type_id(int p_id) {
+    if (p_id == type_id) return;
     type_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int TransformTaskResource::get_type_id() const {
-    return static_cast<int>(type_id);
-}
+int TransformTaskResource::get_type_id() const { return static_cast<int>(type_id); }
 
 } // namespace ideam::godot_ext

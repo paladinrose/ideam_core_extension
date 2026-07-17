@@ -189,7 +189,7 @@ void MemoryGraphNode::receive_connection_info(const godot::Dictionary& p_info) {
 
 // Update receive_memory_grant:
 void MemoryGraphNode::receive_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
-    godot::UtilityFunctions::print("MemoryGraphNode received memory grant: ", p_grant.is_valid() ? p_grant->get_grant_name() : "null");
+    //godot::UtilityFunctions::print("MemoryGraphNode received memory grant: ", p_grant.is_valid() ? p_grant->get_grant_name() : "null");
     
     Ref<MemoryGraphNodeResource> res = get_memory_node_resource();
     if (res.is_valid()) {
@@ -224,6 +224,13 @@ void MemoryGraphNode::receive_memory_grant(const godot::Ref<MemoryGrantResource>
 
 void MemoryGraphNode::_update_theme_properties() {
     IdeamGraphNode::_update_theme_properties();
+
+    for (const auto& pair : input_port_layouts) {
+        update_memory_port(pair.first, true, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(pair.second)));
+    }
+    for (const auto& pair : output_port_layouts) {
+        update_memory_port(pair.first, false, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(pair.second)));
+    }
 
     godot::StringName type_context = "GraphNode";
 
@@ -281,6 +288,19 @@ void MemoryGraphNode::_update_theme_properties() {
 
 }
 
+void MemoryGraphNode::update_from_resource(const godot::Ref<IdeamGraphNodeResource>& p_node_res) {
+    IdeamGraphNode::update_from_resource(p_node_res);
+
+    Ref<MemoryGraphNodeResource> mem_res = p_node_res;
+    if (mem_res.is_valid()) {
+        Ref<MemoryGrantResource> grant = mem_res->get_memory_grant();
+        if (grant.is_valid()) {
+            this->receive_memory_grant(grant); 
+        }
+    }
+}
+
+
 // --- Theme Mapping Helpers ---
 
 Ref<Texture2D> MemoryGraphNode::_get_icon_for_layout(core::BufferLayoutType p_layout) const {
@@ -313,6 +333,13 @@ Ref<Texture2D> MemoryGraphNode::_get_telemetry_badge_icon(TelemetryBadgeState p_
 void MemoryGraphNode::update_memory_port(int p_slot_index, bool p_is_left, godot::BitField<core::BufferLayoutType> p_layout) {
     // Extract the underlying enum class value from the BitField wrapper
     core::BufferLayoutType layout_val = static_cast<core::BufferLayoutType>(static_cast<int64_t>(p_layout));
+    
+    if (p_is_left) {
+        input_port_layouts[p_slot_index] = layout_val;
+    } else {
+        output_port_layouts[p_slot_index] = layout_val;
+    }
+
     Ref<Texture2D> shape_icon = _get_icon_for_layout(layout_val);
 
     // Persist existing settings, only overwrite the icon

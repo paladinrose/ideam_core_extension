@@ -23,6 +23,7 @@ void IdeamGraphEdit::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_request_connect", "from_node", "from_port", "to_node", "to_port"), &IdeamGraphEdit::_request_connect);
     ClassDB::bind_method(D_METHOD("_request_disconnect", "from_node", "from_port", "to_node", "to_port"), &IdeamGraphEdit::_request_disconnect);
     ClassDB::bind_method(D_METHOD("_show_popup", "at", "from_empty"), &IdeamGraphEdit::_show_popup);
+    ClassDB::bind_method(D_METHOD("_on_context_click", "at"), &IdeamGraphEdit::_on_context_click);
     ClassDB::bind_method(D_METHOD("_popup_select", "id"), &IdeamGraphEdit::_popup_select);
     ClassDB::bind_method(D_METHOD("node_context_clicked", "node"), &IdeamGraphEdit::node_context_clicked);
     ClassDB::bind_method(D_METHOD("_on_blueprint_changed"), &IdeamGraphEdit::_on_blueprint_changed);
@@ -36,6 +37,7 @@ void IdeamGraphEdit::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("set_blueprint", "blueprint"), &IdeamGraphEdit::set_blueprint);
     ClassDB::bind_method(D_METHOD("get_blueprint"), &IdeamGraphEdit::get_blueprint);
+    
 }
 
 void IdeamGraphEdit::_ready() {
@@ -43,7 +45,7 @@ void IdeamGraphEdit::_ready() {
         connect("connection_request", Callable(this, "_request_connect"));
         connect("disconnection_request", Callable(this, "_request_disconnect"));
         
-        connect("popup_request", Callable(this, "_show_popup"));
+        connect("popup_request", Callable(this, "_on_context_click"));
         connect("end_node_move", Callable(this, "_on_end_node_move"));
 
         //connect("frame_attached", Callable(this, "_frame_attached"));
@@ -130,6 +132,10 @@ IdeamGraphNode* IdeamGraphEdit::_create_graph_node(const Ref<IdeamGraphNodeResou
     // Default implementation returns nullptr. 
     // Derived graph editors must override this to handle their specific concrete types.
     return nullptr;
+}
+
+void IdeamGraphEdit::_on_context_click(const Vector2 &p_at) {
+    _show_popup(p_at, false);
 }
 
 void IdeamGraphEdit::_show_popup(const Vector2 &p_at, bool p_from_empty) {
@@ -313,6 +319,7 @@ void IdeamGraphEdit::_on_blueprint_changed() {
             ign->update_from_resource(n_res);
             
         } else {
+            //This should be somehow harnessing _spawn_node_by_type, so start here, later.
             ign = _create_graph_node(n_res);
             
             if (ign) {

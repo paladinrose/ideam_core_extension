@@ -23,27 +23,24 @@ void MetadataTaskResource::_bind_methods() {
 }
 
 void MetadataTaskResource::set_view_id(int p_id) {
+    if (p_id == view_id) return;
     view_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int MetadataTaskResource::get_view_id() const {
-    return static_cast<int>(view_id);
-}
+int MetadataTaskResource::get_view_id() const { return static_cast<int>(view_id); }
 
 void MetadataTaskResource::set_strategy_id(int p_id) {
+    if (p_id == strategy_id) return;
     strategy_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int MetadataTaskResource::get_strategy_id() const {
-    return static_cast<int>(strategy_id);
-}
+int MetadataTaskResource::get_strategy_id() const { return static_cast<int>(strategy_id); }
 
 void MetadataTaskResource::set_type_id(int p_id) {
+    if (p_id == type_id) return;
     type_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int MetadataTaskResource::get_type_id() const {
-    return static_cast<int>(type_id);
-}
+int MetadataTaskResource::get_type_id() const { return static_cast<int>(type_id); }
 
 } // namespace ideam::godot_ext

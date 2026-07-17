@@ -15,12 +15,11 @@ void EntryFillTaskResource::_bind_methods() {
 }
 
 void EntryFillTaskResource::set_target_buffer_id(int p_id) {
+    if (p_id == target_buffer_id) return;
     target_buffer_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int EntryFillTaskResource::get_target_buffer_id() const {
-    return static_cast<int>(target_buffer_id);
-}
+int EntryFillTaskResource::get_target_buffer_id() const { return static_cast<int>(target_buffer_id); }
 
 godot::Dictionary EntryFillTaskResource::get_task_properties() const {
     godot::Dictionary props;

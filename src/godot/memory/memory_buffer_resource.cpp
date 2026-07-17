@@ -44,6 +44,62 @@ void MemoryBufferResource::_bind_methods() {
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "columns"), "set_columns", "get_columns");
 }
 
+void MemoryBufferResource::set_buffer_name(const godot::StringName& p_name) { 
+    if (buffer_name == p_name) return;
+    buffer_name = p_name; 
+    emit_changed();
+}
+godot::StringName MemoryBufferResource::get_buffer_name() const { return buffer_name; }
+
+void MemoryBufferResource::set_layout_type(int p_type) {
+    if (p_type == layout_type) return; 
+    layout_type = static_cast<LayoutType>(p_type); 
+    emit_changed();
+}
+int MemoryBufferResource::get_layout_type() const { return layout_type; }
+
+void MemoryBufferResource::set_max_elements(int p_elements) {
+    if (p_elements == max_elements) return; 
+    max_elements = p_elements; 
+    emit_changed();
+}
+int MemoryBufferResource::get_max_elements() const { return max_elements; }
+
+void MemoryBufferResource::set_alignment(int p_align) {
+    if (p_align == alignment) return; 
+    alignment = p_align;
+    emit_changed();
+}
+int MemoryBufferResource::get_alignment() const { return alignment; }
+
+void MemoryBufferResource::set_needs_gpu_compute(bool p_needs_gpu) {
+    if (p_needs_gpu == needs_gpu_compute) return; 
+    needs_gpu_compute = p_needs_gpu;
+    emit_changed();
+}
+bool MemoryBufferResource::get_needs_gpu_compute() const { return needs_gpu_compute; }
+
+void MemoryBufferResource::set_enable_shadowing(bool p_shadow) {
+    if (p_shadow == enable_shadowing) return; 
+    enable_shadowing = p_shadow;
+    emit_changed();
+}
+bool MemoryBufferResource::get_enable_shadowing() const { return enable_shadowing; }
+
+void MemoryBufferResource::set_selection_mode(int p_mode) { 
+    if(p_mode == selection_mode) return;
+    selection_mode = static_cast<SelectionMode>(p_mode);
+    emit_changed();
+}
+int MemoryBufferResource::get_selection_mode() const { return selection_mode; }
+
+void MemoryBufferResource::set_columns(const godot::TypedArray<godot::Dictionary>& p_columns) { 
+    if (p_columns == columns) return;
+    columns = p_columns;
+    emit_changed();
+}
+godot::TypedArray<godot::Dictionary> MemoryBufferResource::get_columns() const { return columns; }
+
 int MemoryBufferResource::calculate_projected_footprint_bytes() const {
     int total_element_size = 0;
     

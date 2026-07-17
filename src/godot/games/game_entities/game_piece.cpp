@@ -92,16 +92,28 @@ void GamePiece::_ready() {
 }
 
 // Setters / Getters
-void GamePiece::set_game_properties(const godot::TypedArray<GameProperty>& p_props) { game_properties = p_props; }
+void GamePiece::set_game_properties(const godot::TypedArray<GameProperty>& p_props) { 
+    if (p_props == game_properties) return;
+    game_properties = p_props; 
+}
 godot::TypedArray<GameProperty> GamePiece::get_game_properties() const { return game_properties; }
 
-void GamePiece::set_actions(const godot::TypedArray<GamePieceAction>& p_actions) { actions = p_actions; }
+void GamePiece::set_actions(const godot::TypedArray<GamePieceAction>& p_actions) { 
+    if (p_actions == actions) return;
+    actions = p_actions; 
+}
 godot::TypedArray<GamePieceAction> GamePiece::get_actions() const { return actions; }
 
-void GamePiece::set_sub_game_pieces(const godot::TypedArray<GamePiece>& p_sub_pieces) { sub_game_pieces = p_sub_pieces; }
+void GamePiece::set_sub_game_pieces(const godot::TypedArray<GamePiece>& p_sub_pieces) { 
+    if (p_sub_pieces == sub_game_pieces) return;
+    sub_game_pieces = p_sub_pieces; 
+}
 godot::TypedArray<GamePiece> GamePiece::get_sub_game_pieces() const { return sub_game_pieces; }
 
-void GamePiece::set_max_sub_pieces(int p_max) { max_sub_pieces = p_max; }
+void GamePiece::set_max_sub_pieces(int p_max) { 
+    if (p_max == max_sub_pieces) return;
+    max_sub_pieces = p_max; 
+}
 int GamePiece::get_max_sub_pieces() const { return max_sub_pieces; }
 
 

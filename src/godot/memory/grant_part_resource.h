@@ -41,9 +41,8 @@ public:
     void set_element_stride(int p_stride);
     void set_column_id(int p_id);
     void set_buffer_type(int p_type);
-    int get_buffer_type() const;
-    void set_target_buffer_name(const godot::StringName& p_name) { target_buffer_name = p_name; }
-    void set_target_column_name(const godot::StringName& p_name) { target_column_name = p_name; }
+    void set_target_buffer_name(const godot::StringName& p_name);
+    void set_target_column_name(const godot::StringName& p_name);
     void set_access_mode(int p_mode);
     void set_is_contiguous(bool p_contiguous);
 
@@ -51,8 +50,9 @@ public:
     int get_buffer_id() const;
     int get_element_stride() const;
     int get_column_id() const;
-    godot::StringName get_target_buffer_name() const { return target_buffer_name; }
-    godot::StringName get_target_column_name() const { return target_column_name; }
+    int get_buffer_type() const;
+    godot::StringName get_target_buffer_name() const;
+    godot::StringName get_target_column_name() const;
     int get_access_mode() const;
     bool get_is_contiguous() const;
 };

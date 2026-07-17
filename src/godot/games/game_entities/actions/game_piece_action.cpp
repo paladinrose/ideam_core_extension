@@ -98,34 +98,64 @@ GamePieceAction::GamePieceAction() {}
 GamePieceAction::~GamePieceAction() {}
 
 // Setters / Getters
-void GamePieceAction::set_lock_piece(bool p_lock) { lock_piece = p_lock; }
+void GamePieceAction::set_lock_piece(bool p_lock) { 
+    if (p_lock == lock_piece) return;
+    lock_piece = p_lock; 
+}
 bool GamePieceAction::get_lock_piece() const { return lock_piece; }
 
-void GamePieceAction::set_game_properties(const godot::TypedArray<GameProperty>& p_properties) { game_properties = p_properties; }
+void GamePieceAction::set_game_properties(const godot::TypedArray<GameProperty>& p_properties) { 
+    if (p_properties == game_properties) return;
+    game_properties = p_properties; 
+}
 godot::TypedArray<GameProperty> GamePieceAction::get_game_properties() const { return game_properties; }
 
-void GamePieceAction::set_property_locks(const godot::TypedArray<bool>& p_locks) { property_locks = p_locks; }
+void GamePieceAction::set_property_locks(const godot::TypedArray<bool>& p_locks) { 
+    if (p_locks == property_locks) return;
+    property_locks = p_locks; 
+}
 godot::TypedArray<bool> GamePieceAction::get_property_locks() const { return property_locks; }
 
-void GamePieceAction::set_property_use_values(const godot::TypedArray<int>& p_values) { property_use_values = p_values; }
+void GamePieceAction::set_property_use_values(const godot::TypedArray<int>& p_values) { 
+    if (p_values == property_use_values) return;
+    property_use_values = p_values; 
+}
 godot::TypedArray<int> GamePieceAction::get_property_use_values() const { return property_use_values; }
 
-void GamePieceAction::set_refresh_time(float p_time) { refresh_time = p_time; }
+void GamePieceAction::set_refresh_time(float p_time) { 
+    if (p_time == refresh_time) return;
+    refresh_time = p_time; 
+}
 float GamePieceAction::get_refresh_time() const { return refresh_time; }
 
-void GamePieceAction::set_competes_with_groups(const godot::TypedArray<godot::String>& p_groups) { competes_with_groups = p_groups; }
+void GamePieceAction::set_competes_with_groups(const godot::TypedArray<godot::String>& p_groups) { 
+    if (p_groups == competes_with_groups) return;
+    competes_with_groups = p_groups; 
+}
 godot::TypedArray<godot::String> GamePieceAction::get_competes_with_groups() const { return competes_with_groups; }
 
-void GamePieceAction::set_status(ActionStatus p_status) { status = p_status; }
+void GamePieceAction::set_status(ActionStatus p_status) { 
+    if (p_status == status) return;
+    status = p_status; 
+}
 ActionStatus GamePieceAction::get_status() const { return status; }
 
-void GamePieceAction::set_success_consequences(const godot::Dictionary& p_consequences) { success_consequences = p_consequences; }
+void GamePieceAction::set_success_consequences(const godot::Dictionary& p_consequences) { 
+    if (p_consequences == success_consequences) return;
+    success_consequences = p_consequences; 
+}
 godot::Dictionary GamePieceAction::get_success_consequences() const { return success_consequences; }
 
-void GamePieceAction::set_failure_consequences(const godot::Dictionary& p_consequences) { failure_consequences = p_consequences; }
+void GamePieceAction::set_failure_consequences(const godot::Dictionary& p_consequences) { 
+    if (p_consequences == failure_consequences) return;
+    failure_consequences = p_consequences; 
+}
 godot::Dictionary GamePieceAction::get_failure_consequences() const { return failure_consequences; }
 
-void GamePieceAction::set_interruption_consequences(const godot::Dictionary& p_consequences) { interruption_consequences = p_consequences; }
+void GamePieceAction::set_interruption_consequences(const godot::Dictionary& p_consequences) { 
+    if (p_consequences == interruption_consequences) return;
+    interruption_consequences = p_consequences; 
+}
 godot::Dictionary GamePieceAction::get_interruption_consequences() const { return interruption_consequences; }
 
 

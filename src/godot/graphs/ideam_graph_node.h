@@ -104,7 +104,7 @@ public:
     /**
      * @brief Updates only mutable data-driven properties without altering structural child components.
      */
-    void update_from_resource(const godot::Ref<IdeamGraphNodeResource>& p_node_res);
+    virtual void update_from_resource(const godot::Ref<IdeamGraphNodeResource>& p_node_res);
 
     // Direct access to the authoritative model
     godot::Ref<IdeamGraphNodeResource> get_node_resource() const { return node_resource; }

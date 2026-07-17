@@ -41,16 +41,32 @@ GameplayMode::~GameplayMode() {
 }
 
 // Setters / Getters
-void GameplayMode::set_perspectives(const godot::TypedArray<GameplayPerspective> &p_perspectives) { perspectives = p_perspectives; }
+void GameplayMode::set_perspectives(const godot::TypedArray<GameplayPerspective> &p_perspectives) { 
+    if (p_perspectives == perspectives) return;
+    perspectives = p_perspectives; 
+    emit_changed();
+}
 godot::TypedArray<GameplayPerspective> GameplayMode::get_perspectives() const { return perspectives; }
 
-void GameplayMode::set_difficulties(const godot::TypedArray<GameplayDifficulty> &p_difficulties) { difficulties = p_difficulties; }
+void GameplayMode::set_difficulties(const godot::TypedArray<GameplayDifficulty> &p_difficulties) { 
+    if (p_difficulties == difficulties) return;
+    difficulties = p_difficulties; 
+    emit_changed();
+}
 godot::TypedArray<GameplayDifficulty> GameplayMode::get_difficulties() const { return difficulties; }
 
-void GameplayMode::set_control_maps(const godot::TypedArray<GameplayControlMap> &p_control_maps) { control_maps = p_control_maps; }
+void GameplayMode::set_control_maps(const godot::TypedArray<GameplayControlMap> &p_control_maps) { 
+    if (p_control_maps == control_maps) return;
+    control_maps = p_control_maps; 
+    emit_changed();
+}
 godot::TypedArray<GameplayControlMap> GameplayMode::get_control_maps() const { return control_maps; }
 
-void GameplayMode::set_accessibility_options(const godot::TypedArray<GameplayAccessibilityOption> &p_options) { accessibility_options = p_options; }
+void GameplayMode::set_accessibility_options(const godot::TypedArray<GameplayAccessibilityOption> &p_options) { 
+    if (p_options == accessibility_options) return;
+    accessibility_options = p_options; 
+    emit_changed();
+}
 godot::TypedArray<GameplayAccessibilityOption> GameplayMode::get_accessibility_options() const { return accessibility_options; }
 
 // Class Functions

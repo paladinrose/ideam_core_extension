@@ -23,6 +23,11 @@ void SceneTransition::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("transition"), &SceneTransition::transition);
     godot::ClassDB::bind_method(godot::D_METHOD("to_scene_load_complete"), &SceneTransition::to_scene_load_complete);
     godot::ClassDB::bind_method(godot::D_METHOD("complete_transition"), &SceneTransition::complete_transition);
+
+    //bind_methods and ADD_PROPERTY, get/set _from
+    //bind_methods and ADD_PROPERTY, get/set to_path
+    //bind_methods and ADD_PROPERTY, get/set _to
+
 }
 
 SceneTransition::SceneTransition() {}
@@ -40,16 +45,31 @@ void SceneTransition::_process(double delta) {
 }
 
 // Getters / Setters
-void SceneTransition::set_transition_in_progress(bool p_in_progress) { _transition_in_progress = p_in_progress; }
+void SceneTransition::set_transition_in_progress(bool p_in_progress) {
+    if (p_in_progress == _transition_in_progress) return;
+    _transition_in_progress = p_in_progress; 
+}
 bool SceneTransition::get_transition_in_progress() const { return _transition_in_progress; }
 
-void SceneTransition::set_from(godot::Node* p_from) { _from = p_from; }
+void SceneTransition::set_from(godot::Node* p_from) { 
+    if (p_from == _from) return;
+    _from = p_from; 
+    // emit_signal
+}
 godot::Node* SceneTransition::get_from() const { return _from; }
 
-void SceneTransition::set_to_path(const godot::String& p_to_path) { _to_path = p_to_path; }
+void SceneTransition::set_to_path(const godot::String& p_to_path) { 
+    if (p_to_path == _to_path) return;
+    _to_path = p_to_path; 
+    // emit_signal
+}
 godot::String SceneTransition::get_to_path() const { return _to_path; }
 
-void SceneTransition::set_to(godot::Node* p_to) { _to = p_to; }
+void SceneTransition::set_to(godot::Node* p_to) { 
+    if (p_to == _to) return;
+    _to = p_to; 
+    // emit_signal
+}
 godot::Node* SceneTransition::get_to() const { return _to; }
 
 // Class Functions

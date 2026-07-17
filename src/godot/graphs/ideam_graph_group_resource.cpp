@@ -28,8 +28,10 @@ void IdeamGraphGroupResource::_bind_methods() {
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "nodes", PROPERTY_HINT_ARRAY_TYPE, "StringName"), "set_nodes", "get_nodes");
 }
 
-void IdeamGraphGroupResource::set_group_name(const godot::StringName& p_name) { 
+void IdeamGraphGroupResource::set_group_name(const godot::StringName& p_name) {
+    if (p_name == group_name) return; 
     group_name = p_name; 
+    emit_changed();
 }
 
 godot::StringName IdeamGraphGroupResource::get_group_name() const { 
@@ -37,7 +39,9 @@ godot::StringName IdeamGraphGroupResource::get_group_name() const {
 }
 
 void IdeamGraphGroupResource::set_title(const godot::String& p_title) { 
+    if (p_title == title) return;
     title = p_title; 
+    emit_changed();
 }
 
 godot::String IdeamGraphGroupResource::get_title() const { 
@@ -45,7 +49,9 @@ godot::String IdeamGraphGroupResource::get_title() const {
 }
 
 void IdeamGraphGroupResource::set_position(const godot::Vector2& p_pos) { 
+    if (p_pos == position) return;
     position = p_pos; 
+    emit_changed();
 }
 
 godot::Vector2 IdeamGraphGroupResource::get_position() const { 
@@ -53,7 +59,9 @@ godot::Vector2 IdeamGraphGroupResource::get_position() const {
 }
 
 void IdeamGraphGroupResource::set_size(const godot::Vector2& p_size) { 
+    if (p_size == size) return;
     size = p_size; 
+    emit_changed();
 }
 
 godot::Vector2 IdeamGraphGroupResource::get_size() const { 
@@ -61,7 +69,9 @@ godot::Vector2 IdeamGraphGroupResource::get_size() const {
 }
 
 void IdeamGraphGroupResource::set_nodes(const godot::TypedArray<godot::StringName>& p_nodes) { 
+    if (p_nodes == nodes) return;
     nodes = p_nodes; 
+    emit_changed();
 }
 
 godot::TypedArray<godot::StringName> IdeamGraphGroupResource::get_nodes() const { 

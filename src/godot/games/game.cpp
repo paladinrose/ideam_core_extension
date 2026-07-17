@@ -60,14 +60,17 @@ void Game::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_root", "root"), &Game::set_game_root);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_root"), &Game::get_game_root);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game_root", godot::PROPERTY_HINT_NODE_TYPE, "Node"), "set_game_root", "get_game_root");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_title", "title"), &Game::set_title);
     godot::ClassDB::bind_method(godot::D_METHOD("get_title"), &Game::get_title);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING, "title"), "set_title", "get_title");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_time_scale", "scale"), &Game::set_time_scale);
     godot::ClassDB::bind_method(godot::D_METHOD("get_time_scale"), &Game::get_time_scale);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::FLOAT, "time_scale"), "set_time_scale", "get_time_scale");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_state", "state"), &Game::set_game_state);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_state"), &Game::get_game_state);
@@ -80,6 +83,7 @@ void Game::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_save_path", "path"), &Game::set_save_path);
     godot::ClassDB::bind_method(godot::D_METHOD("get_save_path"), &Game::get_save_path);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::STRING, "save_path"), "set_save_path", "get_save_path");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_save_options", "options"), &Game::set_save_options);
     godot::ClassDB::bind_method(godot::D_METHOD("get_save_options"), &Game::get_save_options);
@@ -96,6 +100,7 @@ void Game::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_new_game_board", "board"), &Game::set_new_game_board);
     godot::ClassDB::bind_method(godot::D_METHOD("get_new_game_board"), &Game::get_new_game_board);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "new_game_board"), "set_new_game_board", "get_new_game_board");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_unload_game_menu_scene_on_start", "unload"), &Game::set_unload_game_menu_scene_on_start);
     godot::ClassDB::bind_method(godot::D_METHOD("get_unload_game_menu_scene_on_start"), &Game::get_unload_game_menu_scene_on_start);
@@ -120,14 +125,17 @@ void Game::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_board_loader", "loader"), &Game::set_game_board_loader);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_board_loader"), &Game::get_game_board_loader);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game_board_loader", godot::PROPERTY_HINT_NODE_TYPE, "SceneTransition"), "set_game_board_loader", "get_game_board_loader");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_maximum_interactions", "max_interactions"), &Game::set_maximum_interactions);
     godot::ClassDB::bind_method(godot::D_METHOD("get_maximum_interactions"), &Game::get_maximum_interactions);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "maximum_interactions"), "set_maximum_interactions", "get_maximum_interactions");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_gameplay_style", "style"), &Game::set_gameplay_style);
     godot::ClassDB::bind_method(godot::D_METHOD("get_gameplay_style"), &Game::get_gameplay_style);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "gameplay_style", godot::PROPERTY_HINT_RESOURCE_TYPE, "GameplayStyle"), "set_gameplay_style", "get_gameplay_style");
+    // ADD_SIGNAL
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_hub_ID", "id"), &Game::set_game_hub_ID);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_hub_ID"), &Game::get_game_hub_ID);
@@ -211,42 +219,120 @@ void Game::_process(double delta) {
 
 // Assorted Setters/Getters
 godot::String Game::get_continue_play_state() const { return continue_play_state; }
-void Game::set_game_root(godot::Node* p_root) { game_root = p_root; }
+
+void Game::set_game_root(godot::Node* p_root) { 
+    if (p_root == game_root) return;
+    game_root = p_root; 
+    // emit_signal
+}
 godot::Node* Game::get_game_root() const { return game_root; }
-void Game::set_title(const godot::String& p_title) { title = p_title; }
+
+void Game::set_title(const godot::String& p_title) { 
+    if (p_title == title) return;
+    title = p_title; 
+    // emit_signal
+}
 godot::String Game::get_title() const { return title; }
-void Game::set_time_scale(float p_scale) { time_scale = p_scale; }
+
+void Game::set_time_scale(float p_scale) { 
+    if (p_scale == time_scale) return;
+    time_scale = p_scale;
+    // emit_signal 
+}
 float Game::get_time_scale() const { return time_scale; }
-void Game::set_game_state(GameState p_state) { game_state = p_state; }
+
+void Game::set_game_state(GameState p_state) { 
+    if (p_state == game_state) return;
+    game_state = p_state; 
+}
 GameState Game::get_game_state() const { return game_state; }
-void Game::set_close_hub_on_quit(bool p_close) { close_hub_on_quit = p_close; }
+
+void Game::set_close_hub_on_quit(bool p_close) { 
+    if (p_close == close_hub_on_quit) return;
+    close_hub_on_quit = p_close; 
+}
 bool Game::get_close_hub_on_quit() const { return close_hub_on_quit; }
-void Game::set_save_path(const godot::String& p_path) { save_path = p_path; }
+
+void Game::set_save_path(const godot::String& p_path) { 
+    if (p_path == save_path) return;
+    save_path = p_path; 
+    // emit_signal
+}
 godot::String Game::get_save_path() const { return save_path; }
-void Game::set_save_options(SaveOptions p_options) { save_options = p_options; }
+
+void Game::set_save_options(SaveOptions p_options) { 
+    if (p_options == save_options) return;
+    save_options = p_options; 
+}
 SaveOptions Game::get_save_options() const { return save_options; }
-void Game::set_max_save_files(int p_max) { max_save_files = p_max; }
+
+void Game::set_max_save_files(int p_max) { 
+    if (p_max == max_save_files) return;
+    max_save_files = p_max; 
+}
 int Game::get_max_save_files() const { return max_save_files; }
-void Game::set_load_options(LoadOptions p_options) { load_options = p_options; }
+
+void Game::set_load_options(LoadOptions p_options) { 
+    if (p_options == load_options) return;
+    load_options = p_options; 
+}
 LoadOptions Game::get_load_options() const { return load_options; }
-void Game::set_new_game_board(int p_board) { new_game_board = p_board; }
+
+void Game::set_new_game_board(int p_board) { 
+    if (p_board == new_game_board) return;
+    new_game_board = p_board; 
+    // emit_signal
+}
 int Game::get_new_game_board() const { return new_game_board; }
-void Game::set_unload_game_menu_scene_on_start(bool p_unload) { unload_game_menu_scene_on_start = p_unload; }
+
+void Game::set_unload_game_menu_scene_on_start(bool p_unload) { 
+    if (p_unload == unload_game_menu_scene_on_start) return;
+    unload_game_menu_scene_on_start = p_unload; 
+}
 bool Game::get_unload_game_menu_scene_on_start() const { return unload_game_menu_scene_on_start; }
-void Game::set_game_menu_scene(godot::Node* p_scene) { game_menu_scene = p_scene; }
+
+void Game::set_game_menu_scene(godot::Node* p_scene) { 
+    if (p_scene == game_menu_scene) return;
+    game_menu_scene = p_scene; 
+}
 godot::Node* Game::get_game_menu_scene() const { return game_menu_scene; }
-void Game::set_start_game_on_load(bool p_start) { start_game_on_load = p_start; }
+
+void Game::set_start_game_on_load(bool p_start) { 
+    if (p_start == start_game_on_load) return;
+    start_game_on_load = p_start; 
+}
 bool Game::get_start_game_on_load() const { return start_game_on_load; }
-void Game::set_game_board_paths(const godot::TypedArray<godot::String>& p_paths) { game_board_paths = p_paths; }
+
+void Game::set_game_board_paths(const godot::TypedArray<godot::String>& p_paths) { 
+    if (p_paths == game_board_paths) return;
+    game_board_paths = p_paths; 
+}
 godot::TypedArray<godot::String> Game::get_game_board_paths() const { return game_board_paths; }
-void Game::set_game_board_titles(const godot::TypedArray<godot::String>& p_titles) { game_board_titles = p_titles; }
+
+void Game::set_game_board_titles(const godot::TypedArray<godot::String>& p_titles) { 
+    if (p_titles == game_board_titles) return;
+    game_board_titles = p_titles; 
+}
 godot::TypedArray<godot::String> Game::get_game_board_titles() const { return game_board_titles; }
-void Game::set_maximum_interactions(int p_max) { maximum_interactions = p_max; }
+
+void Game::set_maximum_interactions(int p_max) { 
+    if (p_max == maximum_interactions) return;
+    maximum_interactions = p_max; 
+    // emit_signal
+}
 int Game::get_maximum_interactions() const { return maximum_interactions; }
-void Game::set_gameplay_style(const godot::Ref<GameplayStyle>& p_style) { gameplay_style = p_style; }
+
+void Game::set_gameplay_style(const godot::Ref<GameplayStyle>& p_style) { 
+    if (p_style == gameplay_style) return;
+    gameplay_style = p_style; 
+    // emit_signal
+}
 godot::Ref<GameplayStyle> Game::get_gameplay_style() const { return gameplay_style; }
 
-void Game::set_game_hub_ID(int p_id) { game_hub_ID = p_id; }
+void Game::set_game_hub_ID(int p_id) { 
+    if (p_id == game_hub_ID) return;
+    game_hub_ID = p_id; 
+}
 int Game::get_game_hub_ID() const { return game_hub_ID; }
 
 void Game::set_game_board_loader(SceneTransition* p_loader) {
@@ -266,6 +352,7 @@ void Game::set_game_board_loader(SceneTransition* p_loader) {
     if (_game_board_loader) {
         _connect_to_game_board_loader();
     }
+    // emit_signal
 }
 
 SceneTransition* Game::get_game_board_loader() const { return _game_board_loader; }

@@ -36,8 +36,8 @@ public:
     MemoryGrantResource() = default;
     ~MemoryGrantResource() = default;
 
-    void set_grant_name(const godot::StringName& p_name) { grant_name = p_name; }
-    godot::StringName get_grant_name() const { return grant_name; }
+    void set_grant_name(const godot::StringName& p_name);
+    godot::StringName get_grant_name() const;
 
     void set_capacity_mode(int p_mode);
     int get_capacity_mode() const;

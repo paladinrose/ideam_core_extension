@@ -26,20 +26,26 @@ void MemoryGraphNodeResource::_bind_methods() {
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "memory_grant", godot::PROPERTY_HINT_RESOURCE_TYPE, "MemoryGrantResource"), "set_memory_grant", "get_memory_grant");
 }
 
-void MemoryGraphNodeResource::set_type_id(uint32_t p_id) { type_id = p_id; }
+void MemoryGraphNodeResource::set_type_id(uint32_t p_id) { 
+    if (p_id == type_id) return;
+    type_id = p_id;
+    emit_changed();
+}
 uint32_t MemoryGraphNodeResource::get_type_id() const { return type_id; }
 
 void MemoryGraphNodeResource::set_derivation_mode(int p_mode) {
+    if (p_mode == derivation_mode) return;
     derivation_mode = static_cast<GrantDerivationMode>(p_mode);
+    emit_changed();
 }
 int MemoryGraphNodeResource::get_derivation_mode() const { return static_cast<int>(derivation_mode); }
 
-void MemoryGraphNodeResource::set_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) 
-{ 
+void MemoryGraphNodeResource::set_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
+    if (memory_grant == p_grant) return; 
     memory_grant = p_grant; 
-    godot::UtilityFunctions::print("MemoryGraphNodeResource: Memory grant set to ", memory_grant.is_valid() ? memory_grant->get_grant_name() : "null");
+    emit_changed();
+    //godot::UtilityFunctions::print("MemoryGraphNodeResource: Memory grant set to ", memory_grant.is_valid() ? memory_grant->get_grant_name() : "null");
 }
-
 godot::Ref<MemoryGrantResource> MemoryGraphNodeResource::get_memory_grant() const { return memory_grant; }
 
 bool MemoryGraphNodeResource::validate_for_compilation() const {

@@ -20,16 +20,28 @@ private:
 protected:
     static void _bind_methods();
 
+    godot::Ref<ManagedBufferProfile> meta_profile;
+    godot::Ref<ManagedBufferProfile> registry_profile;
+
     // Virtual pipeline override to inject MemoryGraph-specific utility footprints
-    virtual void _append_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const override;
-godot::Ref<MemoryGraphNodeResource> _get_node_by_name(const godot::StringName& p_name) const;
+    virtual void _ensure_managed_profiles() override;
+    virtual void _gather_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const override;
+
+    godot::Ref<MemoryGraphNodeResource> _get_node_by_name(const godot::StringName& p_name) const;
+
 public:
     MemoryGraphResource() = default;
     virtual ~MemoryGraphResource() override = default;
 
     void set_volatile_requirement_capacity(int p_cap);
-    int get_volatile_requirement_capacity() const { return volatile_requirement_capacity; }
+    int get_volatile_requirement_capacity() const;
 
+    void set_meta_profile(const godot::Ref<ManagedBufferProfile>& p_profile);
+    godot::Ref<ManagedBufferProfile> get_meta_profile() const;
+
+    void set_registry_profile(const godot::Ref<ManagedBufferProfile>& p_profile);
+    godot::Ref<ManagedBufferProfile> get_registry_profile() const;
+    
     std::shared_ptr<core::MemoryGraphDOD> compile_to_memory_graph(
         core::MemoryManagerDOD* p_manager, 
         godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const;

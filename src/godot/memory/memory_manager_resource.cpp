@@ -29,10 +29,11 @@ void MemoryManagerResource::_bind_methods() {
     ADD_PROPERTY(PropertyInfo(Variant::INT, "transient_capacity_mb"), "set_transient_capacity_mb", "get_transient_capacity_mb");
 
     ClassDB::bind_method(D_METHOD("register_consumer_buffers", "consumer", "profiles"), &MemoryManagerResource::register_consumer_buffers);
+    ClassDB::bind_method(D_METHOD("set_managed_profiles", "profiles"), &MemoryManagerResource::set_managed_profiles);
     ClassDB::bind_method(D_METHOD("get_managed_profiles"), &MemoryManagerResource::get_managed_profiles);
     ClassDB::bind_method(D_METHOD("get_total_projected_footprint_bytes"), &MemoryManagerResource::get_total_projected_footprint_bytes);
     
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "managed_profiles", PROPERTY_HINT_ARRAY_TYPE, "ManagedBufferProfile"), "", "get_managed_profiles");
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "managed_profiles", PROPERTY_HINT_ARRAY_TYPE, "ManagedBufferProfile"), "set_managed_profiles", "get_managed_profiles");
     
     ClassDB::bind_method(D_METHOD("get_projected_footprint_string"), &MemoryManagerResource::get_projected_footprint_string);
     ClassDB::bind_method(D_METHOD("buffer_contains_id", "buffer_id", "entity_id"), &MemoryManagerResource::buffer_contains_id);
@@ -79,14 +80,64 @@ godot::TypedArray<godot::StringName> MemoryManagerResource::get_selected_buffer_
     return names;
 }
 
-void MemoryManagerResource::register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferProfile>& p_profiles) {
-    for (int i = managed_profiles.size() - 1; i >= 0; i--) {
+std::shared_ptr<core::MemoryManagerDOD> MemoryManagerResource::get_backend() const { return backend_manager; }
+
+void MemoryManagerResource::set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) { 
+    if (p_schemas == buffer_schemas) return;
+    buffer_schemas = p_schemas;
+    emit_changed();
+}
+godot::TypedArray<MemoryBufferResource> MemoryManagerResource::get_buffer_schemas() const { return buffer_schemas; }
+
+void MemoryManagerResource::set_scaling_strategy(int p_strategy) { 
+    if (p_strategy == scaling_strategy) return;
+    scaling_strategy = static_cast<ScalabilityStrategy>(p_strategy); 
+    emit_changed();
+}
+int MemoryManagerResource::get_scaling_strategy() const { return scaling_strategy; }
+
+void MemoryManagerResource::set_transient_capacity_mb(int p_mb) { 
+    if (p_mb == transient_capacity_mb) return;
+    transient_capacity_mb = p_mb; 
+    emit_changed();
+}
+int MemoryManagerResource::get_transient_capacity_mb() const { return transient_capacity_mb; }
+
+
+void MemoryManagerResource::set_managed_profiles(const godot::TypedArray<ManagedBufferProfile>& p_profiles) { 
+    if (p_profiles == managed_profiles) return;
+    managed_profiles = p_profiles; 
+    emit_changed();
+}
+godot::TypedArray<ManagedBufferProfile> MemoryManagerResource::get_managed_profiles() const { return managed_profiles; }
+
+void MemoryManagerResource::set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants) { 
+    if (p_grants == active_emulated_grants) return;
+    active_emulated_grants = p_grants;
+    emit_changed(); 
+}
+godot::TypedArray<MemoryGrantResource> MemoryManagerResource::get_active_emulated_grants() const { return active_emulated_grants; }
+
+void MemoryManagerResource::clear_consumer_buffers(const godot::StringName& p_consumer) {
+    for (int i = managed_profiles.size() - 1; i >= 0; --i) {
         godot::Ref<ManagedBufferProfile> profile = managed_profiles[i];
-        if (profile.is_valid() && profile->get_consumer_name() == p_consumer) {
+        if (profile->get_consumer_name() == p_consumer) {
+            managed_profiles.remove_at(i);
+        }
+    }
+    
+    emit_changed();
+}
+
+void MemoryManagerResource::register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferProfile>& p_profiles) {
+    for (int i = managed_profiles.size() - 1; i >= 0; --i) {
+        godot::Ref<ManagedBufferProfile> profile = managed_profiles[i];
+        if (profile->get_consumer_name() == p_consumer) {
             managed_profiles.remove_at(i);
         }
     }
     managed_profiles.append_array(p_profiles);
+    
     emit_changed();
 }
 

@@ -40,21 +40,30 @@ public:
     void initialize_backend();
     bool is_initialized() const { return backend_manager != nullptr; }
     
-    std::shared_ptr<core::MemoryManagerDOD> get_backend() const { return backend_manager; }
+    
 
-    void set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) { buffer_schemas = p_schemas; }
-    godot::TypedArray<MemoryBufferResource> get_buffer_schemas() const { return buffer_schemas; }
     godot::TypedArray<godot::StringName> get_buffer_names() const;
     godot::TypedArray<godot::StringName> get_selected_buffer_names(const godot::PackedInt32Array& p_buffer_ids) const;
     
-    void set_scaling_strategy(int p_strategy) { scaling_strategy = static_cast<ScalabilityStrategy>(p_strategy); }
-    int get_scaling_strategy() const { return scaling_strategy; }
+    std::shared_ptr<core::MemoryManagerDOD> get_backend() const;
+    void set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas);
+    godot::TypedArray<MemoryBufferResource> get_buffer_schemas() const;
+    
+    void set_scaling_strategy(int p_strategy);
+    int get_scaling_strategy() const;
 
-    void set_transient_capacity_mb(int p_mb) { transient_capacity_mb = p_mb; }
-    int get_transient_capacity_mb() const { return transient_capacity_mb; }
+    void set_transient_capacity_mb(int p_mb);
+    int get_transient_capacity_mb() const;
 
+    void clear_consumer_buffers(const godot::StringName& p_consumer);
     void register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferProfile>& p_profiles);
-    godot::TypedArray<ManagedBufferProfile> get_managed_profiles() const { return managed_profiles; }
+    
+    void set_managed_profiles(const godot::TypedArray<ManagedBufferProfile>& p_profiles);
+    godot::TypedArray<ManagedBufferProfile> get_managed_profiles() const;
+    
+    void set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants);
+    godot::TypedArray<MemoryGrantResource> get_active_emulated_grants() const;
+
     int get_total_projected_footprint_bytes() const;
 
     godot::String get_projected_footprint_string() const;
@@ -67,9 +76,6 @@ public:
     void clear_all_emulated_grants();
     void recalculate_emulated_grants();
 
-    // Add the missing setter under your getters
-void set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants) { active_emulated_grants = p_grants; }
-    godot::TypedArray<MemoryGrantResource> get_active_emulated_grants() const { return active_emulated_grants; }
 };
 
 } // namespace ideam::godot_ext

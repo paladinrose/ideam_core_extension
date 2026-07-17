@@ -28,7 +28,9 @@ GameplayStyle::~GameplayStyle() {
 }
 
 void GameplayStyle::set_modes(const godot::TypedArray<GameplayMode> &p_modes) {
+    if (p_modes == modes) return;
     modes = p_modes;
+    emit_changed();
 }
 
 godot::TypedArray<GameplayMode> GameplayStyle::get_modes() const {

@@ -357,10 +357,20 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
         }
     }
 
-    // Push to the data blueprint (which should trigger a UI graph sync downstream)
-    current_blueprint->action_add_node(new_res);
-
     if (!drag_source_node.is_empty()) {
+        Node* source_node_base = get_node_or_null(NodePath(drag_source_node));
+        TaskGraphNode* source_task_node = Object::cast_to<TaskGraphNode>(source_node_base);
+        
+        if (source_task_node) {
+            Ref<TaskResource> task_res = source_task_node->get_task_node_resource();
+            if (task_res.is_valid()) {
+                Ref<MemoryGrantResource> grant_res = task_res->get_memory_grant();
+                if (grant_res.is_valid()) {
+                    new_res->set_memory_grant(grant_res); // Propagate the same grant to the new node
+                }
+            }
+        }
+
         godot::Dictionary edge;
         edge["from"] = drag_source_node;
         edge["from_port"] = drag_source_port;
@@ -382,6 +392,8 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
             queue_redraw();
         }
     }
+    // Push to the data blueprint (which should trigger a UI graph sync downstream)
+    current_blueprint->action_add_node(new_res);
 }
 
 IdeamGraphNode* TaskGraphEdit::_create_graph_node(const godot::Ref<IdeamGraphNodeResource>& p_node_res) {

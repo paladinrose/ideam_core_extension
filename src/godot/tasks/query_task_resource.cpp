@@ -22,41 +22,36 @@ void QueryTaskResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_type_id", "id"), &QueryTaskResource::set_type_id);
     godot::ClassDB::bind_method(godot::D_METHOD("get_type_id"), &QueryTaskResource::get_type_id);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "type_id"), "set_type_id", "get_type_id");
-
-    
+ 
 }
 
 void QueryTaskResource::set_op_id(int p_id) {
+    if (op_id == p_id) return;
     op_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int QueryTaskResource::get_op_id() const {
-    return static_cast<int>(op_id);
-}
+int QueryTaskResource::get_op_id() const { return static_cast<int>(op_id); }
 
 void QueryTaskResource::set_view_id(int p_id) {
+    if (p_id == view_id) return;
     view_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int QueryTaskResource::get_view_id() const {
-    return static_cast<int>(view_id);
-}
+int QueryTaskResource::get_view_id() const { return static_cast<int>(view_id); }
 
 void QueryTaskResource::set_strategy_id(int p_id) {
+    if (p_id == strategy_id) return;
     strategy_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int QueryTaskResource::get_strategy_id() const {
-    return static_cast<int>(strategy_id);
-}
+int QueryTaskResource::get_strategy_id() const { return static_cast<int>(strategy_id); }
 
 void QueryTaskResource::set_type_id(int p_id) {
+    if (p_id == type_id) return;
     type_id = static_cast<uint32_t>(p_id);
+    emit_changed();
 }
-
-int QueryTaskResource::get_type_id() const {
-    return static_cast<int>(type_id);
-}
+int QueryTaskResource::get_type_id() const { return static_cast<int>(type_id); }
 
 
 } // namespace ideam::godot_ext

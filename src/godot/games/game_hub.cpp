@@ -24,22 +24,27 @@ void GameHub::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_paths", "paths"), &GameHub::set_game_paths);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_paths"), &GameHub::get_game_paths);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::ARRAY, "game_paths", godot::PROPERTY_HINT_ARRAY_TYPE, "String"), "set_game_paths", "get_game_paths");
+    ADD_SIGNAL(godot::MethodInfo("game_paths_changed", godot::PropertyInfo(godot::Variant::ARRAY, "game_paths", godot::PROPERTY_HINT_ARRAY_TYPE, "String")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_titles", "titles"), &GameHub::set_game_titles);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_titles"), &GameHub::get_game_titles);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::ARRAY, "game_titles", godot::PROPERTY_HINT_ARRAY_TYPE, "String"), "set_game_titles", "get_game_titles");
+    ADD_SIGNAL(godot::MethodInfo("game_titles_changed", godot::PropertyInfo(godot::Variant::ARRAY, "game_titles", godot::PROPERTY_HINT_ARRAY_TYPE, "String")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_startup_game", "startup_game"), &GameHub::set_startup_game);
     godot::ClassDB::bind_method(godot::D_METHOD("get_startup_game"), &GameHub::get_startup_game);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "startup_game"), "set_startup_game", "get_startup_game");
+    ADD_SIGNAL(godot::MethodInfo("startup_game_changed", godot::PropertyInfo(godot::Variant::INT, "startup_game")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_game_loader", "loader"), &GameHub::set_game_loader);
     godot::ClassDB::bind_method(godot::D_METHOD("get_game_loader"), &GameHub::get_game_loader);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "game_loader", godot::PROPERTY_HINT_NODE_TYPE, "SceneTransition"), "set_game_loader", "get_game_loader");
+    ADD_SIGNAL(godot::MethodInfo("game_loader_changed", godot::PropertyInfo(godot::Variant::OBJECT, "game_loader", godot::PROPERTY_HINT_NODE_TYPE, "SceneTransition")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_hub_scene", "scene"), &GameHub::set_hub_scene);
     godot::ClassDB::bind_method(godot::D_METHOD("get_hub_scene"), &GameHub::get_hub_scene);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "hub_scene", godot::PROPERTY_HINT_NODE_TYPE, "Node"), "set_hub_scene", "get_hub_scene");
+    ADD_SIGNAL(godot::MethodInfo("hub_scene_changed", godot::PropertyInfo(godot::Variant::OBJECT, "hub_scene", godot::PROPERTY_HINT_NODE_TYPE, "Node")));
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_disable_hub_scene_on_game_load", "disable"), &GameHub::set_disable_hub_scene_on_game_load);
     godot::ClassDB::bind_method(godot::D_METHOD("get_disable_hub_scene_on_game_load"), &GameHub::get_disable_hub_scene_on_game_load);
@@ -104,13 +109,25 @@ void GameHub::_notification(int p_what) {
 }
 
 // Property Implementations
-void GameHub::set_game_paths(const godot::TypedArray<godot::String>& p_paths) { game_paths = p_paths; }
+void GameHub::set_game_paths(const godot::TypedArray<godot::String>& p_paths) { 
+    if (game_paths == p_paths) return;
+    game_paths = p_paths; 
+    emit_signal("game_paths_changed", game_paths);
+}
 godot::TypedArray<godot::String> GameHub::get_game_paths() const { return game_paths; }
 
-void GameHub::set_game_titles(const godot::TypedArray<godot::String>& p_titles) { game_titles = p_titles; }
+void GameHub::set_game_titles(const godot::TypedArray<godot::String>& p_titles) { 
+    if (game_titles == p_titles) return;
+    game_titles = p_titles; 
+    emit_signal("game_titles_changed", game_titles);
+}
 godot::TypedArray<godot::String> GameHub::get_game_titles() const { return game_titles; }
 
-void GameHub::set_startup_game(int p_startup) { startup_game = p_startup; }
+void GameHub::set_startup_game(int p_startup) { 
+    if (startup_game == p_startup) return;
+    startup_game = p_startup; 
+    emit_signal("startup_game_changed", startup_game);
+}
 int GameHub::get_startup_game() const { return startup_game; }
 
 void GameHub::set_game_loader(SceneTransition* p_loader) {
@@ -130,13 +147,21 @@ void GameHub::set_game_loader(SceneTransition* p_loader) {
     if (_game_loader) {
         _connect_to_game_loader();
     }
+    emit_signal("game_loader_changed", _game_loader);
 }
 SceneTransition* GameHub::get_game_loader() const { return _game_loader; }
 
-void GameHub::set_hub_scene(godot::Node* p_scene) { hub_scene = p_scene; }
+void GameHub::set_hub_scene(godot::Node* p_scene) { 
+    if (hub_scene == p_scene) return;
+    hub_scene = p_scene; 
+    emit_signal("hub_scene_changed", hub_scene);
+}
 godot::Node* GameHub::get_hub_scene() const { return hub_scene; }
 
-void GameHub::set_disable_hub_scene_on_game_load(bool p_disable) { disable_hub_scene_on_game_load = p_disable; }
+void GameHub::set_disable_hub_scene_on_game_load(bool p_disable) { 
+    if (disable_hub_scene_on_game_load == p_disable) return;
+    disable_hub_scene_on_game_load = p_disable; 
+}
 bool GameHub::get_disable_hub_scene_on_game_load() const { return disable_hub_scene_on_game_load; }
 
 godot::Dictionary GameHub::get_loaded_games() const { 

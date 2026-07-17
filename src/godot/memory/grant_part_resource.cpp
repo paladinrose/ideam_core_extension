@@ -45,22 +45,61 @@ void GrantPartResource::_bind_methods() {
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_contiguous"), "set_is_contiguous", "get_is_contiguous");
 }
 
-void GrantPartResource::set_buffer_id(int p_id) { buffer_id = static_cast<uint32_t>(p_id); }
+void GrantPartResource::set_buffer_id(int p_id) { 
+    if (buffer_id == static_cast<uint32_t>(p_id)) return;
+    buffer_id = static_cast<uint32_t>(p_id); 
+    emit_changed();
+}
 int GrantPartResource::get_buffer_id() const { return static_cast<int>(buffer_id); }
 
-void GrantPartResource::set_element_stride(int p_stride) { element_stride = static_cast<uint32_t>(p_stride); }
+void GrantPartResource::set_element_stride(int p_stride) { 
+    if (element_stride == static_cast<uint32_t>(p_stride)) return;
+    element_stride = static_cast<uint32_t>(p_stride); 
+    emit_changed();
+}
 int GrantPartResource::get_element_stride() const { return static_cast<int>(element_stride); }
 
-void GrantPartResource::set_column_id(int p_id) { column_id = static_cast<uint32_t>(p_id); }
+void GrantPartResource::set_column_id(int p_id) { 
+    if (column_id == static_cast<uint32_t>(p_id)) return;
+    column_id = static_cast<uint32_t>(p_id); 
+    emit_changed();
+}
 int GrantPartResource::get_column_id() const { return static_cast<int>(column_id); }
 
-void GrantPartResource::set_buffer_type(int p_type) { buffer_type = static_cast<uint32_t>(p_type); }
+void GrantPartResource::set_buffer_type(int p_type) { 
+    if (buffer_type == static_cast<uint32_t>(p_type)) return;
+    buffer_type = static_cast<uint32_t>(p_type);
+    emit_changed();
+}
 int GrantPartResource::get_buffer_type() const { return static_cast<int>(buffer_type);}
 
-void GrantPartResource::set_access_mode(int p_mode) { access_mode = p_mode; }
+void GrantPartResource::set_access_mode(int p_mode) { 
+    if (access_mode == p_mode) return;
+    access_mode = p_mode; 
+    emit_changed();
+}
 int GrantPartResource::get_access_mode() const { return access_mode; }
 
-void GrantPartResource::set_is_contiguous(bool p_contiguous) { is_contiguous = p_contiguous; }
+void GrantPartResource::set_is_contiguous(bool p_contiguous) { 
+    if (is_contiguous == p_contiguous) return;
+    is_contiguous = p_contiguous; 
+    emit_changed();
+}
 bool GrantPartResource::get_is_contiguous() const { return is_contiguous; }
+
+void GrantPartResource::set_target_buffer_name(const godot::StringName& p_name) {
+    if (p_name == target_buffer_name) return;
+    target_buffer_name = p_name; 
+    emit_changed();
+}
+godot::StringName GrantPartResource::get_target_buffer_name() const { return target_buffer_name; }
+
+void GrantPartResource::set_target_column_name(const godot::StringName& p_name) {
+    if (target_column_name == p_name) return;
+    target_column_name = p_name; 
+    emit_changed();
+}
+godot::StringName GrantPartResource::get_target_column_name() const { return target_column_name; }
+
 
 } // namespace ideam::godot_ext
