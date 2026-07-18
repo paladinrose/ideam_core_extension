@@ -392,7 +392,7 @@ void TaskGraphEdit::_spawn_node_by_type(int p_type_id) {
             queue_redraw();
         }
     }
-    // Push to the data blueprint (which should trigger a UI graph sync downstream)
+    
     current_blueprint->action_add_node(new_res);
 }
 

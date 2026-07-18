@@ -28,6 +28,7 @@ void IdeamGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_node_resource"), &IdeamGraphNode::get_node_resource);
     ClassDB::bind_method(D_METHOD("get_blueprint_id"), &IdeamGraphNode::get_blueprint_id);
     
+    ClassDB::bind_method(D_METHOD("_on_lock_toggled"), &IdeamGraphNode::_on_lock_toggled);
     ClassDB::bind_method(D_METHOD("set_locked", "locked"), &IdeamGraphNode::set_locked);
     ClassDB::bind_method(D_METHOD("get_locked"), &IdeamGraphNode::get_locked);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "locked"), "set_locked", "get_locked");
@@ -35,18 +36,15 @@ void IdeamGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_error_state", "error"), &IdeamGraphNode::set_error_state);
     ClassDB::bind_method(D_METHOD("get_error_state"), &IdeamGraphNode::get_error_state);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "error_state"), "set_error_state", "get_error_state");
-    // ADD_SIGNAL
+
 
     ClassDB::bind_method(D_METHOD("set_context_hover", "hovered"), &IdeamGraphNode::set_context_hover);
     ClassDB::bind_method(D_METHOD("get_context_hover"), &IdeamGraphNode::get_context_hover);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "context_hover"), "set_context_hover", "get_context_hover");
-    // ADD_SIGNAL? Leaning against.
 
     ClassDB::bind_method(D_METHOD("receive_connection_info", "info"), &IdeamGraphNode::receive_connection_info);
     ClassDB::bind_method(D_METHOD("request_connections"), &IdeamGraphNode::request_connections);
 
-    // Register as Godot Properties
-    
     
 }
 
@@ -77,16 +75,11 @@ void IdeamGraphNode::_update_theme_properties() {
     for (const auto& pair : right_port_states) {
         update_port_state(pair.first, false, pair.second);
     }
-    
-    if (is_locked_state) {
-        Ref<StyleBox> locked_sb = get_theme_stylebox("panel_locked", "GraphNode");
-        add_theme_stylebox_override("panel", locked_sb);
-    } else {
-        remove_theme_stylebox_override("panel");
+
+    if (lock_btn) {
+        lock_btn->set_button_icon(get_theme_icon(is_locked_state ? "node_locked" : "node_unlocked", "GraphNode"));
     }
     
-    lock_btn->set_button_icon(get_theme_icon(is_locked_state ? "node_locked" : "node_unlocked", "GraphNode"));
-
 }
 
 void IdeamGraphNode::_gui_input(const Ref<InputEvent> &p_event) {
@@ -140,14 +133,23 @@ void IdeamGraphNode::_on_lock_toggled() {
 
 void IdeamGraphNode::set_locked(bool p_locked) {
     if (is_locked_state == p_locked) return;
+    
     is_locked_state = p_locked;
-
-    if (lock_btn) {
-        lock_btn->set_button_icon(get_theme_icon(is_locked_state ? "node_locked" : "node_unlocked", "GraphNode"));
-    }
     
     _set_controls_disabled(this, is_locked_state);
     
+    if (is_locked_state) {
+        Ref<StyleBox> locked_sb = get_theme_stylebox("panel_locked", "GraphNode");
+        add_theme_stylebox_override("panel", locked_sb);
+    } else {
+        remove_theme_stylebox_override("panel");
+    }
+    
+    if (lock_btn) {
+        lock_btn->set_button_icon(get_theme_icon(is_locked_state ? "node_locked" : "node_unlocked", "GraphNode"));
+        
+    }
+
     // Explicitly notify Godot to trigger our circuit-broken pipeline
     notification(NOTIFICATION_THEME_CHANGED); 
 }
@@ -249,6 +251,10 @@ void IdeamGraphNode::receive_connection_info(const godot::Dictionary& p_info) {
 }
 
 void IdeamGraphNode::_set_controls_disabled(Node* p_node, bool p_disabled) {
+    if (p_node == lock_btn || p_node == badge_container) {
+        return; 
+    }
+    
     Control* control = Object::cast_to<Control>(p_node);
     if (control && control != this) {
         control->set_mouse_filter(p_disabled ? Control::MOUSE_FILTER_IGNORE : Control::MOUSE_FILTER_STOP);

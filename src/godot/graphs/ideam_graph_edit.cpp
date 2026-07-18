@@ -323,10 +323,9 @@ void IdeamGraphEdit::_on_blueprint_changed() {
             ign = _create_graph_node(n_res);
             
             if (ign) {
+                ign->initialize(n_res);
                 add_child(ign);
                 ign->set_theme(get_theme());
-                ign->initialize(n_res);
-                
             }
         }
         
