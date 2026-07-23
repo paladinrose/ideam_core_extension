@@ -15,8 +15,9 @@ private:
     static constexpr std::string_view MEMORY_SETTINGS_PATH = "res://addons/ideam_memory/resources/project_memory_settings.res";
 
     // Inspector for Memory resources (BufferPODs, GrantPODs)
-    godot::Ref<godot::EditorInspectorPlugin> memory_inspector;
-
+    godot::Ref<godot::EditorInspectorPlugin> memory_graph_inspector;
+    godot::Ref<godot::EditorInspectorPlugin> memory_manager_inspector;
+    
 protected:
     static void _bind_methods();
 

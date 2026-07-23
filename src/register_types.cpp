@@ -10,8 +10,11 @@
 
 // --- Controls ---
 #include "godot/controls/runtime_inspector.h"
+#include "godot/controls/boolean_heatmap_grid.h"
+#include "godot/controls/circular_gauge.h"
+#include "godot/controls/selection_list.h"
 
-// --- Graph UI & Editor ---
+// --- Graphs ---
 #include "godot/graphs/ideam_graphs_plugin.h"
 
 #include "godot/graphs/ideam_graph_resource.h"
@@ -23,23 +26,35 @@
 #include "godot/graphs/graph_composer.h"
 #include "godot/graphs/theme_registry.h"
 
-// --- Memory UI & Editor ---
+// --- Memory ---
 #include "godot/memory/ideam_memory_plugin.h"
 
-#include "godot/memory/memory_graph_edit.h"
-#include "godot/memory/memory_graph_node.h"
-#include "godot/memory/memory_graph_inspector.h"
-#include "godot/memory/memory_inspectors.h"
-#include "godot/memory/memory_buffer_resource.h"
-#include "godot/memory/managed_buffer_profile.h"
 #include "godot/memory/memory_manager_resource.h"
-#include "godot/memory/memory_graph_resource.h"
-#include "godot/memory/memory_graph_node_resource.h"
+#include "godot/memory/memory_profiler.h"
+#include "godot/memory/memory_ribbon.h"
+#include "godot/memory/memory_manager_inspector.h"
+
+#include "godot/memory/managed_buffer_profile.h"
+
+#include "godot/memory/memory_buffer_resource.h"
+#include "godot/memory/memory_buffer_view.h"
+#include "godot/memory/aos_visualizer.h"
+#include "godot/memory/memory_page_grid.h"
+#include "godot/memory/soa_visualizer.h"
+
 #include "godot/memory/memory_grant_resource.h"
 #include "godot/memory/grant_part_resource.h"
 #include "godot/memory/grant_request_window.h"
+#include "godot/memory/memory_inspectors.h"
 
-// --- Tasks UI & Editor ---
+#include "godot/memory/memory_graph_resource.h"
+#include "godot/memory/memory_graph_edit.h"
+#include "godot/memory/memory_graph_inspector.h"
+
+#include "godot/memory/memory_graph_node_resource.h"
+#include "godot/memory/memory_graph_node.h"
+
+// --- Tasks ---
 #include "godot/tasks/ideam_tasks_plugin.h"
 
 #include "godot/tasks/task_graph_resource.h"
@@ -70,7 +85,7 @@
 #include "core/tasks/registration/task_manifest.h"
 
 
-// --- Narratives Plugin ---
+// --- Narratives ---
 #include "godot/narratives/narreme.h"
 #include "godot/narratives/narremes/character.h"
 #include "godot/narratives/narremes/location.h"
@@ -133,7 +148,10 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         
         // --- Controls ---
         GDREGISTER_CLASS(ideam::godot_ext::RuntimeInspector);
-        
+        GDREGISTER_CLASS(ideam::godot_ext::CircularGauge);
+        GDREGISTER_CLASS(ideam::godot_ext::BooleanHeatmapGrid);
+        GDREGISTER_CLASS(ideam::godot_ext::SelectionList);
+
         // --- Graphs ---
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
@@ -150,11 +168,22 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphEdit);
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNode);
 
-        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
-        GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
         GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryProfiler);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryRibbon);
+
+        GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
+
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferView);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryPageGrid);
+        GDREGISTER_CLASS(ideam::godot_ext::AoSVisualizer);
+        GDREGISTER_CLASS(ideam::godot_ext::SoAVisualizer);
+
         GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantResource);
         GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantInspector);
+        GDREGISTER_CLASS(ideam::godot_ext::MemorySelectionInspector);
         GDREGISTER_CLASS(ideam::godot_ext::GrantRequestWindow);
         
         // --- Tasks ---
@@ -242,6 +271,7 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
 
         // Memory tooling
         GDREGISTER_CLASS(ideam::godot_ext::MemoryGraphInspector);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerInspector);
         GDREGISTER_CLASS(ideam::godot_ext::IdeamMemoryPlugin);
 
         // Tasks tooling

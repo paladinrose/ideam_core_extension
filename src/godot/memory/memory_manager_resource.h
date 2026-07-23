@@ -40,8 +40,6 @@ public:
     void initialize_backend();
     bool is_initialized() const { return backend_manager != nullptr; }
     
-    
-
     godot::TypedArray<godot::StringName> get_buffer_names() const;
     godot::TypedArray<godot::StringName> get_selected_buffer_names(const godot::PackedInt32Array& p_buffer_ids) const;
     
@@ -76,6 +74,7 @@ public:
     void clear_all_emulated_grants();
     void recalculate_emulated_grants();
 
+    void serialize_subresources_to_disk();
 };
 
 } // namespace ideam::godot_ext

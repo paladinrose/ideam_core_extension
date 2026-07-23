@@ -1,5 +1,6 @@
 #include "ideam_memory_plugin.h"
 #include "memory_graph_inspector.h"
+#include "memory_manager_inspector.h"
 
 #include <godot_cpp/classes/editor_interface.hpp>
 #include <godot_cpp/classes/editor_undo_redo_manager.hpp>
@@ -36,15 +37,23 @@ void IdeamMemoryPlugin::_enter_tree() {
     register_to_ecosystem("WizardSettings", "IdeamMemory", String(MEMORY_SETTINGS_PATH.data()));
 
     // Instantiate and register the Inspector UI for Memory Resources
+    
     // This allows us to inspect MemoryBufferPODs and MemoryGrantPODs in the editor
-    memory_inspector = Ref<MemoryGraphInspector>(memnew(MemoryGraphInspector));
-    add_inspector_plugin(memory_inspector);
+    memory_graph_inspector = Ref<MemoryGraphInspector>(memnew(MemoryGraphInspector));
+    add_inspector_plugin(memory_graph_inspector);
+    
+    //This allows direct access in the editor to the MemoryProfiler. 
+    memory_manager_inspector = Ref<MemoryManagerInspector>(memnew(MemoryManagerInspector));
+    add_inspector_plugin(memory_manager_inspector);
+    
 }
 
 void IdeamMemoryPlugin::_exit_tree() {
     // Clean teardown of the inspector plugin
-    remove_inspector_plugin(memory_inspector);
+    remove_inspector_plugin(memory_graph_inspector);
 
+    remove_inspector_plugin(memory_manager_inspector);
+    
     // Handshake: Remove plugin from active roster
     set_plugin_active("IdeamMemory", false);
 }

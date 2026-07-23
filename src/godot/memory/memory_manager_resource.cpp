@@ -4,6 +4,10 @@
 
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/os.hpp>
+#include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/dir_access.hpp>
+#include <godot_cpp/classes/resource_saver.hpp>
+
 #include <map>
 #include <vector>
 
@@ -29,6 +33,7 @@ void MemoryManagerResource::_bind_methods() {
     ADD_PROPERTY(PropertyInfo(Variant::INT, "transient_capacity_mb"), "set_transient_capacity_mb", "get_transient_capacity_mb");
 
     ClassDB::bind_method(D_METHOD("register_consumer_buffers", "consumer", "profiles"), &MemoryManagerResource::register_consumer_buffers);
+    ClassDB::bind_method(D_METHOD("clear_consumer_buffers", "consumer"), &MemoryManagerResource::clear_consumer_buffers);
     ClassDB::bind_method(D_METHOD("set_managed_profiles", "profiles"), &MemoryManagerResource::set_managed_profiles);
     ClassDB::bind_method(D_METHOD("get_managed_profiles"), &MemoryManagerResource::get_managed_profiles);
     ClassDB::bind_method(D_METHOD("get_total_projected_footprint_bytes"), &MemoryManagerResource::get_total_projected_footprint_bytes);
@@ -259,10 +264,6 @@ void MemoryManagerResource::initialize_backend() {
             backend_manager->configure_buffer_columns(buffer_id, core_columns);
         }
     }
-
-    // Note: Graph utility buffers are requested independently by the specific GraphDOD 
-    // constructors using backend_manager->create_buffer(), but we guaranteed the space 
-    // mathematically during get_total_projected_footprint_bytes().
 }
 
 godot::String MemoryManagerResource::get_projected_footprint_string() const {
@@ -353,6 +354,7 @@ godot::Ref<MemoryGrantResource> MemoryManagerResource::request_emulated_grant(co
         return Ref<MemoryGrantResource>();
     }
 
+    emit_changed();
     // Success! Return the fully established, validated configuration token
     return new_grant;
 }
@@ -361,15 +363,18 @@ void MemoryManagerResource::release_emulated_grant(const godot::Ref<MemoryGrantR
     if (!p_grant.is_valid()) return;
     
     int index = active_emulated_grants.find(p_grant);
-    if (index != -1) {
-        active_emulated_grants.remove_at(index);
-    }
+    if (index == -1) return;
+
+    active_emulated_grants.remove_at(index);
     recalculate_emulated_grants();
+    emit_changed();
+    
 }
 
 void MemoryManagerResource::clear_all_emulated_grants() {
     active_emulated_grants.clear();
     recalculate_emulated_grants();
+    emit_changed();
 }
 
 void MemoryManagerResource::recalculate_emulated_grants() {
@@ -509,6 +514,73 @@ void MemoryManagerResource::recalculate_emulated_grants() {
             }
         }
     }
+}
+
+void MemoryManagerResource::serialize_subresources_to_disk() {
+    // 1. Ensure we only execute this logic inside the Godot editor
+    if (!godot::Engine::get_singleton()->is_editor_hint()) {
+        return;
+    }
+
+    // 2. Get the current path of the MemoryManagerResource
+    godot::String current_path = get_path();
+    if (current_path.is_empty() || !current_path.begins_with("res://")) {
+        // The manager itself hasn't been saved to disk yet.
+        // It must be saved first so we know where to create the sub-folder.
+        return; 
+    }
+
+    // 3. Determine folder name and create it if it doesn't exist
+    godot::String base_dir = current_path.get_base_dir();
+    godot::String manager_name = get_name();
+    if (manager_name.is_empty()) {
+        manager_name = current_path.get_file().get_basename();
+    }
+    
+    godot::String target_folder = base_dir.path_join(manager_name + "_Assets");
+
+    godot::Ref<godot::DirAccess> dir = godot::DirAccess::open(base_dir);
+    if (dir.is_valid() && !dir->dir_exists(target_folder)) {
+        dir->make_dir(target_folder);
+    }
+
+    // 4. Lambda helper to save individual resources
+    auto save_resource = [&](godot::Ref<godot::Resource> res, const godot::String& prefix, int index) {
+        if (!res.is_valid()) return;
+        
+        // Use the resource's name if it has one, otherwise generate a fallback name
+        godot::String res_name = res->get_name();
+        if (res_name.is_empty()) {
+            res_name = prefix + godot::String("_") + godot::String::num_int64(index);
+        }
+        
+        // Construct the final path
+        godot::String save_path = target_folder.path_join(res_name + ".tres");
+        
+        // Save to disk
+        godot::ResourceSaver::get_singleton()->save(res, save_path);
+        
+        // Update the resource's internal path so Godot knows it's now an external file
+        res->set_path(save_path);
+    };
+
+    // 5. Iterate through your arrays and save the sub-resources
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        save_resource(buffer_schemas[i], "BufferSchema", i);
+    }
+
+    for (int i = 0; i < managed_profiles.size(); ++i) {
+        save_resource(managed_profiles[i], "ManagedProfile", i);
+    }
+
+    for (int i = 0; i < active_emulated_grants.size(); ++i) {
+        save_resource(active_emulated_grants[i], "MemoryGrant", i);
+    }
+    
+    // 6. Resave the MemoryManagerResource itself
+    // This updates the manager's serialized data to point to the newly created external .tres files
+    // instead of embedding them.
+    godot::ResourceSaver::get_singleton()->save(this, current_path);
 }
 
 } // namespace ideam::godot_ext
