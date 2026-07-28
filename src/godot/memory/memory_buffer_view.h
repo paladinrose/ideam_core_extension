@@ -11,7 +11,7 @@
 #include "memory_page_grid.h"
 
 #include "../controls/circular_gauge.h"
-#include "../controls/boolean_heatmap_grid.h"
+#include "../controls/heatmap_grid.h"
 
 namespace ideam::godot_ext {
 
@@ -28,7 +28,7 @@ private:
     void _build_view();
 
     void _setup_ring_buffer_gauge(CircularGauge* p_gauge);
-    void _setup_selection_bitset_grid(BooleanHeatmapGrid* p_grid);
+    void _setup_selection_bitset_grid(HeatmapGrid* p_grid);
 
 protected:
     static void _bind_methods();

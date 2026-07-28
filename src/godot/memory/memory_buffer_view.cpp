@@ -110,7 +110,7 @@ void MemoryBufferView::_build_view() {
     // 2. Anti-Grant / Selection Bitset Grid Visualization
     if (active_buffer->get_enable_shadowing()) {
         // Swap out the imaginary class for our generic heatmap grid
-        BooleanHeatmapGrid* bitset_grid = memnew(BooleanHeatmapGrid);
+        HeatmapGrid* bitset_grid = memnew(HeatmapGrid);
         
         _setup_selection_bitset_grid(bitset_grid); 
         
@@ -144,11 +144,9 @@ void MemoryBufferView::_setup_ring_buffer_gauge(CircularGauge* p_gauge) {
     p_gauge->set_is_overflowing(false);
 }
 
-void MemoryBufferView::_setup_selection_bitset_grid(BooleanHeatmapGrid* p_grid) {
+void MemoryBufferView::_setup_selection_bitset_grid(HeatmapGrid* p_grid) {
     if (!active_buffer.is_valid() || !p_grid) return;
 
-    // Expand horizontally, but you might want to control vertical expansion 
-    // depending on how much screen real estate the primary layout visualizer takes up.
     p_grid->set_h_size_flags(SIZE_EXPAND_FILL);
     p_grid->set_v_size_flags(SIZE_EXPAND_FILL); 
 

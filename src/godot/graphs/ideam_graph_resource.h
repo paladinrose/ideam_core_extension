@@ -38,14 +38,14 @@ private:
 protected:
     static void _bind_methods();
 
-    godot::Ref<ManagedBufferProfile> node_profile;
-    godot::Ref<ManagedBufferProfile> edge_profile;
+    godot::Ref<ManagedBufferResource> node_buffer;
+    godot::Ref<ManagedBufferResource> edge_buffer;
     // Child classes (MemoryGraphResource, TaskGraphResource) 
-    // will override this, call Super::_ensure_managed_profiles(), 
+    // will override this, call Super::_ensure_managed_buffers(), 
     // and then push their own specific utility profiles.
-    virtual void _ensure_managed_profiles();
+    virtual void _ensure_managed_buffers();
 
-    virtual void _gather_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const;
+    virtual void _gather_managed_buffers(godot::TypedArray<ManagedBufferResource>& r_buffers) const;
 
     /**
      * @brief Resolves the incoming dependencies for a given node.
@@ -93,14 +93,14 @@ public:
     godot::Object* get_undo_redo() const { return undo_redo; }
 
     // --- Handshake Orchestration ---
-    void set_node_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { node_profile = p_profile; emit_changed(); }
-    godot::Ref<ManagedBufferProfile> get_node_profile() const { return node_profile; }
+    void set_node_buffer(const godot::Ref<ManagedBufferResource>& p_buffer) { node_buffer = p_buffer; emit_changed(); }
+    godot::Ref<ManagedBufferResource> get_node_buffer() const { return node_buffer; }
 
-    void set_edge_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { edge_profile = p_profile; emit_changed(); }
-    godot::Ref<ManagedBufferProfile> get_edge_profile() const { return edge_profile; }
+    void set_edge_buffer(const godot::Ref<ManagedBufferResource>& p_buffer) { edge_buffer = p_buffer; emit_changed(); }
+    godot::Ref<ManagedBufferResource> get_edge_buffer() const { return edge_buffer; }
    
-    void queue_update_managed_profiles();
-    void update_managed_profiles();
+    void queue_update_managed_buffers();
+    void update_managed_buffers();
 
     // --- Tier 1: Action Routers (Called by UI) ---
     void action_add_node(const godot::Ref<IdeamGraphNodeResource>& p_node);

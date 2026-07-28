@@ -22,13 +22,13 @@ private:
 protected:
     static void _bind_methods();
     
-    godot::Ref<ManagedBufferProfile> exec_profile;
-    godot::Ref<ManagedBufferProfile> cmd_arena_profile;
-    godot::Ref<ManagedBufferProfile> sel_arena_profile;
+    godot::Ref<ManagedBufferResource> exec_buffer;
+    godot::Ref<ManagedBufferResource> cmd_arena_buffer;
+    godot::Ref<ManagedBufferResource> sel_arena_buffer;
     
     // Virtual pipeline overrides
-    virtual void _ensure_managed_profiles() override;
-    virtual void _gather_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const override;
+    virtual void _ensure_managed_buffers() override;
+    virtual void _gather_managed_buffers(godot::TypedArray<ManagedBufferResource>& r_managed_buffers) const override;
 
 public:
     TaskGraphResource() = default;
@@ -41,14 +41,14 @@ public:
     int get_selection_queue_capacity_elements() const;
 
     // --- Explicit Profile Getters/Setters ---
-    void set_exec_profile(const godot::Ref<ManagedBufferProfile>& p_profile);
-    godot::Ref<ManagedBufferProfile> get_exec_profile() const;
+    void set_exec_buffer(const godot::Ref<ManagedBufferResource>& p_buffer);
+    godot::Ref<ManagedBufferResource> get_exec_buffer() const;
 
-    void set_cmd_arena_profile(const godot::Ref<ManagedBufferProfile>& p_profile);
-    godot::Ref<ManagedBufferProfile> get_cmd_arena_profile() const;
+    void set_cmd_arena_buffer(const godot::Ref<ManagedBufferResource>& p_buffer);
+    godot::Ref<ManagedBufferResource> get_cmd_arena_buffer() const;
 
-    void set_sel_arena_profile(const godot::Ref<ManagedBufferProfile>& p_profile);
-    godot::Ref<ManagedBufferProfile> get_sel_arena_profile() const;
+    void set_sel_arena_buffer(const godot::Ref<ManagedBufferResource>& p_buffer);
+    godot::Ref<ManagedBufferResource> get_sel_arena_buffer() const;
 
     std::shared_ptr<core::TaskGraphDOD> compile_to_task_graph(
         core::MemoryManagerDOD* p_manager, 

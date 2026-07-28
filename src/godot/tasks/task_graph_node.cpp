@@ -38,6 +38,8 @@ StringName TaskGraphNode::get_task_name() const {
 void TaskGraphNode::_build_ui() {
     MemoryGraphNode::_build_ui(); // Generates ports and base states
 
+    set_resizable(true);
+    
     task_type_badge = memnew(godot::TextureRect);
     task_type_badge->set_name("TaskTypeBadge");
     add_badge(task_type_badge);
@@ -56,13 +58,21 @@ void TaskGraphNode::_build_ui() {
     add_child(task_type_label);
 
     // 2. Dynamic UI Container Setup
+    custom_parameters_scroll = memnew(ScrollContainer);
+    custom_parameters_scroll->set_custom_minimum_size(Vector2(0, 25));
+    custom_parameters_scroll->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    add_child(custom_parameters_scroll);
+
     custom_parameters_container = memnew(VBoxContainer);
     custom_parameters_container->set_name("CustomParameters");
-    add_child(custom_parameters_container);
+    custom_parameters_container->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    custom_parameters_scroll->add_child(custom_parameters_container);
 
     // 3. Logic Inspector Setup (Persistent parameter controls)
     logic_inspector = memnew(RuntimeInspector);
     logic_inspector->set_name("LogicInspector");
+    logic_inspector->set_custom_minimum_size(Vector2(0, 25));
+    logic_inspector->set_h_size_flags(Control::SIZE_EXPAND_FILL);
     add_child(logic_inspector);
     
     // Route the inspector's mutations up to the graph resource

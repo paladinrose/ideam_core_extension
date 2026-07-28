@@ -19,6 +19,7 @@ enum class TransformLogicID : uint32_t {
     EulerIntegration,
     FastNoiseLite,
     NoiseInjection,
+    PackedArrayExport,
     Stencil_Moore_R1,
     Stencil_Moore_R2,
     Stencil_Moore_R3,

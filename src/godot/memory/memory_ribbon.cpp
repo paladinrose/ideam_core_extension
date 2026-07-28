@@ -77,7 +77,15 @@ void MemoryRibbon::_build_ribbon() {
         return;
     }
 
-    // 1. Map Memory Buffer Resources[cite: 7, 8]
+    // Determine the global capacity to calculate percentages[cite: 3, 4]
+    float total_bytes = static_cast<float>(memory_manager->get_total_projected_footprint_bytes());
+    if (total_bytes <= 0.0f) total_bytes = 1.0f; // Fallback to prevent division by zero
+
+    // 1. Establish visual minimums for 0% buffers
+    // A stretch ratio of 0.05 guarantees a minimum slice of space in the BoxContainer
+    const float MIN_STRETCH_RATIO = 0.05f; 
+
+    // 2. Map Memory Buffer Resources[cite: 1]
     TypedArray<MemoryBufferResource> schemas = memory_manager->get_buffer_schemas();
     for (int i = 0; i < schemas.size(); ++i) {
         Ref<MemoryBufferResource> schema = schemas[i];
@@ -87,10 +95,28 @@ void MemoryRibbon::_build_ribbon() {
         block->set_text(schema->get_buffer_name());
         block->set_theme_type_variation("MemoryBufferBlock"); 
         
-        // Let the blocks expand evenly for now. In the future, this is where you will 
-        // calculate proportional stretch ratios based on the byte footprint of the buffer.
         block->set_h_size_flags(SIZE_EXPAND_FILL);
         block->set_v_size_flags(SIZE_EXPAND_FILL);
+
+        // Estimate footprint based on backend initialization logic
+        int64_t max_elems = schema->get_max_elements();
+        TypedArray<Dictionary> dict_columns = schema->get_columns();
+        float raw_data_size = 0.0f;
+        
+        for (int j = 0; j < dict_columns.size(); ++j) {
+            Dictionary dict = dict_columns[j];
+            uint32_t type_size = dict.has("size") ? static_cast<uint32_t>(dict["size"]) : 1;
+            raw_data_size += (type_size * max_elems);
+        }
+        
+        // Double the estimate if shadowed, mimicking backend allocations[cite: 3]
+        if (schema->get_enable_shadowing()) {
+             raw_data_size *= 2.0f; 
+        }
+
+        // Apply proportional stretching
+        float proportion = raw_data_size / total_bytes;
+        block->set_stretch_ratio(MIN_STRETCH_RATIO + proportion);
 
         Array args;
         args.append(BLOCK_BUFFER);
@@ -100,28 +126,33 @@ void MemoryRibbon::_build_ribbon() {
         add_child(block);
     }
 
-    // 2. Map Managed Buffer Profiles[cite: 7, 8]
-    TypedArray<ManagedBufferProfile> profiles = memory_manager->get_managed_profiles();
+    // 3. Map Managed Buffer Profiles
+    TypedArray<ManagedBufferResource> profiles = memory_manager->get_managed_buffers();
     for (int i = 0; i < profiles.size(); ++i) {
-        Ref<ManagedBufferProfile> profile = profiles[i];
+        Ref<ManagedBufferResource> profile = profiles[i];
         if (!profile.is_valid()) continue;
 
         Button* block = memnew(Button);
         block->set_text(profile->get_consumer_name());
-        block->set_theme_type_variation("ManagedProfileBlock");
+        block->set_theme_type_variation("ManagedBufferBlock");
         
         block->set_h_size_flags(SIZE_EXPAND_FILL);
         block->set_v_size_flags(SIZE_EXPAND_FILL);
 
+        // Apply proportional stretching utilizing the profile's explicit byte footprint[cite: 3]
+        float profile_bytes = static_cast<float>(profile->get_byte_footprint());
+        float proportion = profile_bytes / total_bytes;
+        block->set_stretch_ratio(MIN_STRETCH_RATIO + proportion);
+
         Array args;
-        args.append(BLOCK_PROFILE);
+        args.append(BLOCK_MANAGED);
         args.append(i);
         block->connect("pressed", Callable(this, "_on_block_pressed").bindv(args));
         
         add_child(block);
     }
 
-    // 3. Map Transient Capacity[cite: 7, 8]
+    // 4. Map Transient Capacity[cite: 1]
     int transient_mb = memory_manager->get_transient_capacity_mb();
     if (transient_mb > 0) {
         Button* block = memnew(Button);
@@ -131,9 +162,14 @@ void MemoryRibbon::_build_ribbon() {
         block->set_h_size_flags(SIZE_EXPAND_FILL);
         block->set_v_size_flags(SIZE_EXPAND_FILL);
 
+        // Convert MB to Bytes and apply proportional stretching[cite: 3, 4]
+        float transient_bytes = static_cast<float>(transient_mb) * 1024.0f * 1024.0f;
+        float proportion = transient_bytes / total_bytes;
+        block->set_stretch_ratio(MIN_STRETCH_RATIO + proportion);
+
         Array args;
         args.append(BLOCK_TRANSIENT);
-        args.append(0); // Transient doesn't use an array index, defaulting to 0
+        args.append(0); 
         block->connect("pressed", Callable(this, "_on_block_pressed").bindv(args));
         
         add_child(block);

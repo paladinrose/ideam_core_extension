@@ -41,14 +41,23 @@ RuntimeInspector::RuntimeInspector() {
 }
 
 void RuntimeInspector::clear_inspector() {
-    for (int i = 0; i < get_child_count(); ++i) {
-        Node* child = get_child(i);
+    if (content == nullptr) { return; }
+
+    for (int i = 0; i < content->get_child_count(); ++i) {
+        Node* child = content->get_child(i);
         child->queue_free();
     }
 }
 
 void RuntimeInspector::build_inspector(const Array& p_properties, const Dictionary& p_state, Variant::Type p_resolved_t) {
     clear_inspector();
+
+    if (content == nullptr){
+        content = memnew(VBoxContainer);
+        content->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+        add_child(content);
+    }
+
     current_t_type = p_resolved_t;
     cached_state = p_state.duplicate(true); // Cache state for deep mutations
 
@@ -94,7 +103,7 @@ void RuntimeInspector::build_inspector(const Array& p_properties, const Dictiona
             }
         }
 
-        add_child(row);
+        content->add_child(row);
     }
 }
 

@@ -5,8 +5,8 @@
 
 namespace ideam::godot_ext {
 
-class ManagedBufferProfile : public godot::Resource {
-    GDCLASS(ManagedBufferProfile, godot::Resource)
+class ManagedBufferResource : public godot::Resource {
+    GDCLASS(ManagedBufferResource, godot::Resource)
 
 private:
     godot::StringName consumer_name;
@@ -19,8 +19,8 @@ protected:
     static void _bind_methods();
 
 public:
-    ManagedBufferProfile() = default;
-    ~ManagedBufferProfile() = default;
+    ManagedBufferResource() = default;
+    ~ManagedBufferResource() = default;
 
     void set_consumer_name(const godot::StringName& p_name);
     godot::StringName get_consumer_name() const;

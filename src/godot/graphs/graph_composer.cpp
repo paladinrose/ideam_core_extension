@@ -17,11 +17,9 @@ void GraphComposer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("open_graph", "graph_edit"), &GraphComposer::open_graph);
     ClassDB::bind_method(D_METHOD("close_graph", "graph_edit"), &GraphComposer::close_graph);
 
-    // Bind UI Signals
+    // Bound to the new unified signal and signature
     ClassDB::bind_method(D_METHOD("_on_tab_changed", "tab"), &GraphComposer::_on_tab_changed);
-    ClassDB::bind_method(D_METHOD("_on_theme_selected", "index"), &GraphComposer::_on_theme_selected);
-    ClassDB::bind_method(D_METHOD("_on_load_theme_pressed"), &GraphComposer::_on_load_theme_pressed);
-    ClassDB::bind_method(D_METHOD("_on_theme_file_selected", "path"), &GraphComposer::_on_theme_file_selected);
+    ClassDB::bind_method(D_METHOD("_on_theme_applied", "theme", "index"), &GraphComposer::_on_theme_applied);
     ClassDB::bind_method(D_METHOD("_on_save_pressed"), &GraphComposer::_on_save_pressed);
 }
 
@@ -30,20 +28,13 @@ GraphComposer::GraphComposer() {
     set_h_size_flags(SIZE_EXPAND_FILL);
     set_v_size_flags(SIZE_EXPAND_FILL);
 
-    // 1. Load the Theme Registry
-    theme_registry = ThemeRegistry::load_registry();
-
-    // 2. UI Layout Construction
+    // UI Layout Construction
     header_bar = memnew(HBoxContainer);
     add_child(header_bar);
 
-    theme_selector = memnew(OptionButton);
-    theme_selector->set_h_size_flags(SIZE_EXPAND_FILL);
-    header_bar->add_child(theme_selector);
-
-    load_theme_btn = memnew(Button);
-    load_theme_btn->set_text("Load Theme");
-    header_bar->add_child(load_theme_btn);
+    // Instantiate and embed the generalized ThemeSelector component
+    theme_selector_ui = memnew(ThemeSelector);
+    header_bar->add_child(theme_selector_ui);
 
     save_btn = memnew(Button);
     save_btn->set_text("Save Graph");
@@ -54,25 +45,20 @@ GraphComposer::GraphComposer() {
     tab_container->set_v_size_flags(SIZE_EXPAND_FILL);
     add_child(tab_container);
 
-    // Setup FileDialog for Theme loading
-    theme_file_dialog = memnew(FileDialog);
-    theme_file_dialog->set_file_mode(FileDialog::FILE_MODE_OPEN_FILE);
-    theme_file_dialog->set_access(FileDialog::ACCESS_RESOURCES); // Matches res:// context
-    PackedStringArray filters;
-    filters.append("*.tres, *.theme ; Godot Theme Files");
-    theme_file_dialog->set_filters(filters);
-    add_child(theme_file_dialog);
-
-    // 3. Event Handling (Signals)
+    // Event Handling (Signals)
     tab_container->connect("tab_changed", Callable(this, "_on_tab_changed"));
-    theme_selector->connect("item_selected", Callable(this, "_on_theme_selected"));
-    load_theme_btn->connect("pressed", Callable(this, "_on_load_theme_pressed"));
     save_btn->connect("pressed", Callable(this, "_on_save_pressed"));
-    theme_file_dialog->connect("file_selected", Callable(this, "_on_theme_file_selected"));
+    
+    // Connect to our new custom signal on the selector
+    theme_selector_ui->connect("theme_applied", Callable(this, "_on_theme_applied"));
 
-    // Populate initial state
-    _refresh_theme_list();
-    _apply_default_composer_theme();
+    // Populate initial state and point it to the graphs theme registry
+    String registry_path = "res://addons/ideam_graphs/resources/theme_registry.tres";
+    theme_selector_ui->setup(registry_path);
+
+    // Select the default theme at index 0 for the composer UI itself
+    theme_selector_ui->select_theme(0); 
+
     active_sessions.reserve(8); 
 }
 
@@ -82,113 +68,46 @@ void GraphComposer::_notification(int p_what) {}
 
 // --- State Management & Synchronization ---
 
-void GraphComposer::_refresh_theme_list() {
-    theme_selector->clear();
-
-    TypedArray<String> paths = theme_registry->get_theme_paths();
-    int valid_theme_count = 0;
-
-    for (int i = 0; i < paths.size(); ++i) {
-        String path = paths[i];
-
-        // Fail-safe: Skip empty paths or paths that no longer exist on disk
-        if (path.is_empty() || !ResourceLoader::get_singleton()->exists(path)) {
-            UtilityFunctions::printerr("GraphComposer: Theme path missing or invalid, skipping: ", path);
-            continue;
-        }
-
-        theme_selector->add_item(path.get_file()); 
-        
-        int item_idx = theme_selector->get_item_count() - 1;
-        theme_selector->set_item_metadata(item_idx, path);
-        valid_theme_count++;
-    }
-
-    // Fail-detector: No valid themes found in the registry
-    if (valid_theme_count == 0) {
-        theme_selector->add_item("No Themes Found");
-        theme_selector->set_item_metadata(0, ""); // Empty string signals no theme
-        theme_selector->set_disabled(true);
-    } else {
-        theme_selector->set_disabled(false);
-    }
-}
-
 void GraphComposer::_on_tab_changed(int p_tab) {
     // Context Sensitivity: Sync dropdown visually with the current tab
     for (const auto& session : active_sessions) {
         if (session.tab_index == p_tab) {
-            theme_selector->select(session.theme_index);
+            theme_selector_ui->select_theme(session.theme_index);
             break;
         }
     }
 }
 
-void GraphComposer::_on_theme_selected(int p_index) {
+void GraphComposer::_on_theme_applied(const Ref<Theme>& p_theme, int p_index) {
     int current_tab = tab_container->get_current_tab();
-    if (current_tab < 0) return;
-
-    String theme_path = theme_selector->get_item_metadata(p_index);
-    Ref<Theme> loaded_theme;
-
-    // Only attempt to load if we have a valid path (bypasses the "No Themes Found" state)
-    if (!theme_path.is_empty()) {
-        loaded_theme = ResourceLoader::get_singleton()->load(theme_path);
+    
+    // If no tabs are open, assume we are styling the Composer UI itself
+    if (current_tab < 0) {
+        _apply_default_composer_theme(p_theme);
+        return;
     }
 
+    // Otherwise, apply the theme to the currently active graph editing session
     for (auto& session : active_sessions) {
         if (session.tab_index == current_tab) {
             session.theme_index = p_index;
 
-            if (loaded_theme.is_valid()) {
-                session.editor_node->set_theme(loaded_theme);
+            if (p_theme.is_valid()) {
+                session.editor_node->set_theme(p_theme);
             } else {
-                // Strip custom theme (fallback to Godot's default)
-                session.editor_node->set_theme(nullptr); 
-                
-                if (!theme_path.is_empty()) {
-                    UtilityFunctions::printerr("GraphComposer: Failed to load theme at ", theme_path);
-                }
+                session.editor_node->set_theme(nullptr); // Fallback to Godot default
             }
             break;
         }
     }
 }
 
-void GraphComposer::_apply_default_composer_theme() {
-    if (theme_selector->get_item_count() > 0) {
-        String first_path = theme_selector->get_item_metadata(0);
-        
-        if (!first_path.is_empty()) {
-            Ref<Theme> default_theme = ResourceLoader::get_singleton()->load(first_path);
-            if (default_theme.is_valid()) {
-                // Applies the theme to the entire GraphComposer UI
-                set_theme(default_theme); 
-            }
-        } else {
-            // Strip any existing theme if no valid themes are available
-            set_theme(nullptr);
-        }
+void GraphComposer::_apply_default_composer_theme(const Ref<Theme>& p_theme) {
+    if (p_theme.is_valid()) {
+        set_theme(p_theme); 
+    } else {
+        set_theme(nullptr);
     }
-}
-
-void GraphComposer::_on_load_theme_pressed() {
-    theme_file_dialog->popup_centered_ratio(0.5);
-}
-
-void GraphComposer::_on_theme_file_selected(const String& p_path) {
-    theme_registry->add_theme_path(p_path);
-    theme_registry->save_registry();
-    _refresh_theme_list();
-
-    // If this is the ONLY theme now (we just escaped the fail-detector state), skin the composer
-    if (theme_selector->get_item_count() == 1) {
-        _apply_default_composer_theme();
-    }
-
-    int new_index = theme_selector->get_item_count() - 1;
-    theme_selector->select(new_index);
-    _on_theme_selected(new_index);
 }
 
 void GraphComposer::_on_save_pressed() {
@@ -197,12 +116,10 @@ void GraphComposer::_on_save_pressed() {
 
     // Find the current active session
     IdeamGraphEdit* active_edit = nullptr;
-    const IdeamGraphResource* resource_key = nullptr;
 
     for (const auto& session : active_sessions) {
         if (session.tab_index == current_tab) {
             active_edit = session.editor_node;
-            resource_key = session.resource_key;
             break;
         }
     }
@@ -214,15 +131,13 @@ void GraphComposer::_on_save_pressed() {
 
     // --- CONTEXT SENSITIVE ROUTING LAYER ---
     if (Engine::get_singleton()->is_editor_hint()) {
-        // Editor Context: Use native ResourceSaver
         String res_path = blueprint->get_path();
         
         if (res_path.is_empty() || res_path.contains("::")) {
-            // Edge-case handling: Resource was created anonymously or as a transient sub-resource
             UtilityFunctions::printerr("GraphComposer: Cannot save. Graph resource doesn't have a valid standalone path (res://...)");
             return;
         }
-
+        blueprint->get_memory_manager()->serialize_subresources_to_disk();
         Error err = ResourceSaver::get_singleton()->save(blueprint, res_path);
         if (err == OK) {
             UtilityFunctions::print("GraphComposer: Successfully saved graph resource to ", res_path);
@@ -230,17 +145,13 @@ void GraphComposer::_on_save_pressed() {
             UtilityFunctions::printerr("GraphComposer: Failed to save graph resource. Error code: ", err);
         }
     } else {
-        // Runtime Context: Delegate behavior to the game application layer
         UtilityFunctions::print("GraphComposer: Standalone runtime detected. Routing to runtime storage pipeline.");
         
-        // Custom Hook: You can emit a custom signal here that your game code listens to,
-        // or check if a dedicated script hook is bound to handle JSON/binary serialization.
         if (has_signal("runtime_save_requested")) {
             emit_signal("runtime_save_requested", active_edit);
         }
     }
 }
-// --- Original Operations ---
 
 void GraphComposer::open_graph(IdeamGraphEdit* p_graph_edit) {
     if (!p_graph_edit) return;

@@ -7,13 +7,13 @@ namespace ideam::godot_ext {
 void MemoryGraphResource::_bind_methods() {
     using namespace godot;
     
-    ClassDB::bind_method(D_METHOD("set_meta_profile", "profile"), &MemoryGraphResource::set_meta_profile);
-    ClassDB::bind_method(D_METHOD("get_meta_profile"), &MemoryGraphResource::get_meta_profile);
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "meta_profile", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferProfile"), "set_meta_profile", "get_meta_profile");
+    ClassDB::bind_method(D_METHOD("set_meta_buffer", "profile"), &MemoryGraphResource::set_meta_buffer);
+    ClassDB::bind_method(D_METHOD("get_meta_buffer"), &MemoryGraphResource::get_meta_buffer);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "meta_buffer", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferResource"), "set_meta_buffer", "get_meta_buffer");
 
-    ClassDB::bind_method(D_METHOD("set_registry_profile", "profile"), &MemoryGraphResource::set_registry_profile);
-    ClassDB::bind_method(D_METHOD("get_registry_profile"), &MemoryGraphResource::get_registry_profile);
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "registry_profile", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferProfile"), "set_registry_profile", "get_registry_profile");
+    ClassDB::bind_method(D_METHOD("set_registry_buffer", "profile"), &MemoryGraphResource::set_registry_buffer);
+    ClassDB::bind_method(D_METHOD("get_registry_buffer"), &MemoryGraphResource::get_registry_buffer);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "registry_buffer", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferResource"), "set_registry_buffer", "get_registry_buffer");
 
     ClassDB::bind_method(D_METHOD("set_volatile_requirement_capacity", "cap"), &MemoryGraphResource::set_volatile_requirement_capacity);
     ClassDB::bind_method(D_METHOD("get_volatile_requirement_capacity"), &MemoryGraphResource::get_volatile_requirement_capacity);
@@ -26,28 +26,28 @@ void MemoryGraphResource::set_volatile_requirement_capacity(int p_cap) {
     if (p_cap == volatile_requirement_capacity) return;
     volatile_requirement_capacity = p_cap;
     // Recalculate the master footprint if we are in volatile mode
-    if (get_is_volatile()) queue_update_managed_profiles();
+    if (get_is_volatile()) queue_update_managed_buffers();
     emit_changed();
 }
 int MemoryGraphResource::get_volatile_requirement_capacity() const { return volatile_requirement_capacity; }
 
-void MemoryGraphResource::set_meta_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { 
-    if(p_profile == meta_profile) return;
-    meta_profile = p_profile; 
+void MemoryGraphResource::set_meta_buffer(const godot::Ref<ManagedBufferResource>& p_buffer) { 
+    if(p_buffer == meta_buffer) return;
+    meta_buffer = p_buffer; 
     emit_changed(); 
 }
-godot::Ref<ManagedBufferProfile> MemoryGraphResource::get_meta_profile() const { return meta_profile; }
+godot::Ref<ManagedBufferResource> MemoryGraphResource::get_meta_buffer() const { return meta_buffer; }
 
-void MemoryGraphResource::set_registry_profile(const godot::Ref<ManagedBufferProfile>& p_profile) { 
-    if(registry_profile == p_profile) return;
-    registry_profile = p_profile; 
+void MemoryGraphResource::set_registry_buffer(const godot::Ref<ManagedBufferResource>& p_buffer) { 
+    if(registry_buffer == p_buffer) return;
+    registry_buffer = p_buffer; 
     emit_changed(); 
 }
-godot::Ref<ManagedBufferProfile> MemoryGraphResource::get_registry_profile() const { return registry_profile; }
+godot::Ref<ManagedBufferResource> MemoryGraphResource::get_registry_buffer() const { return registry_buffer; }
 
-void MemoryGraphResource::_ensure_managed_profiles() {
+void MemoryGraphResource::_ensure_managed_buffers() {
     // 1. Let the base IdeamGraphResource instantiate/update the structural Nodes/Edges (SoA/AoS)
-    IdeamGraphResource::_ensure_managed_profiles();
+    IdeamGraphResource::_ensure_managed_buffers();
 
     // Hardware padding constraint
     constexpr int ALIGNMENT = 64; 
@@ -55,45 +55,45 @@ void MemoryGraphResource::_ensure_managed_profiles() {
     // 2. Compute local capacities
     int node_cap = get_is_volatile() ? std::max(static_cast<int>(get_nodes().size()), get_volatile_node_capacity()) : static_cast<int>(get_nodes().size());
 
-    // --- Profile 3: MemoryGraph Internal State Arrays ---
+    // --- Buffer Profile 3: MemoryGraph Internal State Arrays ---
     int meta_bytes = node_cap * (sizeof(core::MemoryGrantPOD) + sizeof(core::MemoryNodeMetadata) + sizeof(core::SelectionMetadata));
     int padded_meta_bytes = (meta_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    if (meta_profile.is_null()) {
-        meta_profile.instantiate();
-        meta_profile->set_purpose("MemoryGraph State Arrays");
-        meta_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT)); 
-        meta_profile->set_alignment(ALIGNMENT);
+    if (meta_buffer.is_null()) {
+        meta_buffer.instantiate();
+        meta_buffer->set_purpose("MemoryGraph State Arrays");
+        meta_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT)); 
+        meta_buffer->set_alignment(ALIGNMENT);
     }
     
     // Always update dynamically changing values
-    meta_profile->set_consumer_name(get_consumer_key());
-    meta_profile->set_byte_footprint(padded_meta_bytes);
+    meta_buffer->set_consumer_name(get_consumer_key());
+    meta_buffer->set_byte_footprint(padded_meta_bytes);
 
-    // --- Profile 4: The Grant Registry Buffer ---
+    // --- Buffer Profile 4: The Grant Registry Buffer ---
     int req_cap = get_is_volatile() ? volatile_requirement_capacity : std::max(1024, volatile_requirement_capacity);
     int registry_bytes = req_cap * sizeof(core::GrantPartPOD);
     int padded_registry_bytes = (registry_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    if (registry_profile.is_null()) {
-        registry_profile.instantiate();
-        registry_profile->set_purpose("Grant Registry Buffer");
-        registry_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); 
-        registry_profile->set_alignment(ALIGNMENT);
+    if (registry_buffer.is_null()) {
+        registry_buffer.instantiate();
+        registry_buffer->set_purpose("Grant Registry Buffer");
+        registry_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); 
+        registry_buffer->set_alignment(ALIGNMENT);
     }
     
     // Always update dynamically changing values
-    registry_profile->set_consumer_name(get_consumer_key());
-    registry_profile->set_byte_footprint(padded_registry_bytes);
+    registry_buffer->set_consumer_name(get_consumer_key());
+    registry_buffer->set_byte_footprint(padded_registry_bytes);
 }
 
-void MemoryGraphResource::_gather_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const {
-    // 1. Pack the base topology profiles (node_profile, edge_profile)
-    IdeamGraphResource::_gather_managed_profiles(r_profiles);
+void MemoryGraphResource::_gather_managed_buffers(godot::TypedArray<ManagedBufferResource>& r_buffers) const {
+    // 1. Pack the base topology profiles (node_buffer, edge_buffer)
+    IdeamGraphResource::_gather_managed_buffers(r_buffers);
 
     // 2. Pack the specific Memory Graph profiles
-    if (meta_profile.is_valid()) r_profiles.append(meta_profile);
-    if (registry_profile.is_valid()) r_profiles.append(registry_profile);
+    if (meta_buffer.is_valid()) r_buffers.append(meta_buffer);
+    if (registry_buffer.is_valid()) r_buffers.append(registry_buffer);
 }
 
 godot::Ref<MemoryGraphNodeResource> MemoryGraphResource::_get_node_by_name(const godot::StringName& p_name) const {

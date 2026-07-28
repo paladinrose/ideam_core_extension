@@ -43,16 +43,16 @@ void IdeamGraphResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_consumer_key"), &IdeamGraphResource::get_consumer_key);
     ADD_PROPERTY(PropertyInfo(Variant::STRING, "consumer_key"), "set_consumer_key", "get_consumer_key");
     
-    ClassDB::bind_method(D_METHOD("set_node_profile", "profile"), &IdeamGraphResource::set_node_profile);
-    ClassDB::bind_method(D_METHOD("get_node_profile"), &IdeamGraphResource::get_node_profile);
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "node_profile", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferProfile"), "set_node_profile", "get_node_profile");
+    ClassDB::bind_method(D_METHOD("set_node_buffer", "profile"), &IdeamGraphResource::set_node_buffer);
+    ClassDB::bind_method(D_METHOD("get_node_buffer"), &IdeamGraphResource::get_node_buffer);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "node_buffer", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferResource"), "set_node_buffer", "get_node_buffer");
 
-    ClassDB::bind_method(D_METHOD("set_edge_profile", "profile"), &IdeamGraphResource::set_edge_profile);
-    ClassDB::bind_method(D_METHOD("get_edge_profile"), &IdeamGraphResource::get_edge_profile);
-    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "edge_profile", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferProfile"), "set_edge_profile", "get_edge_profile");
+    ClassDB::bind_method(D_METHOD("set_edge_buffer", "profile"), &IdeamGraphResource::set_edge_buffer);
+    ClassDB::bind_method(D_METHOD("get_edge_buffer"), &IdeamGraphResource::get_edge_buffer);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "edge_buffer", PROPERTY_HINT_RESOURCE_TYPE, "ManagedBufferResource"), "set_edge_buffer", "get_edge_buffer");
 
-    ClassDB::bind_method(D_METHOD("queue_update_managed_profiles"), &IdeamGraphResource::queue_update_managed_profiles);
-    ClassDB::bind_method(D_METHOD("update_managed_profiles"), &IdeamGraphResource::update_managed_profiles);
+    ClassDB::bind_method(D_METHOD("queue_update_managed_buffers"), &IdeamGraphResource::queue_update_managed_buffers);
+    ClassDB::bind_method(D_METHOD("update_managed_buffers"), &IdeamGraphResource::update_managed_buffers);
 
     // Execution methods
     ClassDB::bind_method(D_METHOD("_do_add_node", "node"), &IdeamGraphResource::_do_add_node);
@@ -66,21 +66,21 @@ void IdeamGraphResource::_bind_methods() {
 void IdeamGraphResource::set_memory_manager(const godot::Ref<MemoryManagerResource>& p_manager) { 
     if (memory_manager == p_manager) return;
     memory_manager = p_manager; 
-    queue_update_managed_profiles();
+    queue_update_managed_buffers();
     emit_changed(); 
 }
 
 void IdeamGraphResource::set_nodes(const godot::TypedArray<godot::Ref<IdeamGraphNodeResource>>& p_nodes) { 
     if (nodes == p_nodes) return;
     nodes = p_nodes; 
-    queue_update_managed_profiles();
+    queue_update_managed_buffers();
     emit_changed(); 
 }
 
 void IdeamGraphResource::set_edges(const godot::TypedArray<godot::Dictionary>& p_edges) { 
     if (edges == p_edges) return;
     edges = p_edges; 
-    queue_update_managed_profiles();
+    queue_update_managed_buffers();
     emit_changed(); 
 }
 
@@ -93,42 +93,42 @@ void IdeamGraphResource::set_groups(const godot::TypedArray<godot::Ref<IdeamGrap
 void IdeamGraphResource::set_is_volatile(bool p_volatile) { 
     if (is_volatile_at_runtime == p_volatile) return;
     is_volatile_at_runtime = p_volatile; 
-    if (is_volatile_at_runtime) queue_update_managed_profiles();
+    if (is_volatile_at_runtime) queue_update_managed_buffers();
     emit_changed(); 
 }
 
 void IdeamGraphResource::set_volatile_node_capacity(int p_cap) {
     if (volatile_node_capacity == p_cap) return;
     volatile_node_capacity = p_cap;
-    if (is_volatile_at_runtime) queue_update_managed_profiles();
+    if (is_volatile_at_runtime) queue_update_managed_buffers();
     emit_changed();
 }
 
 void IdeamGraphResource::set_volatile_edge_capacity(int p_cap) {
     if (volatile_edge_capacity == p_cap) return;
     volatile_edge_capacity = p_cap;
-    if (is_volatile_at_runtime) queue_update_managed_profiles();
+    if (is_volatile_at_runtime) queue_update_managed_buffers();
     emit_changed();
 }
 
-// --- Managed Profiles Handshake ---
-void IdeamGraphResource::queue_update_managed_profiles() {
+// --- Managed Buffers Handshake ---
+void IdeamGraphResource::queue_update_managed_buffers() {
     // This prevents the update from running 10 times if 10 properties are loaded at once.
     if (!is_update_queued) {
         is_update_queued = true;
-        call_deferred("update_managed_profiles"); 
+        call_deferred("update_managed_buffers"); 
     }
 }
 
-void IdeamGraphResource::update_managed_profiles() {
+void IdeamGraphResource::update_managed_buffers() {
     // 1. Ensure internal explicit profiles exist and have the latest footprint data.
-    _ensure_managed_profiles();
+    _ensure_managed_buffers();
 
     if (memory_manager.is_null()) return;
 
     // 2. Pack the explicit members into a transport array via the virtual hook.
-    godot::TypedArray<ManagedBufferProfile> profiles_to_send;
-    _gather_managed_profiles(profiles_to_send);
+    godot::TypedArray<ManagedBufferResource> profiles_to_send;
+    _gather_managed_buffers(profiles_to_send);
 
     // 3. Send the packaged array to the manager
     memory_manager->register_consumer_buffers(get_consumer_key(), profiles_to_send);
@@ -143,7 +143,7 @@ void IdeamGraphResource::set_consumer_key(const godot::String& p_key) {
     consumer_key = p_key;
     
     // The queued update will update the consumer_name of each profile, then re-register them with the MemoryManagerResource.
-    queue_update_managed_profiles();
+    queue_update_managed_buffers();
     
     emit_changed();
 }
@@ -158,47 +158,47 @@ godot::String IdeamGraphResource::get_consumer_key() {
     return consumer_key;
 }
 
-void IdeamGraphResource::_ensure_managed_profiles(){
+void IdeamGraphResource::_ensure_managed_buffers(){
     // 1. Calculate the required bounds
     int node_cap = is_volatile_at_runtime ? std::max(static_cast<int>(nodes.size()), volatile_node_capacity) : static_cast<int>(nodes.size());
     int edge_cap = is_volatile_at_runtime ? std::max(static_cast<int>(edges.size()), volatile_edge_capacity) : static_cast<int>(edges.size());
 
     constexpr int ALIGNMENT = 64; 
 
-    // --- Profile 1: Topology Nodes (SoA) ---
+    // --- Buffer Profile 1: Topology Nodes (SoA) ---
     int node_bytes = node_cap * 12;
     int padded_node_bytes = (node_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    if (node_profile.is_null()) {
-        node_profile.instantiate();
-        node_profile->set_purpose("Topology Nodes SoA");
-        node_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::SOA));
-        node_profile->set_alignment(ALIGNMENT);
+    if (node_buffer.is_null()) {
+        node_buffer.instantiate();
+        node_buffer->set_purpose("Topology Nodes SoA");
+        node_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::SOA));
+        node_buffer->set_alignment(ALIGNMENT);
     }
     
     // Always update dynamically changing values
-    node_profile->set_consumer_name(get_consumer_key());
-    node_profile->set_byte_footprint(padded_node_bytes);
+    node_buffer->set_consumer_name(get_consumer_key());
+    node_buffer->set_byte_footprint(padded_node_bytes);
 
-    // --- Profile 2: Topology Edges (AoS) ---
+    // --- Buffer Profile 2: Topology Edges (AoS) ---
     int edge_bytes = edge_cap * sizeof(core::GraphEdgeData);
     int padded_edge_bytes = (edge_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
 
-    if (edge_profile.is_null()) {
-        edge_profile.instantiate();
-        edge_profile->set_purpose("Topology Edges AoS");
-        edge_profile->set_layout_type(static_cast<int>(core::BufferLayoutType::AOS));
-        edge_profile->set_alignment(ALIGNMENT);
+    if (edge_buffer.is_null()) {
+        edge_buffer.instantiate();
+        edge_buffer->set_purpose("Topology Edges AoS");
+        edge_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::AOS));
+        edge_buffer->set_alignment(ALIGNMENT);
     }
     
     // Always update dynamically changing values
-    edge_profile->set_consumer_name(get_consumer_key());
-    edge_profile->set_byte_footprint(padded_edge_bytes);
+    edge_buffer->set_consumer_name(get_consumer_key());
+    edge_buffer->set_byte_footprint(padded_edge_bytes);
 }
 
-void IdeamGraphResource::_gather_managed_profiles(godot::TypedArray<ManagedBufferProfile>& r_profiles) const {
-    if (node_profile.is_valid()) r_profiles.append(node_profile);
-    if (edge_profile.is_valid()) r_profiles.append(edge_profile);
+void IdeamGraphResource::_gather_managed_buffers(godot::TypedArray<ManagedBufferResource>& r_buffers) const {
+    if (node_buffer.is_valid()) r_buffers.append(node_buffer);
+    if (edge_buffer.is_valid()) r_buffers.append(edge_buffer);
 }
 
 godot::TypedArray<godot::StringName> IdeamGraphResource::_get_node_dependencies(const godot::StringName& p_node) const {
@@ -314,7 +314,7 @@ void IdeamGraphResource::action_remove_edge(const godot::StringName& p_from, int
         if (e["from"] == godot::Variant(p_from) && static_cast<int>(e["from_port"]) == p_from_port &&
             e["to"] == godot::Variant(p_to) && static_cast<int>(e["to_port"]) == p_to_port) {
             edges.remove_at(i);
-            update_managed_profiles();
+            update_managed_buffers();
             emit_changed();
             break;
         }
@@ -376,7 +376,7 @@ void IdeamGraphResource::_do_add_node(const godot::Ref<IdeamGraphNodeResource>& 
     if (p_node.is_valid()) {
         nodes.append(p_node);
         p_node->set_local_to_scene(true); // Ensures the node gets saved with the scene if it's not already a sub-resource
-        update_managed_profiles(); // Ensures memory UI updates instantly
+        update_managed_buffers(); // Ensures memory UI updates instantly
         emit_changed();
     }
 }
@@ -386,7 +386,7 @@ void IdeamGraphResource::_undo_add_node(const godot::StringName& p_node_name) {
         godot::Ref<IdeamGraphNodeResource> n = nodes[i];
         if (n.is_valid() && n->get_node_name() == p_node_name) {
             nodes.remove_at(i);
-            update_managed_profiles(); // Ensures memory UI updates instantly
+            update_managed_buffers(); // Ensures memory UI updates instantly
             emit_changed();
             break;
         }
@@ -395,7 +395,7 @@ void IdeamGraphResource::_undo_add_node(const godot::StringName& p_node_name) {
 
 void IdeamGraphResource::_do_add_edge(const godot::Dictionary& p_edge_data) {
     edges.append(p_edge_data);
-    update_managed_profiles(); // Ensures memory UI updates instantly
+    update_managed_buffers(); // Ensures memory UI updates instantly
     emit_changed();
 }
 

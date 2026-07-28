@@ -4,6 +4,7 @@
 #include "../controls/runtime_inspector.h"
 #include "task_resource.h"
 #include <godot_cpp/classes/label.hpp>
+#include <godot_cpp/classes/scroll_container.hpp>
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
 #include <godot_cpp/variant/string_name.hpp>
@@ -49,6 +50,7 @@ private:
 
 protected:
     // The dedicated container for dynamic Tier 3 parameters (matrices, logic thresholds)
+    godot::ScrollContainer* custom_parameters_scroll = nullptr;
     godot::VBoxContainer* custom_parameters_container = nullptr;
     
     // Dedicated, persistent inspector for logic-specific properties

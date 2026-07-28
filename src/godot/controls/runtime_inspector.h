@@ -1,5 +1,6 @@
 #pragma once
 
+#include <godot_cpp/classes/scroll_container.hpp>
 #include <godot_cpp/classes/v_box_container.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -13,10 +14,11 @@
 
 namespace ideam::godot_ext {
 
-class RuntimeInspector : public godot::VBoxContainer {
-    GDCLASS(RuntimeInspector, godot::VBoxContainer)
+class RuntimeInspector : public godot::ScrollContainer {
+    GDCLASS(RuntimeInspector, godot::ScrollContainer)
 
 private:
+    godot::VBoxContainer* content = nullptr;
     // Cached resolved type for properties requesting the dynamic "T" type
     godot::Variant::Type current_t_type = godot::Variant::NIL;
     

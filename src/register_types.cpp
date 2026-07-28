@@ -10,9 +10,12 @@
 
 // --- Controls ---
 #include "godot/controls/runtime_inspector.h"
-#include "godot/controls/boolean_heatmap_grid.h"
+#include "godot/controls/heatmap_grid.h"
 #include "godot/controls/circular_gauge.h"
 #include "godot/controls/selection_list.h"
+
+#include "godot/controls/theme_registry.h"
+#include "godot/controls/theme_selector.h"
 
 // --- Graphs ---
 #include "godot/graphs/ideam_graphs_plugin.h"
@@ -24,7 +27,6 @@
 #include "godot/graphs/ideam_graph_node.h"
 #include "godot/graphs/ideam_graph_inspector.h"
 #include "godot/graphs/graph_composer.h"
-#include "godot/graphs/theme_registry.h"
 
 // --- Memory ---
 #include "godot/memory/ideam_memory_plugin.h"
@@ -34,10 +36,12 @@
 #include "godot/memory/memory_ribbon.h"
 #include "godot/memory/memory_manager_inspector.h"
 
-#include "godot/memory/managed_buffer_profile.h"
+#include "godot/memory/managed_buffer_resource.h"
+#include "godot/memory/managed_buffer_view.h"
 
 #include "godot/memory/memory_buffer_resource.h"
 #include "godot/memory/memory_buffer_view.h"
+
 #include "godot/memory/aos_visualizer.h"
 #include "godot/memory/memory_page_grid.h"
 #include "godot/memory/soa_visualizer.h"
@@ -149,9 +153,12 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         // --- Controls ---
         GDREGISTER_CLASS(ideam::godot_ext::RuntimeInspector);
         GDREGISTER_CLASS(ideam::godot_ext::CircularGauge);
-        GDREGISTER_CLASS(ideam::godot_ext::BooleanHeatmapGrid);
+        GDREGISTER_CLASS(ideam::godot_ext::HeatmapGrid);
         GDREGISTER_CLASS(ideam::godot_ext::SelectionList);
 
+        GDREGISTER_CLASS(ideam::godot_ext::ThemeRegistry);
+        GDREGISTER_CLASS(ideam::godot_ext::ThemeSelector);
+        
         // --- Graphs ---
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphResource);
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNodeResource);
@@ -159,7 +166,6 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::IdeamGraphNode);
 
         GDREGISTER_CLASS(ideam::godot_ext::GraphComposer);
-        GDREGISTER_CLASS(ideam::godot_ext::ThemeRegistry);
         GDREGISTER_CLASS(ideam::godot_ext::IdeamGraphGroupResource);
         
         // --- Memory ---
@@ -172,10 +178,12 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         GDREGISTER_CLASS(ideam::godot_ext::MemoryProfiler);
         GDREGISTER_CLASS(ideam::godot_ext::MemoryRibbon);
 
-        GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferProfile);
+        GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferResource);
+        GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferView);
 
         GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
         GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferView);
+
         GDREGISTER_CLASS(ideam::godot_ext::MemoryPageGrid);
         GDREGISTER_CLASS(ideam::godot_ext::AoSVisualizer);
         GDREGISTER_CLASS(ideam::godot_ext::SoAVisualizer);

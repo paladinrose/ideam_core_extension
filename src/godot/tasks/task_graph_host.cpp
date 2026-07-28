@@ -71,7 +71,7 @@ void TaskGraphHost::_setup_isolated() {
     ERR_FAIL_COND_MSG(manager.is_null(), "TaskGraphHost: Isolated setup failed. The provided TaskGraphResource does not contain a valid MemoryManagerResource.");
 
     // 1. The Declarative Handshake
-    // Re-inject the manager to force `update_managed_profiles()`, injecting all 
+    // Re-inject the manager to force `update_managed_buffers()`, injecting all 
     // Command Arenas and SoA footprints into the Manager's mathematical sizing logic BEFORE allocation.
     graph_resource->set_memory_manager(manager);
 

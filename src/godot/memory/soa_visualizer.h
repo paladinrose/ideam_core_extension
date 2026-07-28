@@ -17,8 +17,6 @@ private:
 protected:
     static void _bind_methods();
     void _notification(int p_what);
-    
-    godot::Vector2 _get_minimum_size() const override;
 
 public:
     SoAVisualizer();
@@ -26,6 +24,8 @@ public:
 
     void setup_from_resource(godot::Ref<MemoryBufferResource> p_buffer);
     void _on_buffer_changed();
+
+    godot::Vector2 _get_minimum_size() const override;
 };
 
 } // namespace ideam::godot_ext

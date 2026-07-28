@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "memory_buffer_resource.h"
-#include "managed_buffer_profile.h" 
+#include "managed_buffer_resource.h" 
 #include "memory_grant_resource.h"
 #include "../../core/memory/memory_manager_dod.h"
 
@@ -22,7 +22,7 @@ public:
 
 private:
     godot::TypedArray<MemoryBufferResource> buffer_schemas;
-    godot::TypedArray<ManagedBufferProfile> managed_profiles;
+    godot::TypedArray<ManagedBufferResource> managed_buffer_schemas;
     godot::TypedArray<MemoryGrantResource> active_emulated_grants;
 
     ScalabilityStrategy scaling_strategy = STRATEGY_FIXED;
@@ -54,10 +54,10 @@ public:
     int get_transient_capacity_mb() const;
 
     void clear_consumer_buffers(const godot::StringName& p_consumer);
-    void register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferProfile>& p_profiles);
+    void register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferResource>& p_buffers);
     
-    void set_managed_profiles(const godot::TypedArray<ManagedBufferProfile>& p_profiles);
-    godot::TypedArray<ManagedBufferProfile> get_managed_profiles() const;
+    void set_managed_buffers(const godot::TypedArray<ManagedBufferResource>& p_buffers);
+    godot::TypedArray<ManagedBufferResource> get_managed_buffers() const;
     
     void set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants);
     godot::TypedArray<MemoryGrantResource> get_active_emulated_grants() const;

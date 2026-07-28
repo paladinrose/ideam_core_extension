@@ -12,7 +12,7 @@ class MemoryRibbon : public godot::BoxContainer {
 public:
     enum BlockType {
         BLOCK_BUFFER = 0,
-        BLOCK_PROFILE = 1,
+        BLOCK_MANAGED = 1,
         BLOCK_TRANSIENT = 2
     };
 

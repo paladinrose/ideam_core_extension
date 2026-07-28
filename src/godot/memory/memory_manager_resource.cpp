@@ -34,11 +34,11 @@ void MemoryManagerResource::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("register_consumer_buffers", "consumer", "profiles"), &MemoryManagerResource::register_consumer_buffers);
     ClassDB::bind_method(D_METHOD("clear_consumer_buffers", "consumer"), &MemoryManagerResource::clear_consumer_buffers);
-    ClassDB::bind_method(D_METHOD("set_managed_profiles", "profiles"), &MemoryManagerResource::set_managed_profiles);
-    ClassDB::bind_method(D_METHOD("get_managed_profiles"), &MemoryManagerResource::get_managed_profiles);
+    ClassDB::bind_method(D_METHOD("set_managed_buffers", "profiles"), &MemoryManagerResource::set_managed_buffers);
+    ClassDB::bind_method(D_METHOD("get_managed_buffers"), &MemoryManagerResource::get_managed_buffers);
     ClassDB::bind_method(D_METHOD("get_total_projected_footprint_bytes"), &MemoryManagerResource::get_total_projected_footprint_bytes);
     
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "managed_profiles", PROPERTY_HINT_ARRAY_TYPE, "ManagedBufferProfile"), "set_managed_profiles", "get_managed_profiles");
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "managed_buffer_schemas", PROPERTY_HINT_ARRAY_TYPE, "ManagedBufferProfile"), "set_managed_buffers", "get_managed_buffers");
     
     ClassDB::bind_method(D_METHOD("get_projected_footprint_string"), &MemoryManagerResource::get_projected_footprint_string);
     ClassDB::bind_method(D_METHOD("buffer_contains_id", "buffer_id", "entity_id"), &MemoryManagerResource::buffer_contains_id);
@@ -109,12 +109,12 @@ void MemoryManagerResource::set_transient_capacity_mb(int p_mb) {
 int MemoryManagerResource::get_transient_capacity_mb() const { return transient_capacity_mb; }
 
 
-void MemoryManagerResource::set_managed_profiles(const godot::TypedArray<ManagedBufferProfile>& p_profiles) { 
-    if (p_profiles == managed_profiles) return;
-    managed_profiles = p_profiles; 
+void MemoryManagerResource::set_managed_buffers(const godot::TypedArray<ManagedBufferResource>& p_buffers) { 
+    if (p_buffers == managed_buffer_schemas) return;
+    managed_buffer_schemas = p_buffers; 
     emit_changed();
 }
-godot::TypedArray<ManagedBufferProfile> MemoryManagerResource::get_managed_profiles() const { return managed_profiles; }
+godot::TypedArray<ManagedBufferResource> MemoryManagerResource::get_managed_buffers() const { return managed_buffer_schemas; }
 
 void MemoryManagerResource::set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants) { 
     if (p_grants == active_emulated_grants) return;
@@ -124,24 +124,24 @@ void MemoryManagerResource::set_active_emulated_grants(const godot::TypedArray<M
 godot::TypedArray<MemoryGrantResource> MemoryManagerResource::get_active_emulated_grants() const { return active_emulated_grants; }
 
 void MemoryManagerResource::clear_consumer_buffers(const godot::StringName& p_consumer) {
-    for (int i = managed_profiles.size() - 1; i >= 0; --i) {
-        godot::Ref<ManagedBufferProfile> profile = managed_profiles[i];
+    for (int i = managed_buffer_schemas.size() - 1; i >= 0; --i) {
+        godot::Ref<ManagedBufferResource> profile = managed_buffer_schemas[i];
         if (profile->get_consumer_name() == p_consumer) {
-            managed_profiles.remove_at(i);
+            managed_buffer_schemas.remove_at(i);
         }
     }
     
     emit_changed();
 }
 
-void MemoryManagerResource::register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferProfile>& p_profiles) {
-    for (int i = managed_profiles.size() - 1; i >= 0; --i) {
-        godot::Ref<ManagedBufferProfile> profile = managed_profiles[i];
+void MemoryManagerResource::register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferResource>& p_buffers) {
+    for (int i = managed_buffer_schemas.size() - 1; i >= 0; --i) {
+        godot::Ref<ManagedBufferResource> profile = managed_buffer_schemas[i];
         if (profile->get_consumer_name() == p_consumer) {
-            managed_profiles.remove_at(i);
+            managed_buffer_schemas.remove_at(i);
         }
     }
-    managed_profiles.append_array(p_profiles);
+    managed_buffer_schemas.append_array(p_buffers);
     
     emit_changed();
 }
@@ -183,8 +183,8 @@ int MemoryManagerResource::get_total_projected_footprint_bytes() const {
                 ((max_elems + 63) / 64) * sizeof(uint64_t) : max_elems * sizeof(int64_t);
 
             size_t meta_soa_size = (max_elems * sizeof(uint32_t)) + (max_elems * sizeof(int64_t)) + 
-                                   (max_elems * sizeof(uint32_t)) + (max_elems * sizeof(uint8_t));
-
+                       (max_elems * sizeof(uint8_t));
+            
             simulated_offset = core::MemoryUtilities::align_to(simulated_offset, 64);
             simulated_offset += (selection_data_size + meta_soa_size + 256);
         } else {
@@ -195,8 +195,8 @@ int MemoryManagerResource::get_total_projected_footprint_bytes() const {
     }
 
     // --- 3. Simulate Graph Consumer Profiles ---
-    for (int i = 0; i < managed_profiles.size(); ++i) {
-        godot::Ref<ManagedBufferProfile> profile = managed_profiles[i];
+    for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
+        godot::Ref<ManagedBufferResource> profile = managed_buffer_schemas[i];
         if (!profile.is_valid()) continue;
         
         uint32_t align = static_cast<uint32_t>(profile->get_alignment());
@@ -537,7 +537,7 @@ void MemoryManagerResource::serialize_subresources_to_disk() {
         manager_name = current_path.get_file().get_basename();
     }
     
-    godot::String target_folder = base_dir.path_join(manager_name + "_Assets");
+    godot::String target_folder = base_dir.path_join(manager_name + "_resources");
 
     godot::Ref<godot::DirAccess> dir = godot::DirAccess::open(base_dir);
     if (dir.is_valid() && !dir->dir_exists(target_folder)) {
@@ -555,13 +555,15 @@ void MemoryManagerResource::serialize_subresources_to_disk() {
         }
         
         // Construct the final path
-        godot::String save_path = target_folder.path_join(res_name + ".tres");
+        godot::String save_path = res->get_path();
+        
+        if (!save_path.is_empty()){
+           save_path = target_folder.path_join(res_name + ".tres");
+           res->set_path(save_path);
+        }
         
         // Save to disk
         godot::ResourceSaver::get_singleton()->save(res, save_path);
-        
-        // Update the resource's internal path so Godot knows it's now an external file
-        res->set_path(save_path);
     };
 
     // 5. Iterate through your arrays and save the sub-resources
@@ -569,8 +571,8 @@ void MemoryManagerResource::serialize_subresources_to_disk() {
         save_resource(buffer_schemas[i], "BufferSchema", i);
     }
 
-    for (int i = 0; i < managed_profiles.size(); ++i) {
-        save_resource(managed_profiles[i], "ManagedProfile", i);
+    for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
+        save_resource(managed_buffer_schemas[i], "ManagedBufferSchema", i);
     }
 
     for (int i = 0; i < active_emulated_grants.size(); ++i) {

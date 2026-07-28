@@ -44,7 +44,7 @@ struct MemoryBufferSelectionPOD {
     // All pointers are 8 bytes on x64; grouping them maintains cache locality.
     int64_t* partition_ids  = nullptr;
     uint32_t* group_masks   = nullptr;
-    uint32_t* version_tags  = nullptr;
+    //uint32_t* version_tags  = nullptr;
     uint8_t* lod_levels     = nullptr;
     uint64_t* unclaimed_mask = nullptr; // Availability Mask (Anti-Grant Bitset)
 
@@ -95,7 +95,7 @@ struct MemoryBufferSelectionPOD {
 
 // Compile-Time Defenses: Lock the exact memory footprints
 static_assert(sizeof(MemoryBufferSelectionPOD) % 8 == 0, "MemoryBufferSelectionPOD alignment violated!");
-static_assert(sizeof(MemoryBufferSelectionPOD) == 104, "MemoryBufferSelectionPOD size altered from expected 104 bytes!");
+static_assert(sizeof(MemoryBufferSelectionPOD) == 96, "MemoryBufferSelectionPOD size altered from expected 104 bytes!");
 
 } // namespace ideam::core
 

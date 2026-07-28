@@ -118,9 +118,8 @@ int MemoryBufferResource::calculate_projected_footprint_bytes() const {
         int selection_data_size = (selection_mode == SELECTION_DENSE) ? 
             (((max_elements + 63) / 64) * 8) : (max_elements * 8);
 
-        int meta_soa_size = (max_elements * 4) + (max_elements * 8) + 
-                            (max_elements * 4) + (max_elements * 1);
-
+        int meta_soa_size = (max_elements * 4) + (max_elements * 8) + (max_elements * 1);
+        
         footprint += (selection_data_size + meta_soa_size + 256);
     }
 

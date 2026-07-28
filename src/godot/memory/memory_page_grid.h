@@ -21,7 +21,6 @@ protected:
     static void _bind_methods();
     void _notification(int p_what);
     
-    godot::Vector2 _get_minimum_size() const override;
 
 public:
     MemoryPageGrid();
@@ -38,6 +37,8 @@ public:
 
     void set_enforce_square_cells(bool p_enforce);
     bool get_enforce_square_cells() const;
+
+    godot::Vector2 _get_minimum_size() const override;
 };
 
 } // namespace ideam::godot_ext

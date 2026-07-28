@@ -72,6 +72,24 @@ void QueryTaskGraphNode::_rebuild_dynamic_ui() {
 
     // Run initial guardrail evaluation to prune invalid combos
     _update_matrix_guardrails();
+
+    int current_idx = type_dropdown->get_selected();
+    if (current_idx >= 0 && type_dropdown->is_item_disabled(current_idx)) {
+        for (int i = 0; i < type_dropdown->get_item_count(); ++i) {
+            if (!type_dropdown->is_item_disabled(i)) {
+                type_dropdown->select(i);
+                if (res.is_valid()) {
+                    int valid_id = type_dropdown->get_item_id(i);
+                    res->set_type_id(valid_id);
+                    emit_property_changed(StringName("type_id"), valid_id);
+                }
+                // Re-evaluate guardrails based on the newly enforced selection
+                _update_matrix_guardrails();
+                break;
+            }
+        }
+    }
+
     Dictionary matrix = core::IdeamTaskRegistry::get_ui_query_matrix();
     String logic_str = String::num_int64(get_logic_id());
     
@@ -273,15 +291,7 @@ void QueryTaskGraphNode::_on_type_selected(int p_index) {
         emit_property_changed(StringName("type_id"), p_index);
     }
 
-    Dictionary matrix = core::IdeamTaskRegistry::get_ui_query_matrix();
-    String logic_str = String::num_int64(get_logic_id());
-    
-    if (matrix.has(logic_str)) {
-        Dictionary logic_def = matrix[logic_str];
-        if (logic_def.has("properties")) {
-            _rebuild_logic_inspector(logic_def["properties"]);
-        }
-    }
+    _rebuild_dynamic_ui();
 }
 
 // --- Population Helpers ---

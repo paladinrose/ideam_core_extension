@@ -186,9 +186,10 @@ uint32_t MemoryManagerDOD::create_shadowed_buffer(BufferLayoutType p_layout, siz
     size_t selection_data_size = (p_selection_mode == SelectionMode::DENSE) ? 
         ((p_max_elements + 63) / 64) * sizeof(uint64_t) : p_max_elements * sizeof(int64_t);
 
-    size_t meta_soa_size = (p_max_elements * sizeof(uint32_t)) + (p_max_elements * sizeof(int64_t)) + 
-                           (p_max_elements * sizeof(uint32_t)) + (p_max_elements * sizeof(uint8_t));
-
+    size_t meta_soa_size = (p_max_elements * sizeof(uint32_t)) + // group_masks
+                       (p_max_elements * sizeof(int64_t)) +  // partition_ids
+                       (p_max_elements * sizeof(uint8_t));   // lod_levels
+    
     uint32_t shadow_id = create_buffer(BufferLayoutType::FLAT, selection_data_size + meta_soa_size + 256, 64);
     if (shadow_id != 0xFFFFFFFF) {
         std::unique_lock<std::shared_mutex> lock(manager_rw_lock);
@@ -220,10 +221,10 @@ void MemoryManagerDOD::_resolve_selection_pointers(uint32_t p_data_buffer_id, Me
     if (r_selection.mode == SelectionMode::DENSE) r_selection.data.bitset = reinterpret_cast<uint64_t*>(base);
     else r_selection.data.indices = reinterpret_cast<int64_t*>(base);
 
+    // SoA offsets compacted: lod_levels shifts down to close the gap left by version_tags
     r_selection.group_masks   = reinterpret_cast<uint32_t*>(base + selection_size);
     r_selection.partition_ids = reinterpret_cast<int64_t*>(base + selection_size + (count * 4));
-    r_selection.version_tags  = reinterpret_cast<uint32_t*>(base + selection_size + (count * 12));
-    r_selection.lod_levels    = reinterpret_cast<uint8_t*>(base + selection_size + (count * 16));
+    r_selection.lod_levels    = reinterpret_cast<uint8_t*>(base + selection_size + (count * 12)); 
     
     // Bind the unified anti-grant mask directly for O(1) query acceleration
     if (p_data_buffer_id < global_unclaimed_masks.size()) {

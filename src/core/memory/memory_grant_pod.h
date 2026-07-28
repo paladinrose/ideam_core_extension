@@ -41,7 +41,7 @@ struct GrantPartPOD {
 };
 
 static_assert(sizeof(GrantPartPOD) % 8 == 0, "GrantPartPOD is not properly padded!");
-static_assert(sizeof(GrantPartPOD) == 136, "GrantPartPOD size altered from expected 136 bytes!");
+static_assert(sizeof(GrantPartPOD) == 128, "GrantPartPOD size altered from expected 128 bytes!");
 
 /**
  * TMemoryGrant
@@ -113,9 +113,8 @@ using MemoryGrantPOD      = TMemoryGrant<4>;  // 640 bytes (Exactly 10 cache lin
 using MemoryGrantHeavyPOD = TMemoryGrant<8>;  // 1152 bytes (Exactly 18 cache lines)
 
 // Compile-Time Defenses: Lock the exact memory footprints
-static_assert(sizeof(MemoryGrantPOD) == 640, "MemoryGrantPOD (Lite) broke 10-cache-lines!");
-static_assert(sizeof(MemoryGrantHeavyPOD) == 1152, "MemoryGrantHeavyPOD broke 18-cache-lines!");
-
+static_assert(sizeof(MemoryGrantPOD) == 576, "MemoryGrantPOD (Lite) broke 9-cache-lines!");
+static_assert(sizeof(MemoryGrantHeavyPOD) == 1088, "MemoryGrantHeavyPOD broke 17-cache-lines!");
 } // namespace ideam::core
 
  // IDEAM_CORE_MEMORY_GRANT_POD_H

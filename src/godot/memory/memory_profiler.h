@@ -12,6 +12,8 @@
 #include "memory_manager_resource.h"
 #include "memory_ribbon.h"
 #include "memory_buffer_view.h"
+#include "managed_buffer_view.h"
+#include "../controls/theme_selector.h"
 
 namespace ideam::godot_ext {
 
@@ -23,6 +25,7 @@ private:
 
     // Row 1: Control Bar
     godot::HBoxContainer* control_bar = nullptr;
+    ThemeSelector* theme_selector_ui = nullptr;
     godot::Button* save_btn = nullptr;
     
     // Row 2: Ribbon
@@ -33,10 +36,14 @@ private:
     
     // Column A: Sidebar
     godot::VBoxContainer* sidebar = nullptr;
-    godot::ItemList* buffer_list = nullptr;
-    
+    godot::ItemList* memory_buffer_list = nullptr;
+    godot::Label* managed_buffer_list_title = nullptr;
+    godot::ItemList* managed_buffer_list = nullptr;
+
     // Column B: Primary Visualization
-    MemoryBufferView* buffer_view = nullptr;
+    godot::PanelContainer* view_container = nullptr;
+    MemoryBufferView* memory_buffer_view = nullptr;
+    ManagedBufferView* managed_buffer_view = nullptr;        
     
     // Column C: Pseudo-Inspector
     godot::PanelContainer* inspector_panel = nullptr;
@@ -56,7 +63,10 @@ public:
     // Signal Handlers
     void _on_save_pressed();
     void _on_buffer_item_selected(int p_index);
+    void _on_managed_buffer_item_selected(int p_index);
     void _on_ribbon_inspection_requested(int p_block_type, int p_index);
+    
+    void _on_theme_applied(const godot::Ref<godot::Theme>& p_theme, int p_index);
     
     // Instance-level operations
     void open_resource(godot::Ref<MemoryManagerResource> p_resource);

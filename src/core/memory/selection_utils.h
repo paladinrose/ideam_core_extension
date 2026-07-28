@@ -3,6 +3,7 @@
 #include "memory_buffer_selection_pod.h"
 #include <cstdint>
 #include <cstring>
+#include <bit>
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -21,15 +22,11 @@ struct SelectionUtils {
      * get_popcount
      * Returns the number of active bits in a dense bitset array.
      */
-    [[nodiscard]] static inline int64_t get_popcount(const uint64_t* p_bitset, int64_t p_capacity) {
+    [[nodiscard]] static inline int64_t get_popcount(const uint64_t* p_bitset, int64_t p_capacity) noexcept {
         int64_t count = 0;
         const int64_t words = (p_capacity + 63) >> 6;
         for (int64_t i = 0; i < words; ++i) {
-#if defined(_MSC_VER)
-            count += __popcnt64(p_bitset[i]);
-#else
-            count += __builtin_popcountll(p_bitset[i]);
-#endif
+            count += std::popcount(p_bitset[i]);
         }
         return count;
     }

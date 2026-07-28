@@ -45,12 +45,11 @@ void ThemeRegistry::add_theme_path(const String& p_path) {
     }
 }
 
-Ref<ThemeRegistry> ThemeRegistry::load_registry() {
-    String registry_path = "res://addons/ideam_graphs/resources/theme_registry.tres";
+Ref<ThemeRegistry> ThemeRegistry::load_registry(const String& p_registry_path) {
     ResourceLoader* loader = ResourceLoader::get_singleton();
 
-    if (loader->exists(registry_path)) {
-        return loader->load(registry_path);
+    if (loader->exists(p_registry_path)) {
+        return loader->load(p_registry_path);
     }
     
     // Fallback: If no file exists yet, instantiate a fresh registry
@@ -59,12 +58,11 @@ Ref<ThemeRegistry> ThemeRegistry::load_registry() {
     return new_registry;
 }
 
-void ThemeRegistry::save_registry() {
-    String registry_path = "res://addons/ideam_graphs/resources/theme_registry.tres";
-    Error err = ResourceSaver::get_singleton()->save(this, registry_path);
+void ThemeRegistry::save_registry(const String& p_registry_path) {
+    Error err = ResourceSaver::get_singleton()->save(this, p_registry_path);
     
     if (err != OK) {
-        UtilityFunctions::printerr("ThemeRegistry: Failed to save theme paths to ", registry_path);
+        UtilityFunctions::printerr("ThemeRegistry: Failed to save theme paths to ", p_registry_path);
     }
 }
 

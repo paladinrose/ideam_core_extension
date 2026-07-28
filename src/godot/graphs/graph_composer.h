@@ -5,14 +5,12 @@
 #include <godot_cpp/classes/tab_container.hpp>
 #include <godot_cpp/classes/control.hpp>
 #include <godot_cpp/classes/window.hpp>
-#include <godot_cpp/classes/option_button.hpp>
 #include <godot_cpp/classes/button.hpp>
-#include <godot_cpp/classes/file_dialog.hpp>
 #include <vector>
 
 #include "ideam_graph_edit.h"
 #include "ideam_graph_resource.h"
-#include "theme_registry.h"
+#include "../controls/theme_selector.h" 
 
 namespace ideam::godot_ext {
 
@@ -21,16 +19,11 @@ class GraphComposer : public godot::VBoxContainer {
 
 private:
     godot::HBoxContainer* header_bar = nullptr;
-    godot::OptionButton* theme_selector = nullptr;
-    godot::Button* load_theme_btn = nullptr;
+    ThemeSelector* theme_selector_ui = nullptr; // Replaces previous dropdown/buttons/dialog/registry
     godot::Button* save_btn = nullptr;
     godot::TabContainer* tab_container = nullptr;
-    godot::FileDialog* theme_file_dialog = nullptr;
-
-    godot::Ref<ThemeRegistry> theme_registry;
 
     // DOD-Optimized State Tracker
-    // Size: 24 bytes. Fits perfectly in 32-byte alignment.
     struct alignas(32) ActiveSession {
         const IdeamGraphResource* resource_key; 
         IdeamGraphEdit* editor_node;
@@ -40,13 +33,12 @@ private:
     
     std::vector<ActiveSession> active_sessions;
 
-    // Internal State Management
-    void _refresh_theme_list();
-
 protected:
     static void _bind_methods();
     void _notification(int p_what);
-    void _apply_default_composer_theme();
+    
+    // Updated to accept a theme directly
+    void _apply_default_composer_theme(const godot::Ref<godot::Theme>& p_theme);
 
     static godot::Window* create_runtime_composer_window();
 
@@ -56,9 +48,7 @@ public:
 
     // Signal Handlers
     void _on_tab_changed(int p_tab);
-    void _on_theme_selected(int p_index);
-    void _on_load_theme_pressed();
-    void _on_theme_file_selected(const godot::String& p_path);
+    void _on_theme_applied(const godot::Ref<godot::Theme>& p_theme, int p_index);
     void _on_save_pressed();
     
     // Instance-level operations

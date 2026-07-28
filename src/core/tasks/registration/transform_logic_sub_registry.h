@@ -15,6 +15,7 @@
 #include "../transform_logic/euler_integration_transform_logic.h"
 #include "../transform_logic/fast_noise_lite_transform_logic.h"
 #include "../transform_logic/noise_injection_transform_logic.h"
+#include "../transform_logic/packed_array_export_transform_logic.h"
 #include "../transform_logic/stencil_convolution_transform_logic.h"
 #include "../transform_logic/value_accumulation_transform_logic.h"
 
@@ -72,6 +73,7 @@ namespace {
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::FastNoiseLite, C, S> { using Type = FastNoiseLiteTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::NoiseInjection, C, S> { using Type = NoiseInjectionTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::PackedArrayExport, C, S> { using Type = PackedArrayExportTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { 
         static constexpr size_t K_SIZE = stencil_math::moore_size<S::dimensions, 1>();
         using Type = StencilConvolutionTransformLogic<C, S, K_SIZE>; 
