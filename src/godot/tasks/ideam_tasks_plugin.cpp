@@ -85,11 +85,13 @@ void IdeamTasksPlugin::_check_manifest_and_setup() {
     }
 }
 
-Object *IdeamTasksPlugin::undo_redo() {
+#ifdef TOOLS_ENABLED
+EditorUndoRedoManager *IdeamTasksPlugin::undo_redo() {
     if (singleton) {
         return singleton->get_undo_redo();
     }
     return nullptr;
 }
+#endif
 
 } // namespace ideam::godot_ext

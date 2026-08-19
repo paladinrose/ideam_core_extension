@@ -22,7 +22,9 @@ public:
     virtual ~IdeamGraphInspector() override;
 
     // Overrides from IdeamEditorInspectorPlugin
-    virtual godot::Object *get_undo_redo() const override;
+#ifdef TOOLS_ENABLED
+    virtual godot::EditorUndoRedoManager *get_undo_redo() const override;
+#endif
 
     // Overrides from EditorInspectorPlugin
     virtual bool _can_handle(godot::Object *p_object) override;

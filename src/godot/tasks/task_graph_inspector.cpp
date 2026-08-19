@@ -19,9 +19,11 @@ void TaskGraphInspector::_bind_methods() {
 TaskGraphInspector::TaskGraphInspector() {}
 TaskGraphInspector::~TaskGraphInspector() {}
 
-Object *TaskGraphInspector::get_undo_redo() const {
+#ifdef TOOLS_ENABLED
+EditorUndoRedoManager *TaskGraphInspector::get_undo_redo() const {
     return IdeamTasksPlugin::undo_redo();
 }
+#endif
 
 bool TaskGraphInspector::_can_handle(Object *p_object) {
     if (!p_object) return false;

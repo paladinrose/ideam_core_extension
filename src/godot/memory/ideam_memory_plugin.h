@@ -29,8 +29,10 @@ public:
     virtual void _enter_tree() override;
     virtual void _exit_tree() override;
 
+#ifdef TOOLS_ENABLED
     // Global Access
-    static godot::Object *undo_redo();
+    static godot::EditorUndoRedoManager *undo_redo();
+#endif
 };
 
 } // namespace ideam::godot_ext

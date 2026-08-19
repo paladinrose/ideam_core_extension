@@ -27,6 +27,23 @@ void MemorySelectionInspector::initialize_from_pod(const core::MemoryBufferSelec
     }
 }
 
+// In MemorySelectionInspector
+void MemorySelectionInspector::setup_emulated_selection(const godot::Ref<MemoryBufferSelectionResource>& p_res, int p_capacity, uint32_t p_target_id) {
+    if (p_res.is_null()) return;
+    
+    element_count = p_res->get_element_count();
+    target_buffer_id = p_target_id;
+    buffer_version = 0; // Emulated, no version yet
+    valid = true;
+    
+    switch (p_res->get_mode()) {
+        case MemoryBufferSelectionResource::MODE_DENSE: selection_mode_name = "Dense (Bitmask)"; break;
+        case MemoryBufferSelectionResource::MODE_SPARSE: selection_mode_name = "Sparse (ID List)"; break;
+        case MemoryBufferSelectionResource::MODE_RANGE: selection_mode_name = "Range (Contiguous)"; break;
+        default: selection_mode_name = "Unknown"; break;
+    }
+}
+
 // --- MemoryGrantInspector ---
 
 void MemoryGrantInspector::_bind_methods() {

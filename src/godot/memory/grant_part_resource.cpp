@@ -43,6 +43,11 @@ void GrantPartResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_is_contiguous", "is_contiguous"), &GrantPartResource::set_is_contiguous);
     ClassDB::bind_method(D_METHOD("get_is_contiguous"), &GrantPartResource::get_is_contiguous);
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_contiguous"), "set_is_contiguous", "get_is_contiguous");
+
+    // Selection
+    ClassDB::bind_method(D_METHOD("set_selection", "selection"), &GrantPartResource::set_selection);
+    ClassDB::bind_method(D_METHOD("get_selection"), &GrantPartResource::get_selection);
+    ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "selection", PROPERTY_HINT_RESOURCE_TYPE, "MemoryBufferSelectionResource"), "set_selection", "get_selection");
 }
 
 void GrantPartResource::set_buffer_id(int p_id) { 
@@ -101,5 +106,14 @@ void GrantPartResource::set_target_column_name(const godot::StringName& p_name) 
 }
 godot::StringName GrantPartResource::get_target_column_name() const { return target_column_name; }
 
+void GrantPartResource::set_selection(const godot::Ref<MemoryBufferSelectionResource>& p_selection) {
+    if (selection == p_selection) return;
+    selection = p_selection;
+    emit_changed();
+}
+
+godot::Ref<MemoryBufferSelectionResource> GrantPartResource::get_selection() const { 
+    return selection; 
+}
 
 } // namespace ideam::godot_ext

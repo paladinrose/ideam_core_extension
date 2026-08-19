@@ -20,11 +20,13 @@ MemoryGraphInspector::MemoryGraphInspector() {
 MemoryGraphInspector::~MemoryGraphInspector() {
 }
 
-Object *MemoryGraphInspector::get_undo_redo() const {
+#ifdef TOOLS_ENABLED
+EditorUndoRedoManager *MemoryGraphInspector::get_undo_redo() const {
     // Relying on the shared Graph Plugin undo_redo ensures history isn't fragmented 
     // when modifying the Memory Graph in the composer
     return IdeamMemoryPlugin::undo_redo();
 }
+#endif
 
 bool MemoryGraphInspector::_can_handle(Object *p_object) {
     if (!p_object) return false;

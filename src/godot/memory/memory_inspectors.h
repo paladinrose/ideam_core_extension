@@ -5,6 +5,7 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 
+#include "memory_buffer_selection_resource.h"
 #include "../../core/memory/memory_buffer_selection_pod.h"
 #include "../../core/memory/memory_grant_pod.h"
 #include "../../core/memory/memory_manager_dod.h"
@@ -36,6 +37,7 @@ public:
     // C++ Initialization Constructor
     void initialize_from_pod(const core::MemoryBufferSelectionPOD& p_pod);
 
+    void setup_emulated_selection(const godot::Ref<MemoryBufferSelectionResource>& p_res, int p_capacity, uint32_t p_target_id);
     // Read-only GDScript API
     int get_element_count() const { return static_cast<int>(element_count); }
     int get_target_buffer_id() const { return static_cast<int>(target_buffer_id); }

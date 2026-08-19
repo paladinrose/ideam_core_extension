@@ -25,7 +25,11 @@ public:
     ~GameAgentEditorInspectorPlugin();
 
     // Base overrides
-    virtual godot::Object *get_undo_redo() const override;
+
+#ifdef TOOLS_ENABLED
+    virtual godot::EditorUndoRedoManager *get_undo_redo() const override;
+#endif
+
     virtual bool _can_handle(godot::Object *p_object) override;
     
     // Utilizing the strict signature we fixed earlier!

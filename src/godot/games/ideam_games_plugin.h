@@ -4,6 +4,7 @@
 #include <godot_cpp/classes/window.hpp>
 #include <godot_cpp/classes/control.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/classes/editor_undo_redo_manager.hpp>
 
 namespace ideam::godot_ext {
 
@@ -54,7 +55,7 @@ public:
 
     // Static API exposed to Godot
     static godot::Window* open_action_tool_window(GameAgent* agent, godot::Object* editor);
-    static godot::Object* get_static_undo_redo();
+    static godot::EditorUndoRedoManager* get_static_undo_redo();
 };
 
 } // namespace ideam::godot_ext

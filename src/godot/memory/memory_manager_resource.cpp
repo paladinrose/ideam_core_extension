@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/dir_access.hpp>
 #include <godot_cpp/classes/resource_saver.hpp>
+#include <godot_cpp/variant/callable_method_pointer.hpp>
 
 #include <map>
 #include <vector>
@@ -24,6 +25,11 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_buffer_names"), &MemoryManagerResource::get_buffer_names);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "buffer_schemas", PROPERTY_HINT_ARRAY_TYPE, "MemoryBufferResource"), "set_buffer_schemas", "get_buffer_schemas");
 
+    ClassDB::bind_method(D_METHOD("move_buffer", "from_index", "to_index"), &MemoryManagerResource::move_buffer);
+    ClassDB::bind_method(D_METHOD("insert_buffer", "index", "buffer"), &MemoryManagerResource::insert_buffer);
+    ClassDB::bind_method(D_METHOD("duplicate_buffer", "index"), &MemoryManagerResource::duplicate_buffer);
+    ClassDB::bind_method(D_METHOD("remove_buffer", "index"), &MemoryManagerResource::remove_buffer);
+    
     ClassDB::bind_method(D_METHOD("set_scaling_strategy", "strategy"), &MemoryManagerResource::set_scaling_strategy);
     ClassDB::bind_method(D_METHOD("get_scaling_strategy"), &MemoryManagerResource::get_scaling_strategy);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "scaling_strategy", PROPERTY_HINT_ENUM, "Fixed,Scale By RAM"), "set_scaling_strategy", "get_scaling_strategy");
@@ -32,10 +38,12 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_transient_capacity_mb"), &MemoryManagerResource::get_transient_capacity_mb);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "transient_capacity_mb"), "set_transient_capacity_mb", "get_transient_capacity_mb");
 
-    ClassDB::bind_method(D_METHOD("register_consumer_buffers", "consumer", "profiles"), &MemoryManagerResource::register_consumer_buffers);
+    ClassDB::bind_method(D_METHOD("register_consumer_buffers", "consumer", "consumer_buffers"), &MemoryManagerResource::register_consumer_buffers);
     ClassDB::bind_method(D_METHOD("clear_consumer_buffers", "consumer"), &MemoryManagerResource::clear_consumer_buffers);
-    ClassDB::bind_method(D_METHOD("set_managed_buffers", "profiles"), &MemoryManagerResource::set_managed_buffers);
+    ClassDB::bind_method(D_METHOD("set_managed_buffers", "managed_buffers"), &MemoryManagerResource::set_managed_buffers);
     ClassDB::bind_method(D_METHOD("get_managed_buffers"), &MemoryManagerResource::get_managed_buffers);
+    ClassDB::bind_method(D_METHOD("move_managed_buffer", "from_index", "to_index"), &MemoryManagerResource::move_managed_buffer);
+    
     ClassDB::bind_method(D_METHOD("get_total_projected_footprint_bytes"), &MemoryManagerResource::get_total_projected_footprint_bytes);
     
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "managed_buffer_schemas", PROPERTY_HINT_ARRAY_TYPE, "ManagedBufferProfile"), "set_managed_buffers", "get_managed_buffers");
@@ -53,6 +61,10 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_active_emulated_grants", "grants"), &MemoryManagerResource::set_active_emulated_grants);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "active_emulated_grants", PROPERTY_HINT_ARRAY_TYPE, "MemoryGrantResource"), "set_active_emulated_grants", "get_active_emulated_grants");
 }
+
+MemoryManagerResource::MemoryManagerResource() {}
+
+MemoryManagerResource::~MemoryManagerResource() {}
 
 godot::TypedArray<godot::StringName> MemoryManagerResource::get_buffer_names() const {
     godot::TypedArray<godot::StringName> names;
@@ -87,15 +99,141 @@ godot::TypedArray<godot::StringName> MemoryManagerResource::get_selected_buffer_
 
 std::shared_ptr<core::MemoryManagerDOD> MemoryManagerResource::get_backend() const { return backend_manager; }
 
-void MemoryManagerResource::set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) { 
+void MemoryManagerResource::set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) {
     if (p_schemas == buffer_schemas) return;
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Set Buffer Schemas");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(p_schemas.duplicate()));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(buffer_schemas.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _set_buffer_schemas(p_schemas);
+    }
+}
+void MemoryManagerResource::_set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) { 
     buffer_schemas = p_schemas;
     emit_changed();
 }
 godot::TypedArray<MemoryBufferResource> MemoryManagerResource::get_buffer_schemas() const { return buffer_schemas; }
 
+void MemoryManagerResource::move_buffer(int p_from_index, int p_to_index) {
+    if (p_from_index < 0 || p_from_index >= buffer_schemas.size()) return;
+    if (p_to_index < 0 || p_to_index >= buffer_schemas.size()) return;
+    if (p_from_index == p_to_index) return;
+
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Move Memory Buffer");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_move_buffer).bind(p_from_index, p_to_index));
+        // The inverse of a move is just moving it back from the destination to the origin
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_move_buffer).bind(p_to_index, p_from_index));
+        undo_redo->commit_action();
+    } else {
+        _move_buffer(p_from_index, p_to_index);
+    }
+}
+
+void MemoryManagerResource::_move_buffer(int p_from_index, int p_to_index) {
+    godot::Variant buffer = buffer_schemas[p_from_index];
+    buffer_schemas.remove_at(p_from_index);
+    buffer_schemas.insert(p_to_index, buffer);
+    emit_changed();
+}
+
+void MemoryManagerResource::remove_buffer(int p_index) {
+    if (p_index < 0 || p_index >= buffer_schemas.size()) return;
+
+    // Capture the existing reference so we can put it back during Undo
+    godot::Ref<MemoryBufferResource> buffer_to_remove = buffer_schemas[p_index];
+
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Remove Memory Buffer");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_remove_buffer).bind(p_index));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_insert_buffer).bind(p_index, buffer_to_remove));
+        undo_redo->commit_action();
+    } else {
+        _remove_buffer(p_index);
+    }
+}
+
+void MemoryManagerResource::_remove_buffer(int p_index) {
+    buffer_schemas.remove_at(p_index);
+    emit_changed();
+}
+
+void MemoryManagerResource::insert_buffer(int p_index, const godot::Ref<MemoryBufferResource>& p_buffer) {
+    if (!p_buffer.is_valid()) return;
+
+    // Clamp the index to prevent out-of-bounds insertions if called directly from the UI
+    int safe_index = p_index;
+    if (safe_index < 0 || safe_index > buffer_schemas.size()) {
+        safe_index = buffer_schemas.size();
+    }
+
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Insert Memory Buffer");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_insert_buffer).bind(safe_index, p_buffer));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_remove_buffer).bind(safe_index));
+        undo_redo->commit_action();
+    } else {
+        _insert_buffer(safe_index, p_buffer);
+    }
+}
+void MemoryManagerResource::_insert_buffer(int p_index, const godot::Ref<MemoryBufferResource>& p_buffer) {
+    // If the index is out of bounds, push to the end to prevent crashing
+    if (p_index < 0 || p_index > buffer_schemas.size()) {
+        buffer_schemas.push_back(p_buffer);
+    } else {
+        buffer_schemas.insert(p_index, p_buffer);
+    }
+    emit_changed();
+}
+
+void MemoryManagerResource::duplicate_buffer(int p_index) {
+    if (p_index < 0 || p_index >= buffer_schemas.size()) return;
+
+    godot::Ref<MemoryBufferResource> original = buffer_schemas[p_index];
+    if (!original.is_valid()) return;
+
+    // Deep-copy the configuration based on MemoryBufferResource properties[cite: 8]
+    godot::Ref<MemoryBufferResource> duplicate_res;
+    duplicate_res.instantiate();
+    
+    duplicate_res->set_buffer_name(original->get_buffer_name() + godot::StringName("_copy"));
+    duplicate_res->set_layout_type(original->get_layout_type());
+    duplicate_res->set_max_elements(original->get_max_elements());
+    duplicate_res->set_alignment(original->get_alignment());
+    duplicate_res->set_needs_gpu_compute(original->get_needs_gpu_compute());
+    duplicate_res->set_enable_shadowing(original->get_enable_shadowing());
+    duplicate_res->set_selection_mode(original->get_selection_mode());
+    
+    // Perform a deep copy of the columns dictionary array[cite: 7, 8]
+    duplicate_res->set_columns(original->get_columns().duplicate(true)); 
+
+    // Insert the duplicate immediately following the original
+    int target_index = p_index + 1;
+
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Duplicate Memory Buffer");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_insert_buffer).bind(target_index, duplicate_res));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_remove_buffer).bind(target_index));
+        undo_redo->commit_action();
+    } else {
+        _insert_buffer(target_index, duplicate_res);
+    }
+}
+
 void MemoryManagerResource::set_scaling_strategy(int p_strategy) { 
     if (p_strategy == scaling_strategy) return;
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Set Scaling Strategy");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_scaling_strategy).bind(p_strategy));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_scaling_strategy).bind(scaling_strategy));
+        undo_redo->commit_action();
+    } else {
+        _set_scaling_strategy(p_strategy);
+    }
+}
+void MemoryManagerResource::_set_scaling_strategy(int p_strategy) { 
     scaling_strategy = static_cast<ScalabilityStrategy>(p_strategy); 
     emit_changed();
 }
@@ -103,6 +241,16 @@ int MemoryManagerResource::get_scaling_strategy() const { return scaling_strateg
 
 void MemoryManagerResource::set_transient_capacity_mb(int p_mb) { 
     if (p_mb == transient_capacity_mb) return;
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Set Transient Capacity");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_transient_capacity_mb).bind(p_mb));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_transient_capacity_mb).bind(transient_capacity_mb));
+        undo_redo->commit_action();
+    } else {
+        _set_transient_capacity_mb(p_mb);
+    }
+}
+void MemoryManagerResource::_set_transient_capacity_mb(int p_mb) { 
     transient_capacity_mb = p_mb; 
     emit_changed();
 }
@@ -111,38 +259,103 @@ int MemoryManagerResource::get_transient_capacity_mb() const { return transient_
 
 void MemoryManagerResource::set_managed_buffers(const godot::TypedArray<ManagedBufferResource>& p_buffers) { 
     if (p_buffers == managed_buffer_schemas) return;
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Set Managed Buffers");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_managed_buffers).bind(p_buffers.duplicate()));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_managed_buffers).bind(managed_buffer_schemas.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _set_managed_buffers(p_buffers);
+    }
+}
+void MemoryManagerResource::_set_managed_buffers(const godot::TypedArray<ManagedBufferResource>& p_buffers) { 
     managed_buffer_schemas = p_buffers; 
     emit_changed();
 }
 godot::TypedArray<ManagedBufferResource> MemoryManagerResource::get_managed_buffers() const { return managed_buffer_schemas; }
 
+void MemoryManagerResource::move_managed_buffer(int p_from_index, int p_to_index) {
+    if (p_from_index < 0 || p_from_index >= managed_buffer_schemas.size()) return;
+    if (p_to_index < 0 || p_to_index >= managed_buffer_schemas.size()) return;
+    if (p_from_index == p_to_index) return;
+
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Move Managed Profile");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_move_managed_buffer).bind(p_from_index, p_to_index));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_move_managed_buffer).bind(p_to_index, p_from_index));
+        undo_redo->commit_action();
+    } else {
+        _move_managed_buffer(p_from_index, p_to_index);
+    }
+}
+
+void MemoryManagerResource::_move_managed_buffer(int p_from_index, int p_to_index) {
+    godot::Variant profile = managed_buffer_schemas[p_from_index];
+    managed_buffer_schemas.remove_at(p_from_index);
+    managed_buffer_schemas.insert(p_to_index, profile);
+    emit_changed();
+}
+
 void MemoryManagerResource::set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants) { 
     if (p_grants == active_emulated_grants) return;
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Set Active Emulated Grants");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_active_emulated_grants).bind(p_grants.duplicate()));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_active_emulated_grants).bind(active_emulated_grants.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _set_active_emulated_grants(p_grants);
+    }
+}
+void MemoryManagerResource::_set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants) { 
     active_emulated_grants = p_grants;
+    recalculate_emulated_grants();
     emit_changed(); 
 }
 godot::TypedArray<MemoryGrantResource> MemoryManagerResource::get_active_emulated_grants() const { return active_emulated_grants; }
 
 void MemoryManagerResource::clear_consumer_buffers(const godot::StringName& p_consumer) {
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Clear Consumer Buffers");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_clear_consumer_buffers).bind(p_consumer));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_managed_buffers).bind(managed_buffer_schemas.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _clear_consumer_buffers(p_consumer);
+    }
+}
+void MemoryManagerResource::_clear_consumer_buffers(const godot::StringName& p_consumer) {
+    bool changed = false;
     for (int i = managed_buffer_schemas.size() - 1; i >= 0; --i) {
-        godot::Ref<ManagedBufferResource> profile = managed_buffer_schemas[i];
-        if (profile->get_consumer_name() == p_consumer) {
+        godot::Ref<ManagedBufferResource> consumer_buffer = managed_buffer_schemas[i];
+        if (consumer_buffer->get_consumer_name() == p_consumer) {
             managed_buffer_schemas.remove_at(i);
+            changed = true;
         }
     }
-    
-    emit_changed();
+    if (changed) {
+        emit_changed();
+    }
 }
 
 void MemoryManagerResource::register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferResource>& p_buffers) {
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Register Consumer Buffers");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_register_consumer_buffers).bind(p_consumer, p_buffers.duplicate()));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_managed_buffers).bind(managed_buffer_schemas.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _register_consumer_buffers(p_consumer, p_buffers);
+    }
+}
+void MemoryManagerResource::_register_consumer_buffers(const godot::StringName& p_consumer, const godot::TypedArray<ManagedBufferResource>& p_buffers) {
     for (int i = managed_buffer_schemas.size() - 1; i >= 0; --i) {
-        godot::Ref<ManagedBufferResource> profile = managed_buffer_schemas[i];
-        if (profile->get_consumer_name() == p_consumer) {
+        godot::Ref<ManagedBufferResource> consumer_buffer = managed_buffer_schemas[i];
+        if (consumer_buffer->get_consumer_name() == p_consumer) {
             managed_buffer_schemas.remove_at(i);
         }
     }
     managed_buffer_schemas.append_array(p_buffers);
-    
     emit_changed();
 }
 
@@ -196,11 +409,11 @@ int MemoryManagerResource::get_total_projected_footprint_bytes() const {
 
     // --- 3. Simulate Graph Consumer Profiles ---
     for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
-        godot::Ref<ManagedBufferResource> profile = managed_buffer_schemas[i];
-        if (!profile.is_valid()) continue;
+        godot::Ref<ManagedBufferResource> managed_buffer = managed_buffer_schemas[i];
+        if (!managed_buffer.is_valid()) continue;
         
-        uint32_t align = static_cast<uint32_t>(profile->get_alignment());
-        size_t size = static_cast<size_t>(profile->get_byte_footprint());
+        uint32_t align = static_cast<uint32_t>(managed_buffer->get_alignment());
+        size_t size = static_cast<size_t>(managed_buffer->get_byte_footprint());
         
         simulated_offset = core::MemoryUtilities::align_to(simulated_offset, align);
         simulated_offset += size;
@@ -313,6 +526,10 @@ godot::Ref<MemoryGrantResource> MemoryManagerResource::request_emulated_grant(co
         part_res->set_access_mode(0);     // Default fallback to READ mode
         part_res->set_is_contiguous(true); 
         
+        Ref<MemoryBufferSelectionResource> default_selection;
+        default_selection.instantiate();
+        part_res->set_selection(default_selection);
+
         if (target_buffer_id >= 0 && target_buffer_id < buffer_schemas.size()) {
             Ref<MemoryBufferResource> schema = buffer_schemas[target_buffer_id];
             if (schema.is_valid()) {
@@ -326,14 +543,12 @@ godot::Ref<MemoryGrantResource> MemoryManagerResource::request_emulated_grant(co
     // Assign the generated array of parts directly into our new grant resource
     new_grant->set_configured_parts(configured_parts);
 
-    // 3. Register our fresh grant into the global manager tracking pool
+    // 3. Dry-Run Validation Loop
+    // Temporarily add it to check for Unassigned Claims, Out of Bounds, or Race Conditions.
     active_emulated_grants.push_back(new_grant);
-
-    // 4. Run the authoritative validation linter loop
-    // This populates any "Unassigned Claims", "Out of Bounds", or "Race Condition Collisions".
     recalculate_emulated_grants();
 
-    // 5. Contextual Context Evaluation
+    // Context Evaluation
     // Check if the linter appended any errors to our newly minted grant during validation.
     if (!new_grant->is_emulated_valid()) { 
         UtilityFunctions::print_rich("[color=yellow]Memory Warning: Requested emulated grant failed linting validations.[/color]");
@@ -344,19 +559,44 @@ godot::Ref<MemoryGrantResource> MemoryManagerResource::request_emulated_grant(co
         for (int i = 0; i < errors.size(); ++i) {
             UtilityFunctions::print_rich("[color=orange] - " + errors[i] + "[/color]");
         }
-        // If it failed systemic validation rules, remove it from our active simulation tracking pool
+        
+        // Failed systemic validation rules: cleanly revert simulation tracking pool
         int tracking_idx = active_emulated_grants.find(new_grant);
         if (tracking_idx != -1) {
             active_emulated_grants.remove_at(tracking_idx);
         }
+        recalculate_emulated_grants();
         
         // Return a null pointer to signal compilation/configuration failure to the UI orchestrator
         return Ref<MemoryGrantResource>();
     }
 
-    emit_changed();
+    // 4. Clean Revert & Unified Commit
+    // It's valid, but to support Undo/Redo tracking, we need to temporarily remove it 
+    // from the raw array and let the UndoRedo pipeline explicitly run the `add` action.
+    int tracking_idx = active_emulated_grants.find(new_grant);
+    if (tracking_idx != -1) {
+        active_emulated_grants.remove_at(tracking_idx);
+    }
+    recalculate_emulated_grants();
+
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Request Emulated Grant");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_add_emulated_grant).bind(new_grant));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_release_emulated_grant).bind(new_grant));
+        undo_redo->commit_action(true);
+    } else {
+        _add_emulated_grant(new_grant);
+    }
+
     // Success! Return the fully established, validated configuration token
     return new_grant;
+}
+
+void MemoryManagerResource::_add_emulated_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
+    active_emulated_grants.push_back(p_grant);
+    recalculate_emulated_grants();
+    emit_changed();
 }
 
 void MemoryManagerResource::release_emulated_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
@@ -365,13 +605,49 @@ void MemoryManagerResource::release_emulated_grant(const godot::Ref<MemoryGrantR
     int index = active_emulated_grants.find(p_grant);
     if (index == -1) return;
 
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Release Emulated Grant");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_release_emulated_grant).bind(p_grant));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_insert_emulated_grant).bind(index, p_grant));
+        undo_redo->commit_action();
+    } else {
+        _release_emulated_grant(p_grant);
+    }
+}
+
+void MemoryManagerResource::_release_emulated_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
+    int index = active_emulated_grants.find(p_grant);
+    if (index == -1) return;
+
     active_emulated_grants.remove_at(index);
     recalculate_emulated_grants();
     emit_changed();
-    
+}
+
+void MemoryManagerResource::_insert_emulated_grant(int p_index, const godot::Ref<MemoryGrantResource>& p_grant) {
+    if (p_index < 0 || p_index >= active_emulated_grants.size()) {
+        active_emulated_grants.push_back(p_grant);
+    } else {
+        active_emulated_grants.insert(p_index, p_grant);
+    }
+    recalculate_emulated_grants();
+    emit_changed();
 }
 
 void MemoryManagerResource::clear_all_emulated_grants() {
+    if (active_emulated_grants.is_empty()) return;
+    
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Clear All Emulated Grants");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_clear_all_emulated_grants));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_active_emulated_grants).bind(active_emulated_grants.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _clear_all_emulated_grants();
+    }
+}
+
+void MemoryManagerResource::_clear_all_emulated_grants() {
     active_emulated_grants.clear();
     recalculate_emulated_grants();
     emit_changed();
@@ -516,6 +792,61 @@ void MemoryManagerResource::recalculate_emulated_grants() {
     }
 }
 
+godot::Ref<MemoryGrantInspector> MemoryManagerResource::get_grant_inspector(int p_grant_index) const {
+    godot::Ref<MemoryGrantInspector> grant_inspector;
+    
+    if (p_grant_index < 0 || p_grant_index >= active_emulated_grants.size()) {
+        return grant_inspector; // Returns null
+    }
+
+    godot::Ref<MemoryGrantResource> grant = active_emulated_grants[p_grant_index];
+    if (grant.is_null()) return grant_inspector;
+
+    grant_inspector.instantiate();
+    godot::TypedArray<godot::Dictionary> mock_parts;
+    godot::TypedArray<GrantPartResource> parts = grant->get_configured_parts();
+
+    for (int i = 0; i < parts.size(); ++i) {
+        godot::Ref<GrantPartResource> part = parts[i];
+        if (part.is_null()) continue;
+
+        uint32_t b_id = part->get_buffer_id();
+        int capacity = 0;
+
+        // Contextual Lookup: Grab the capacity from the master schemas
+        if (b_id >= 0 && b_id < buffer_schemas.size()) {
+            godot::Ref<MemoryBufferResource> schema = buffer_schemas[b_id];
+            if (schema.is_valid()) {
+                capacity = schema->get_max_elements();
+            }
+        }
+
+        godot::Dictionary dict;
+        dict["buffer_id"] = b_id;
+        dict["access_mode"] = part->get_access_mode() == 1 ? "WRITE" : "READ";
+        dict["element_stride"] = part->get_element_stride();
+        dict["capacity"] = capacity;
+
+        // Construct and nest the Selection Inspector
+        godot::Ref<MemoryBufferSelectionResource> sel_res = part->get_selection();
+        godot::Ref<MemorySelectionInspector> sel_inspector;
+        sel_inspector.instantiate();
+        
+        if (sel_res.is_valid()) {
+            sel_inspector->setup_emulated_selection(sel_res, capacity, b_id);
+            dict["element_count"] = sel_res->get_element_count();
+        } else {
+            dict["element_count"] = 0;
+        }
+        
+        dict["selection"] = sel_inspector;
+        mock_parts.push_back(dict);
+    }
+
+    grant_inspector->setup_emulated_grant(mock_parts);
+    return grant_inspector;
+}
+
 void MemoryManagerResource::serialize_subresources_to_disk() {
     // 1. Ensure we only execute this logic inside the Godot editor
     if (!godot::Engine::get_singleton()->is_editor_hint()) {
@@ -584,5 +915,6 @@ void MemoryManagerResource::serialize_subresources_to_disk() {
     // instead of embedding them.
     godot::ResourceSaver::get_singleton()->save(this, current_path);
 }
+
 
 } // namespace ideam::godot_ext

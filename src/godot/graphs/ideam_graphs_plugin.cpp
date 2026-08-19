@@ -60,12 +60,14 @@ void IdeamGraphsPlugin::_on_composer_window_closed() {
     }
 }
 
-Object *IdeamGraphsPlugin::undo_redo() {
+#ifdef TOOLS_ENABLED
+EditorUndoRedoManager *IdeamGraphsPlugin::undo_redo() {
     if (singleton) {
         return singleton->get_undo_redo();
     }
     return nullptr;
 }
+#endif
 
 Window* IdeamGraphsPlugin::get_shared_composer_window() {
     if (!singleton) {

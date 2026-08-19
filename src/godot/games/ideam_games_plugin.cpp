@@ -194,7 +194,7 @@ godot::Window* IdeamGamesPlugin::open_action_tool_window(GameAgent* agent, godot
     return nullptr;
 }
 
-godot::Object* IdeamGamesPlugin::get_static_undo_redo() {
+godot::EditorUndoRedoManager* IdeamGamesPlugin::get_static_undo_redo() {
     if (singleton) {
         return singleton->get_undo_redo();
     }

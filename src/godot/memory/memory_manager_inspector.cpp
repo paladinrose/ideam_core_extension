@@ -19,10 +19,12 @@ void MemoryManagerInspector::_bind_methods() {
 MemoryManagerInspector::MemoryManagerInspector() {}
 MemoryManagerInspector::~MemoryManagerInspector() {}
 
-Object *MemoryManagerInspector::get_undo_redo() const {
+#ifdef TOOLS_ENABLED
+EditorUndoRedoManager *MemoryManagerInspector::get_undo_redo() const {
     // Modify this if your memory tools rely on a different plugin for undo/redo actions
     return IdeamMemoryPlugin::undo_redo();
 }
+#endif
 
 bool MemoryManagerInspector::_can_handle(Object *p_object) {
     if (!p_object) return false;
@@ -53,7 +55,15 @@ void MemoryManagerInspector::_on_open_profiler_pressed(Object* p_object) {
     Ref<MemoryManagerResource> memory_manager_ref(raw_resource);
     
     // Pass the reference directly to the static profiler method
-    MemoryProfiler::profile_memory_manager(memory_manager_ref);
+#ifdef TOOLS_ENABLED
+    // Fetch the active UndoRedo manager from our plugin
+    EditorUndoRedoManager* editor_ur = nullptr;
+    editor_ur = get_undo_redo();
+    MemoryProfiler::profile_memory_manager(memory_manager_ref, nullptr, editor_ur);
+#else
+    MemoryProfiler::profile_memory_manager(memory_manager_ref, nullptr);
+#endif
+    
 }
 
 } // namespace ideam::godot_ext

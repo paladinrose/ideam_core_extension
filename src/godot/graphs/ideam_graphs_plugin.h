@@ -35,7 +35,9 @@ public:
     void _on_composer_window_closed();
 
     // Global Access
-    static godot::Object *undo_redo();
+#ifdef TOOLS_ENABLED
+    static godot::EditorUndoRedoManager *undo_redo();
+#endif
     // A static bridge to request the shared composer window from the active plugin instance.
     static godot::Window* get_shared_composer_window();
 };

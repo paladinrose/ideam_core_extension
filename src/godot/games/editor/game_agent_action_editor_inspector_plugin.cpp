@@ -39,11 +39,13 @@ bool GameAgentActionEditorInspectorPlugin::_parse_property(godot::Object *p_obje
         // Instantiate our custom UI sequencer
         GameAgentActionSequencer* s = memnew(GameAgentActionSequencer);
         
-        // We use the dynamic 'set' API here to guarantee it sets without 
-        // needing the explicit C++ method signatures of the sequencer.
-        s->set("undo_redo", get_undo_redo());
+
+#ifdef TOOLS_ENABLED
+        Object *undo_redo = get_undo_redo();
+        s->set("undo_redo", undo_redo);
         s->set("editor_root", editor_root);
-        
+#endif
+
         GameAgentAction* action = godot::Object::cast_to<GameAgentAction>(p_object);
         if (action) {
             // Again, using call() allows us to interact seamlessly even if 

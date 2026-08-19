@@ -38,8 +38,10 @@ public:
     // Signal Callbacks
     void _on_manifest_updated();
 
+#ifdef TOOLS_ENABLED
     // Global Access
-    static godot::Object *undo_redo();
+    static godot::EditorUndoRedoManager *undo_redo();
+#endif
 };
 
 } // namespace ideam::godot_ext

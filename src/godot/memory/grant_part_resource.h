@@ -1,5 +1,7 @@
 #pragma once
 
+#include "memory_buffer_selection_resource.h"
+
 #include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 
@@ -29,6 +31,8 @@ private:
     int access_mode = 0; 
     bool is_contiguous = false;
 
+    godot::Ref<MemoryBufferSelectionResource> selection;
+
 protected:
     static void _bind_methods();
 
@@ -45,6 +49,7 @@ public:
     void set_target_column_name(const godot::StringName& p_name);
     void set_access_mode(int p_mode);
     void set_is_contiguous(bool p_contiguous);
+    void set_selection(const godot::Ref<MemoryBufferSelectionResource>& p_selection);
 
     // Getters
     int get_buffer_id() const;
@@ -55,6 +60,7 @@ public:
     godot::StringName get_target_column_name() const;
     int get_access_mode() const;
     bool get_is_contiguous() const;
+    godot::Ref<MemoryBufferSelectionResource> get_selection() const;
 };
 
 } // namespace ideam::godot_ext

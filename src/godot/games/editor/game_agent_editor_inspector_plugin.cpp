@@ -20,10 +20,12 @@ GameAgentEditorInspectorPlugin::GameAgentEditorInspectorPlugin() {}
 
 GameAgentEditorInspectorPlugin::~GameAgentEditorInspectorPlugin() {}
 
-godot::Object *GameAgentEditorInspectorPlugin::get_undo_redo() const {
+#ifdef TOOLS_ENABLED
+godot::EditorUndoRedoManager *GameAgentEditorInspectorPlugin::get_undo_redo() const {
     // Cleanly fetch the editor's undo/redo manager without storing state
     return godot::EditorInterface::get_singleton()->get_editor_undo_redo();
 }
+#endif
 
 bool GameAgentEditorInspectorPlugin::_can_handle(godot::Object *p_object) {
     // Safely check if the object is our GameAgent
@@ -77,14 +79,16 @@ void GameAgentEditorInspectorPlugin::_node_retargeter_change(godot::Object* new_
     if (old_retargeter == godot::Variant(new_retargeter)) {
         return;
     }
-    
-    godot::EditorUndoRedoManager* ur = godot::Object::cast_to<godot::EditorUndoRedoManager>(get_undo_redo());
+
+#ifdef TOOLS_ENABLED
+    godot::EditorUndoRedoManager* ur = get_undo_redo();
     if (ur) {
         ur->create_action("Set Player Node Assignments");
         ur->add_do_property(agent, "player_node_assignments", new_retargeter);
         ur->add_undo_property(agent, "player_node_assignments", old_retargeter);
         ur->commit_action();
     }
+#endif
 }
 
 void GameAgentEditorInspectorPlugin::_signal_connector_change(godot::Object* new_connector) {
@@ -96,13 +100,15 @@ void GameAgentEditorInspectorPlugin::_signal_connector_change(godot::Object* new
         return;
     }
     
-    godot::EditorUndoRedoManager* ur = godot::Object::cast_to<godot::EditorUndoRedoManager>(get_undo_redo());
+#ifdef TOOLS_ENABLED
+    godot::EditorUndoRedoManager* ur = get_undo_redo();
     if (ur) {
         ur->create_action("Set Player Signal Assignments");
         ur->add_do_property(agent, "player_signal_assignments", new_connector);
         ur->add_undo_property(agent, "player_signal_assignments", old_connector);
         ur->commit_action();
     }
+#endif
 }
 
 } // namespace ideam::godot_ext

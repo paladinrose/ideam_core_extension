@@ -58,11 +58,13 @@ void IdeamMemoryPlugin::_exit_tree() {
     set_plugin_active("IdeamMemory", false);
 }
 
-Object *IdeamMemoryPlugin::undo_redo() {
+#ifdef TOOLS_ENABLED
+EditorUndoRedoManager *IdeamMemoryPlugin::undo_redo() {
     if (singleton) {
         return singleton->get_undo_redo();
     }
     return nullptr;
 }
+#endif
 
 } // namespace ideam::godot_ext

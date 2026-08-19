@@ -20,9 +20,11 @@ IdeamGraphInspector::IdeamGraphInspector() {
 IdeamGraphInspector::~IdeamGraphInspector() {
 }
 
-Object *IdeamGraphInspector::get_undo_redo() const {
+#ifdef TOOLS_ENABLED
+EditorUndoRedoManager *IdeamGraphInspector::get_undo_redo() const {
     return IdeamGraphsPlugin::undo_redo();
 }
+#endif
 
 bool IdeamGraphInspector::_can_handle(Object *p_object) {
     if (!p_object) {

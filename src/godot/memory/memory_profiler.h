@@ -8,12 +8,20 @@
 #include <godot_cpp/classes/item_list.hpp>
 #include <godot_cpp/classes/panel_container.hpp>
 #include <godot_cpp/classes/label.hpp>
+#include <godot_cpp/classes/tab_container.hpp>
+#include <godot_cpp/classes/input_event_mouse_motion.hpp>
 
 #include "memory_manager_resource.h"
 #include "memory_ribbon.h"
 #include "memory_buffer_view.h"
 #include "managed_buffer_view.h"
+#include "memory_grant_view.h"
 #include "../controls/theme_selector.h"
+#include "../utilities/ideam_undo_redo.h"
+
+#ifdef TOOLS_ENABLED
+#include <godot_cpp/classes/editor_undo_redo_manager.hpp>
+#endif
 
 namespace ideam::godot_ext {
 
@@ -22,6 +30,7 @@ class MemoryProfiler : public godot::VBoxContainer {
 
 private:
     godot::Ref<MemoryManagerResource> active_resource;
+    godot::Ref<IdeamUndoRedo> undo_redo;
 
     // Row 1: Control Bar
     godot::HBoxContainer* control_bar = nullptr;
@@ -34,16 +43,19 @@ private:
     // Row 3: Main Workspace
     godot::HBoxContainer* main_workspace = nullptr;
     
-    // Column A: Sidebar
-    godot::VBoxContainer* sidebar = nullptr;
+    // Column A: Sidebar Tabs
+    godot::TabContainer* sidebar_tabs = nullptr;
     godot::ItemList* memory_buffer_list = nullptr;
-    godot::Label* managed_buffer_list_title = nullptr;
     godot::ItemList* managed_buffer_list = nullptr;
+    godot::ItemList* memory_grant_list = nullptr;
+
+    int hovered_grant_index = -1;
 
     // Column B: Primary Visualization
     godot::PanelContainer* view_container = nullptr;
     MemoryBufferView* memory_buffer_view = nullptr;
     ManagedBufferView* managed_buffer_view = nullptr;        
+    MemoryGrantView* memory_grant_view = nullptr;
     
     // Column C: Pseudo-Inspector
     godot::PanelContainer* inspector_panel = nullptr;
@@ -60,20 +72,37 @@ public:
     MemoryProfiler();
     ~MemoryProfiler();
 
+#ifdef TOOLS_ENABLED
+    void set_editor_undo_redo(godot::EditorUndoRedoManager* p_manager);
+#endif
+    godot::Ref<IdeamUndoRedo> get_undo_redo() const { return undo_redo; }
+
     // Signal Handlers
     void _on_save_pressed();
     void _on_buffer_item_selected(int p_index);
     void _on_managed_buffer_item_selected(int p_index);
+    void _on_grant_item_selected(int p_index);
+    
+    void _on_grant_list_gui_input(const godot::Ref<godot::InputEvent>& p_event);
+    void _on_grant_list_mouse_exited();
+
     void _on_ribbon_inspection_requested(int p_block_type, int p_index);
     
     void _on_theme_applied(const godot::Ref<godot::Theme>& p_theme, int p_index);
     
     // Instance-level operations
     void open_resource(godot::Ref<MemoryManagerResource> p_resource);
+    void _open_resource(godot::Ref<MemoryManagerResource> p_resource);
     void close_resource();
+    void _close_resource();
 
-    // Unified Static API routing (matches GraphComposer interface)
+    // Unified Static API routing 
+#ifdef TOOLS_ENABLED
+    static void profile_memory_manager(godot::Ref<MemoryManagerResource> p_resource, godot::Control* p_owner = nullptr, godot::EditorUndoRedoManager* p_undo_redo = nullptr);
+#else
     static void profile_memory_manager(godot::Ref<MemoryManagerResource> p_resource, godot::Control* p_owner = nullptr);
+#endif
+
     static void close_memory_profiler(godot::Ref<MemoryManagerResource> p_resource, godot::Control* p_owner = nullptr);
 };
 
