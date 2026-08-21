@@ -80,6 +80,8 @@ public:
     void insert_buffer(int p_index, const godot::Ref<MemoryBufferResource>& p_buffer);
     void duplicate_buffer(int p_index);
     void remove_buffer(int p_index);
+    void move_buffers_bulk(const godot::PackedInt32Array& p_buffer_ids, int p_target_index);
+    void duplicate_buffers_bulk(const godot::PackedInt32Array& p_buffer_ids, int p_target_index);
     
     void set_scaling_strategy(int p_strategy);
     int get_scaling_strategy() const;

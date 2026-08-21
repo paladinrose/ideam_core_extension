@@ -7,6 +7,10 @@ namespace ideam::godot_ext {
 void MemoryGrantView::_bind_methods() {
     ClassDB::bind_method(D_METHOD("populate_from_inspector", "inspector"), &MemoryGrantView::populate_from_inspector);
     ClassDB::bind_method(D_METHOD("clear"), &MemoryGrantView::clear);
+    
+    ClassDB::bind_method(D_METHOD("_on_part_inspect_requested", "index"), &MemoryGrantView::_on_part_inspect_requested);
+    ADD_SIGNAL(MethodInfo("part_selection_inspection_requested", PropertyInfo(Variant::INT, "part_index")));
+
 }
 
 MemoryGrantView::MemoryGrantView() {
@@ -81,8 +85,15 @@ void MemoryGrantView::populate_from_inspector(const Ref<MemoryGrantInspector>& p
         
         GrantPartView* part_view = memnew(GrantPartView);
         parts_container->add_child(part_view);
-        part_view->populate(part_data);
+        
+        // Use the updated populate signature and connect the signal
+        part_view->populate(part_data, i);
+        part_view->connect("inspect_requested", Callable(this, "_on_part_inspect_requested"));
     }
+}
+
+void MemoryGrantView::_on_part_inspect_requested(int p_index) {
+    emit_signal("part_selection_inspection_requested", p_index);
 }
 
 } // namespace ideam::godot_ext

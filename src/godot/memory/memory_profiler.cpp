@@ -13,17 +13,29 @@ namespace ideam::godot_ext {
 
 void MemoryProfiler::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_save_pressed"), &MemoryProfiler::_on_save_pressed);
+    
     ClassDB::bind_method(D_METHOD("_on_buffer_item_selected", "index"), &MemoryProfiler::_on_buffer_item_selected);
+    ClassDB::bind_method(D_METHOD("_on_buffer_list_gui_input", "event"), &MemoryProfiler::_on_buffer_list_gui_input);
+    ClassDB::bind_method(D_METHOD("_update_buffer_selection", "selection"), &MemoryProfiler::_update_buffer_selection);
+    ClassDB::bind_method(D_METHOD("_select_all_buffers"), &MemoryProfiler::_select_all_buffers);
+    ClassDB::bind_method(D_METHOD("_invert_buffer_selection"), &MemoryProfiler::_invert_buffer_selection);
+    ClassDB::bind_method(D_METHOD("_buffer_cut"), &MemoryProfiler::_buffer_cut);
+    ClassDB::bind_method(D_METHOD("_buffer_copy"), &MemoryProfiler::_buffer_copy);
+    ClassDB::bind_method(D_METHOD("_buffer_paste"), &MemoryProfiler::_buffer_paste);
+    ClassDB::bind_method(D_METHOD("_clear_clipboard"), &MemoryProfiler::_clear_clipboard);
+
     ClassDB::bind_method(D_METHOD("_on_managed_buffer_item_selected", "index"), &MemoryProfiler::_on_managed_buffer_item_selected);
     ClassDB::bind_method(D_METHOD("_on_grant_item_selected", "index"), &MemoryProfiler::_on_grant_item_selected);
     
     ClassDB::bind_method(D_METHOD("_on_grant_list_gui_input", "event"), &MemoryProfiler::_on_grant_list_gui_input);
     ClassDB::bind_method(D_METHOD("_on_grant_list_mouse_exited"), &MemoryProfiler::_on_grant_list_mouse_exited);
 
-    ClassDB::bind_method(D_METHOD("_on_ribbon_inspection_requested", "block_type", "index"), &MemoryProfiler::_on_ribbon_inspection_requested);
+    ClassDB::bind_method(D_METHOD("_on_ribbon_inspection_requested", "block_type", "index", "shift_pressed", "ctrl_pressed"), &MemoryProfiler::_on_ribbon_inspection_requested);
     
     ClassDB::bind_method(D_METHOD("_on_theme_applied", "theme", "index"), &MemoryProfiler::_on_theme_applied);
     
+    ClassDB::bind_method(D_METHOD("_on_part_selection_inspection_requested", "part_index"), &MemoryProfiler::_on_part_selection_inspection_requested);
+
     // Bind internal methods for undo/redo callables
     ClassDB::bind_method(D_METHOD("_open_resource", "resource"), &MemoryProfiler::_open_resource);
     ClassDB::bind_method(D_METHOD("_close_resource"), &MemoryProfiler::_close_resource);
@@ -59,6 +71,12 @@ MemoryProfiler::MemoryProfiler() {
     add_child(memory_ribbon);
     
     memory_ribbon->connect("inspection_requested", Callable(this, "_on_ribbon_inspection_requested"));
+    memory_ribbon->connect("select_all_requested", Callable(this, "_select_all_buffers"));
+    memory_ribbon->connect("invert_selection_requested", Callable(this, "_invert_buffer_selection"));
+    memory_ribbon->connect("copy_requested", Callable(this, "_buffer_copy"));
+    memory_ribbon->connect("cut_requested", Callable(this, "_buffer_cut"));
+    memory_ribbon->connect("paste_requested", Callable(this, "_buffer_paste"));
+    memory_ribbon->connect("cancel_requested", Callable(this, "_clear_clipboard"));
 
     // --- Row 3: Main Workspace ---
     main_workspace = memnew(HBoxContainer);
@@ -76,8 +94,10 @@ MemoryProfiler::MemoryProfiler() {
     memory_buffer_list->set_name("Buffers"); // Sets the Tab Label
     memory_buffer_list->set_h_size_flags(SIZE_EXPAND_FILL);
     memory_buffer_list->set_v_size_flags(SIZE_EXPAND_FILL);
+    memory_buffer_list->set_select_mode(ItemList::SELECT_MULTI);
     sidebar_tabs->add_child(memory_buffer_list);
     memory_buffer_list->connect("item_selected", Callable(this, "_on_buffer_item_selected"));
+    memory_buffer_list->connect("gui_input", Callable(this, "_on_buffer_list_gui_input"));
 
     managed_buffer_list = memnew(ItemList);
     managed_buffer_list->set_name("Managed");
@@ -111,7 +131,10 @@ MemoryProfiler::MemoryProfiler() {
     memory_grant_view = memnew(MemoryGrantView);
     memory_grant_view->set_visible(false);
     view_container->add_child(memory_grant_view);
-
+   
+    // Connect the new signal
+    memory_grant_view->connect("part_selection_inspection_requested", Callable(this, "_on_part_selection_inspection_requested"));
+    
     // Column C: Pseudo-Inspector Panel
     inspector_panel = memnew(PanelContainer);
     inspector_panel->set_custom_minimum_size(Vector2(250, 0));
@@ -177,25 +200,161 @@ void MemoryProfiler::_on_save_pressed() {
 }
 
 void MemoryProfiler::_on_buffer_item_selected(int p_index) {
+    last_clicked_buffer_index = p_index; // Track the anchor
+    PackedInt32Array new_selection = memory_buffer_list->get_selected_items();
+    _update_buffer_selection(new_selection);
+}
+
+void MemoryProfiler::_on_buffer_list_gui_input(const Ref<InputEvent>& p_event) {
+    Ref<InputEventKey> k = p_event;
+    if (k.is_valid() && k->is_pressed() && !k->is_echo()) {
+        
+        // Escape cancels clipboard operations
+        if (k->get_keycode() == Key::KEY_ESCAPE) {
+            _clear_clipboard();
+            memory_buffer_list->accept_event();
+            return;
+        }
+
+        if (k->is_command_or_control_pressed()) {
+            if (k->get_keycode() == Key::KEY_I) {
+                _invert_buffer_selection();
+                memory_buffer_list->accept_event();
+                return;
+            } else if (k->get_keycode() == Key::KEY_C) {
+                _buffer_copy();
+                memory_buffer_list->accept_event();
+                return;
+            } else if (k->get_keycode() == Key::KEY_X) {
+                _buffer_cut();
+                memory_buffer_list->accept_event();
+                return;
+            } else if (k->get_keycode() == Key::KEY_V) {
+                _buffer_paste();
+                memory_buffer_list->accept_event();
+                return;
+            }
+        }
+    }
+}
+
+void MemoryProfiler::_update_buffer_selection(const PackedInt32Array& p_selection) {
     if (active_resource.is_null()) return;
 
+    selected_buffer_ids = p_selection;
+
+    // 1. Sync the Ribbon
+    memory_ribbon->set_selected_buffers(selected_buffer_ids);
+
+    // 2. Sync the ItemList silently
+    memory_buffer_list->deselect_all();
+    for (int i = 0; i < selected_buffer_ids.size(); ++i) {
+        // The 'false' argument prevents the ItemList from emitting signals
+        memory_buffer_list->select(selected_buffer_ids[i], false); 
+    }
+
+    // 3. Manage the Views
     managed_buffer_list->deselect_all();
     memory_grant_list->deselect_all();
-    
     managed_buffer_view->set_visible(false);
     memory_grant_view->set_visible(false);
     memory_buffer_view->set_visible(true);
-    
-    memory_ribbon->clear_dimming();
 
-    TypedArray<MemoryBufferResource> schemas = active_resource->get_buffer_schemas();
-    if (p_index >= 0 && p_index < schemas.size()) {
-        Ref<MemoryBufferResource> schema = schemas[p_index];
-        if (schema.is_valid()) {
-            memory_buffer_view->open_buffer(schema);
-            inspector_title->set_text(String("Inspecting: ") + schema->get_buffer_name());
+    // 4. Update the Inspector Panel
+    if (selected_buffer_ids.size() == 1) {
+        // Single selection: Show normal buffer inspection
+        TypedArray<MemoryBufferResource> schemas = active_resource->get_buffer_schemas();
+        int idx = selected_buffer_ids[0];
+        if (idx >= 0 && idx < schemas.size()) {
+            Ref<MemoryBufferResource> schema = schemas[idx];
+            if (schema.is_valid()) {
+                TypedArray<MemoryBufferResource> view_array;
+                view_array.append(schema);
+                memory_buffer_view->open_buffers(view_array);
+                inspector_title->set_text(String("Inspecting: ") + schema->get_buffer_name());
+            }
+        }
+    } else if (selected_buffer_ids.size() > 1) {
+        // Multi-selection : TO BE UPDATED!!
+        memory_buffer_view->open_buffers(TypedArray<MemoryBufferResource>());
+        inspector_title->set_text(String("Multiple Buffers Selected (") + String::num_int64(selected_buffer_ids.size()) + ")");
+    } else {
+        // Empty selection
+        memory_buffer_view->open_buffers(TypedArray<MemoryBufferResource>());
+        inspector_title->set_text("Inspector");
+    }
+}
+
+void MemoryProfiler::_select_all_buffers() {
+    if (active_resource.is_null()) return;
+
+    int count = active_resource->get_buffer_schemas().size();
+    PackedInt32Array new_selection;
+    
+    for (int i = 0; i < count; ++i) {
+        new_selection.append(i);
+    }
+    
+    _update_buffer_selection(new_selection);
+}
+
+void MemoryProfiler::_invert_buffer_selection() {
+    if (active_resource.is_null()) return;
+
+    int count = active_resource->get_buffer_schemas().size();
+    PackedInt32Array new_selection;
+    
+    for (int i = 0; i < count; ++i) {
+        if (!selected_buffer_ids.has(i)) {
+            new_selection.append(i);
         }
     }
+    
+    _update_buffer_selection(new_selection);
+}
+
+void MemoryProfiler::_buffer_copy() {
+    if (active_resource.is_null() || selected_buffer_ids.is_empty()) return;
+    
+    clipboard_buffer_ids = selected_buffer_ids;
+    is_cut_operation = false;
+    
+    // Clear any previous cut visuals
+    memory_ribbon->clear_cut_buffers();
+}
+
+void MemoryProfiler::_buffer_cut() {
+    if (active_resource.is_null() || selected_buffer_ids.is_empty()) return;
+    
+    clipboard_buffer_ids = selected_buffer_ids;
+    is_cut_operation = true;
+    
+    // Visually stage the cut in the UI
+    memory_ribbon->set_cut_buffers(clipboard_buffer_ids);
+}
+
+void MemoryProfiler::_buffer_paste() {
+    if (active_resource.is_null() || clipboard_buffer_ids.is_empty()) return;
+
+    // Use our anchor index as the target
+    int target_index = last_clicked_buffer_index;
+
+    if (is_cut_operation) {
+        // Assume this method will handle the complex gathering/reordering math 
+        active_resource->move_buffers_bulk(clipboard_buffer_ids, target_index);
+        
+        // A cut is a one-time operation. Clear the clipboard after pasting.
+        _clear_clipboard();
+    } else {
+        // Assume this method handles bulk duplication
+        active_resource->duplicate_buffers_bulk(clipboard_buffer_ids, target_index);
+    }
+}
+
+void MemoryProfiler::_clear_clipboard() {
+    clipboard_buffer_ids.clear();
+    is_cut_operation = false;
+    memory_ribbon->clear_cut_buffers();
 }
 
 void MemoryProfiler::_on_managed_buffer_item_selected(int p_index) {
@@ -276,14 +435,50 @@ void MemoryProfiler::_on_grant_list_mouse_exited() {
     memory_ribbon->clear_dimming();
 }
 
-void MemoryProfiler::_on_ribbon_inspection_requested(int p_block_type, int p_index) {
-    // Forward the visual selection from the memory ribbon to our main workspace logic
+void MemoryProfiler::_on_ribbon_inspection_requested(int p_block_type, int p_index, bool p_shift_pressed, bool p_ctrl_pressed) {
     if (p_block_type == MemoryRibbon::BLOCK_BUFFER) {
         sidebar_tabs->set_current_tab(0);
-        if (memory_buffer_list->get_item_count() > p_index) {
-            memory_buffer_list->select(p_index);
-            _on_buffer_item_selected(p_index);
+
+        PackedInt32Array new_selection;
+
+        if (p_shift_pressed && last_clicked_buffer_index != -1) {
+            // RANGE SELECTION
+            if (p_ctrl_pressed) {
+                new_selection = selected_buffer_ids; // Keep existing if Ctrl is held
+            }
+            int start = (last_clicked_buffer_index < p_index) ? last_clicked_buffer_index : p_index;
+            int end = (last_clicked_buffer_index > p_index) ? last_clicked_buffer_index : p_index;
+            
+            for (int i = start; i <= end; ++i) {
+                if (!new_selection.has(i)) {
+                    new_selection.append(i);
+                }
+            }
+        } else if (p_ctrl_pressed) {
+            // TOGGLE SELECTION
+            new_selection = selected_buffer_ids;
+            if (new_selection.has(p_index)) {
+                // Strip the index out
+                PackedInt32Array temp;
+                for (int i = 0; i < new_selection.size(); ++i) {
+                    if (new_selection[i] != p_index) {
+                        temp.append(new_selection[i]);
+                    }
+                }
+                new_selection = temp;
+            } else {
+                new_selection.append(p_index);
+            }
+            last_clicked_buffer_index = p_index;
+        } else {
+            // STANDARD SELECTION
+            new_selection.append(p_index);
+            last_clicked_buffer_index = p_index;
         }
+
+        // Push to the hub
+        _update_buffer_selection(new_selection);
+
     } else if (p_block_type == MemoryRibbon::BLOCK_MANAGED) {
         sidebar_tabs->set_current_tab(1);
         if (managed_buffer_list->get_item_count() > p_index) {
@@ -292,11 +487,40 @@ void MemoryProfiler::_on_ribbon_inspection_requested(int p_block_type, int p_ind
         }
     } else if (p_block_type == MemoryRibbon::BLOCK_TRANSIENT) {
         inspector_title->set_text("Inspecting: Transient Capacity");
-        memory_buffer_view->open_buffer(Ref<MemoryBufferResource>());
+        memory_buffer_view->open_buffers(TypedArray<MemoryBufferResource>());
         
         memory_buffer_view->set_visible(false);
         managed_buffer_view->set_visible(false);
         memory_grant_view->set_visible(false);
+    }
+}
+
+void MemoryProfiler::_on_part_selection_inspection_requested(int p_part_index) {
+    // 1. Clear out the placeholder or old views (keep the title)
+    for (int i = inspector_content->get_child_count() - 1; i >= 0; --i) {
+        Node* child = inspector_content->get_child(i);
+        if (child != inspector_title) {
+            inspector_content->remove_child(child);
+            child->queue_free();
+        }
+    }
+
+    // 2. Instantiate and add the Selection View
+    current_selection_view = memnew(MemoryBufferSelectionView);
+    inspector_content->add_child(current_selection_view);
+    inspector_title->set_text(String("Inspecting: Grant Part ") + String::num_int64(p_part_index));
+
+    // 3. Fetch the specific MemorySelectionInspector and populate
+    // Note: Adjust the getter below to match whatever your actual 
+    // getter is on the active_resource or memory_grant_inspector.
+    
+    int selected_grant_idx = memory_grant_list->get_selected_items()[0];
+    Ref<MemoryGrantInspector> grant_inspector = active_resource->get_grant_inspector(selected_grant_idx);
+    
+    Ref<MemorySelectionInspector> selection_inspector = grant_inspector->get_part_snapshot(p_part_index)["selection"];
+    
+    if (selection_inspector.is_valid()) {
+        current_selection_view->populate(selection_inspector);
     }
 }
 
@@ -354,7 +578,7 @@ void MemoryProfiler::close_resource() {
     active_resource.unref();
     
     memory_buffer_list->clear();
-    memory_buffer_view->open_buffer(Ref<MemoryBufferResource>());
+    memory_buffer_view->open_buffers(TypedArray<MemoryBufferResource>());;
     
     managed_buffer_list->clear();
     managed_buffer_view->open_resource(Ref<ManagedBufferResource>());

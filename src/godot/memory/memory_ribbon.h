@@ -22,7 +22,7 @@ public:
 
 private:
     godot::Ref<MemoryManagerResource> memory_manager;
-    int selected_buffer_index = -1;
+    godot::PackedInt32Array selected_buffer_ids;
 
     void _clear_ribbon();
     void _build_ribbon();
@@ -47,14 +47,24 @@ public:
     // Visual State Management
     void highlight_grant_buffers(const godot::PackedInt32Array& p_active_buffer_ids);
     void clear_dimming();
-    void set_selected_buffer_index(int p_index);
+    void set_selected_buffers(const godot::PackedInt32Array& p_indices);
     void clear_selection();
+
+    void set_cut_buffers(const godot::PackedInt32Array& p_indices);
+    void clear_cut_buffers();
 
     // Signal Handlers
     void _on_resource_changed();
     void _on_block_selected(int p_buffer_id, bool p_shift_pressed, bool p_ctrl_pressed);
     void _on_block_context_menu_requested(const godot::Vector2& p_global_pos, int p_buffer_id);
     void _on_block_navigated(int p_buffer_id, int p_direction);
+    void _on_block_select_all_requested();
+    void _on_block_invert_selection_requested();
+    void _on_block_copy_requested();
+    void _on_block_cut_requested();
+    void _on_block_paste_requested();
+    void _on_block_cancel_requested();
+
     void _on_non_buffer_block_pressed(int p_block_type, int p_index);
 };
 

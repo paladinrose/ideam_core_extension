@@ -19,7 +19,7 @@ class MemoryBufferView : public godot::VBoxContainer {
     GDCLASS(MemoryBufferView, godot::VBoxContainer)
 
 private:
-    godot::Ref<MemoryBufferResource> active_buffer;
+    godot::TypedArray<MemoryBufferResource> active_buffers;
     
     godot::Label* header_label = nullptr;
     godot::VBoxContainer* visualization_container = nullptr;
@@ -27,8 +27,8 @@ private:
     void _clear_view();
     void _build_view();
 
-    void _setup_ring_buffer_gauge(CircularGauge* p_gauge);
-    void _setup_selection_bitset_grid(HeatmapGrid* p_grid);
+    void _setup_ring_buffer_gauge(CircularGauge* p_gauge, godot::Ref<MemoryBufferResource> p_buffer);
+    void _setup_selection_bitset_grid(HeatmapGrid* p_grid, godot::Ref<MemoryBufferResource> p_buffer);
 
 protected:
     static void _bind_methods();
@@ -37,7 +37,7 @@ public:
     MemoryBufferView();
     ~MemoryBufferView();
 
-    void open_buffer(godot::Ref<MemoryBufferResource> p_buffer);
+    void open_buffers(const godot::TypedArray<MemoryBufferResource>& p_buffers);
     
     // Signal Handlers
     void _on_buffer_changed();

@@ -4,6 +4,7 @@
 #include <godot_cpp/classes/grid_container.hpp>
 #include <godot_cpp/classes/label.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/classes/button.hpp>
 
 namespace ideam::godot_ext {
 
@@ -17,6 +18,8 @@ private:
     godot::Label* element_count_label = nullptr;
     godot::Label* element_stride_label = nullptr;
     godot::Label* capacity_label = nullptr;
+    int part_index = -1;
+    godot::Button* inspect_button = nullptr;
 
 protected:
     static void _bind_methods();
@@ -25,7 +28,9 @@ public:
     GrantPartView();
     ~GrantPartView() = default;
 
-    void populate(const godot::Dictionary& p_data);
+    void populate(const godot::Dictionary& p_data, int p_index); // Updated signature
+    void _on_inspect_pressed();
+    
 };
 
 } // namespace ideam::godot_ext

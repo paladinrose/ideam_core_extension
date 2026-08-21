@@ -29,7 +29,9 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("insert_buffer", "index", "buffer"), &MemoryManagerResource::insert_buffer);
     ClassDB::bind_method(D_METHOD("duplicate_buffer", "index"), &MemoryManagerResource::duplicate_buffer);
     ClassDB::bind_method(D_METHOD("remove_buffer", "index"), &MemoryManagerResource::remove_buffer);
-    
+    ClassDB::bind_method(D_METHOD("move_buffers_bulk", "buffer_ids", "target_index"), &MemoryManagerResource::move_buffers_bulk);
+    ClassDB::bind_method(D_METHOD("duplicate_buffers_bulk", "buffer_ids", "target_index"), &MemoryManagerResource::duplicate_buffers_bulk);
+
     ClassDB::bind_method(D_METHOD("set_scaling_strategy", "strategy"), &MemoryManagerResource::set_scaling_strategy);
     ClassDB::bind_method(D_METHOD("get_scaling_strategy"), &MemoryManagerResource::get_scaling_strategy);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "scaling_strategy", PROPERTY_HINT_ENUM, "Fixed,Scale By RAM"), "set_scaling_strategy", "get_scaling_strategy");
@@ -219,6 +221,102 @@ void MemoryManagerResource::duplicate_buffer(int p_index) {
         undo_redo->commit_action();
     } else {
         _insert_buffer(target_index, duplicate_res);
+    }
+}
+
+void MemoryManagerResource::move_buffers_bulk(const godot::PackedInt32Array& p_buffer_ids, int p_target_index) {
+    if (p_buffer_ids.is_empty()) return;
+
+    godot::TypedArray<MemoryBufferResource> remaining;
+    godot::TypedArray<MemoryBufferResource> extracted;
+    int insert_point = 0;
+
+    // 1. Stable Partitioning: Separate the cut items from the remaining items
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        if (p_buffer_ids.has(i)) {
+            extracted.push_back(buffer_schemas[i]);
+        } else {
+            remaining.push_back(buffer_schemas[i]);
+            // Count how many "uncut" items fall before or exactly on our target index
+            if (i <= p_target_index) {
+                insert_point++;
+            }
+        }
+    }
+
+    // 2. Reconstruct the final array
+    godot::TypedArray<MemoryBufferResource> new_schemas;
+    for (int i = 0; i < insert_point; ++i) {
+        new_schemas.push_back(remaining[i]);
+    }
+    for (int i = 0; i < extracted.size(); ++i) {
+        new_schemas.push_back(extracted[i]);
+    }
+    for (int i = insert_point; i < remaining.size(); ++i) {
+        new_schemas.push_back(remaining[i]);
+    }
+
+    // 3. Commit via the centralized schema setter for a clean, atomic Undo/Redo
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Move Buffers (Bulk)");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(new_schemas));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(buffer_schemas.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _set_buffer_schemas(new_schemas);
+    }
+}
+
+void MemoryManagerResource::duplicate_buffers_bulk(const godot::PackedInt32Array& p_buffer_ids, int p_target_index) {
+    if (p_buffer_ids.is_empty()) return;
+
+    godot::TypedArray<MemoryBufferResource> new_schemas;
+    
+    // Clamp target to prevent bounds issues if the list is empty or target is wild
+    int safe_target = p_target_index;
+    if (safe_target < 0) safe_target = -1; 
+    if (safe_target >= buffer_schemas.size()) safe_target = buffer_schemas.size() - 1;
+
+    // 1. Add original items up to and including the target index
+    for (int i = 0; i <= safe_target; ++i) {
+        new_schemas.push_back(buffer_schemas[i]);
+    }
+
+    // 2. Generate duplicates in their original relative order
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        if (p_buffer_ids.has(i)) {
+            godot::Ref<MemoryBufferResource> original = buffer_schemas[i];
+            if (!original.is_valid()) continue;
+
+            godot::Ref<MemoryBufferResource> duplicate_res;
+            duplicate_res.instantiate();
+            
+            duplicate_res->set_buffer_name(original->get_buffer_name() + godot::StringName("_copy"));
+            duplicate_res->set_layout_type(original->get_layout_type());
+            duplicate_res->set_max_elements(original->get_max_elements());
+            duplicate_res->set_alignment(original->get_alignment());
+            duplicate_res->set_needs_gpu_compute(original->get_needs_gpu_compute());
+            duplicate_res->set_enable_shadowing(original->get_enable_shadowing());
+            duplicate_res->set_selection_mode(original->get_selection_mode());
+            duplicate_res->set_columns(original->get_columns().duplicate(true)); 
+
+            new_schemas.push_back(duplicate_res);
+        }
+    }
+
+    // 3. Add the remaining original items
+    for (int i = safe_target + 1; i < buffer_schemas.size(); ++i) {
+        new_schemas.push_back(buffer_schemas[i]);
+    }
+
+    // 4. Commit via atomic Undo/Redo
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Duplicate Buffers (Bulk)");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(new_schemas));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(buffer_schemas.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _set_buffer_schemas(new_schemas);
     }
 }
 

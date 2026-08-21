@@ -5,7 +5,10 @@ using namespace godot;
 namespace ideam::godot_ext {
 
 void GrantPartView::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("populate", "data"), &GrantPartView::populate);
+    ClassDB::bind_method(D_METHOD("populate", "data", "index"), &GrantPartView::populate);
+    ClassDB::bind_method(D_METHOD("_on_inspect_pressed"), &GrantPartView::_on_inspect_pressed);
+    
+    ADD_SIGNAL(MethodInfo("inspect_requested", PropertyInfo(Variant::INT, "part_index")));
 }
 
 GrantPartView::GrantPartView() {
@@ -49,22 +52,22 @@ GrantPartView::GrantPartView() {
 
     // Row 3
     Label* lbl_capacity = memnew(Label);
-    lbl_capacity->set_text("Capacity:");
-    grid->add_child(lbl_capacity);
+    // ... [existing capacity label setup] ...
     
-    capacity_label = memnew(Label);
-    capacity_label->set_text("-");
-    grid->add_child(capacity_label);
+    // Replace filler_1 with the inspect button
+    inspect_button = memnew(Button);
+    inspect_button->set_text("Inspect Selection");
+    inspect_button->connect("pressed", Callable(this, "_on_inspect_pressed"));
+    grid->add_child(inspect_button);
     
-    // Empty fillers to balance the 4-column grid
-    Label* filler_1 = memnew(Label);
-    grid->add_child(filler_1);
-    
+    // Keep filler_2 to balance the 4-column grid
     Label* filler_2 = memnew(Label);
     grid->add_child(filler_2);
 }
 
-void GrantPartView::populate(const Dictionary& p_data) {
+void GrantPartView::populate(const Dictionary& p_data, int p_index) {
+    part_index = p_index;
+
     if (p_data.has("buffer_id")) {
         buffer_id_label->set_text(String::num_int64(p_data["buffer_id"]));
     }
@@ -80,6 +83,10 @@ void GrantPartView::populate(const Dictionary& p_data) {
     if (p_data.has("capacity")) {
         capacity_label->set_text(String::num_int64(p_data["capacity"]));
     }
+}
+
+void GrantPartView::_on_inspect_pressed() {
+    emit_signal("inspect_requested", part_index);
 }
 
 } // namespace ideam::godot_ext

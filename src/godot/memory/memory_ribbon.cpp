@@ -16,21 +16,41 @@ void MemoryRibbon::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("highlight_grant_buffers", "active_buffer_ids"), &MemoryRibbon::highlight_grant_buffers);
     ClassDB::bind_method(D_METHOD("clear_dimming"), &MemoryRibbon::clear_dimming);
-    ClassDB::bind_method(D_METHOD("set_selected_buffer_index", "index"), &MemoryRibbon::set_selected_buffer_index);
+    ClassDB::bind_method(D_METHOD("set_selected_buffers", "indices"), &MemoryRibbon::set_selected_buffers);
     ClassDB::bind_method(D_METHOD("clear_selection"), &MemoryRibbon::clear_selection);
-    
+    ClassDB::bind_method(D_METHOD("set_cut_buffers", "indices"), &MemoryRibbon::set_cut_buffers);
+    ClassDB::bind_method(D_METHOD("clear_cut_buffers"), &MemoryRibbon::clear_cut_buffers);
+
     ClassDB::bind_method(D_METHOD("_on_resource_changed"), &MemoryRibbon::_on_resource_changed);
     ClassDB::bind_method(D_METHOD("_on_block_selected", "buffer_id", "shift_pressed", "ctrl_pressed"), &MemoryRibbon::_on_block_selected);
     ClassDB::bind_method(D_METHOD("_on_block_context_menu_requested", "global_position", "buffer_id"), &MemoryRibbon::_on_block_context_menu_requested);
     ClassDB::bind_method(D_METHOD("_on_block_navigated", "buffer_id", "direction"), &MemoryRibbon::_on_block_navigated);
+    ClassDB::bind_method(D_METHOD("_on_block_select_all_requested"), &MemoryRibbon::_on_block_select_all_requested);
+    ClassDB::bind_method(D_METHOD("_on_block_invert_selection_requested"), &MemoryRibbon::_on_block_invert_selection_requested);
+    ClassDB::bind_method(D_METHOD("_on_block_copy_requested"), &MemoryRibbon::_on_block_copy_requested);
+    ClassDB::bind_method(D_METHOD("_on_block_cut_requested"), &MemoryRibbon::_on_block_cut_requested);
+    ClassDB::bind_method(D_METHOD("_on_block_paste_requested"), &MemoryRibbon::_on_block_paste_requested);
+    ClassDB::bind_method(D_METHOD("_on_block_cancel_requested"), &MemoryRibbon::_on_block_cancel_requested);
+
+    
+
     ClassDB::bind_method(D_METHOD("_on_non_buffer_block_pressed", "block_type", "index"), &MemoryRibbon::_on_non_buffer_block_pressed);
 
     ADD_PROPERTY(PropertyInfo(Variant::BOOL, "is_vertical"), "set_is_vertical", "get_is_vertical");
     
     // Signals
+    ADD_SIGNAL(MethodInfo("select_all_requested"));
+    ADD_SIGNAL(MethodInfo("invert_selection_requested"));
+    ADD_SIGNAL(MethodInfo("copy_requested"));
+    ADD_SIGNAL(MethodInfo("cut_requested"));
+    ADD_SIGNAL(MethodInfo("paste_requested"));
+    ADD_SIGNAL(MethodInfo("cancel_requested"));
+    
     ADD_SIGNAL(MethodInfo("inspection_requested", 
         PropertyInfo(Variant::INT, "block_type"), 
-        PropertyInfo(Variant::INT, "index")));
+        PropertyInfo(Variant::INT, "index"),
+        PropertyInfo(Variant::BOOL, "shift_pressed"),
+        PropertyInfo(Variant::BOOL, "ctrl_pressed")));
 
     ADD_SIGNAL(MethodInfo("buffer_context_menu_requested", 
         PropertyInfo(Variant::VECTOR2, "global_position"), 
@@ -127,8 +147,14 @@ void MemoryRibbon::_build_ribbon() {
         block->connect("block_selected", Callable(this, "_on_block_selected"));
         block->connect("block_context_menu_requested", Callable(this, "_on_block_context_menu_requested"));
         block->connect("block_navigated", Callable(this, "_on_block_navigated"));
+        block->connect("select_all_requested", Callable(this, "_on_block_select_all_requested"));
+        block->connect("invert_selection_requested", Callable(this, "_on_block_invert_selection_requested"));
+        block->connect("copy_requested", Callable(this, "_on_block_copy_requested"));
+        block->connect("cut_requested", Callable(this, "_on_block_cut_requested"));
+        block->connect("paste_requested", Callable(this, "_on_block_paste_requested"));
+        block->connect("cancel_requested", Callable(this, "_on_block_cancel_requested"));
 
-        if (i == selected_buffer_index) {
+        if (selected_buffer_ids.has(i)) {
             block->set_selected(true);
         }
 
@@ -200,18 +226,18 @@ void MemoryRibbon::clear_dimming() {
     }
 }
 
-void MemoryRibbon::set_selected_buffer_index(int p_index) {
-    selected_buffer_index = p_index;
+void MemoryRibbon::set_selected_buffers(const PackedInt32Array& p_indices) {
+    selected_buffer_ids = p_indices;
     for (int i = 0; i < get_child_count(); ++i) {
         MemoryBlockButton* block = Object::cast_to<MemoryBlockButton>(get_child(i));
         if (block) {
-            block->set_selected(block->get_buffer_id() == p_index);
+            block->set_selected(selected_buffer_ids.has(block->get_buffer_id()));
         }
     }
 }
 
 void MemoryRibbon::clear_selection() {
-    selected_buffer_index = -1;
+    selected_buffer_ids.clear();
     for (int i = 0; i < get_child_count(); ++i) {
         MemoryBlockButton* block = Object::cast_to<MemoryBlockButton>(get_child(i));
         if (block) {
@@ -219,14 +245,29 @@ void MemoryRibbon::clear_selection() {
         }
     }
 }
+void MemoryRibbon::set_cut_buffers(const PackedInt32Array& p_indices) {
+    for (int i = 0; i < get_child_count(); ++i) {
+        MemoryBlockButton* block = Object::cast_to<MemoryBlockButton>(get_child(i));
+        if (block) {
+            block->set_cut(p_indices.has(block->get_buffer_id()));
+        }
+    }
+}
+
+void MemoryRibbon::clear_cut_buffers() {
+    for (int i = 0; i < get_child_count(); ++i) {
+        MemoryBlockButton* block = Object::cast_to<MemoryBlockButton>(get_child(i));
+        if (block) {
+            block->set_cut(false);
+        }
+    }
+}
 
 void MemoryRibbon::_on_block_selected(int p_buffer_id, bool p_shift_pressed, bool p_ctrl_pressed) {
-    set_selected_buffer_index(p_buffer_id);
-    emit_signal("inspection_requested", BLOCK_BUFFER, p_buffer_id);
+    emit_signal("inspection_requested", BLOCK_BUFFER, p_buffer_id, p_shift_pressed, p_ctrl_pressed);
 }
 
 void MemoryRibbon::_on_block_context_menu_requested(const Vector2& p_global_pos, int p_buffer_id) {
-    set_selected_buffer_index(p_buffer_id);
     emit_signal("buffer_context_menu_requested", p_global_pos, p_buffer_id);
 }
 
@@ -237,14 +278,26 @@ void MemoryRibbon::_on_block_navigated(int p_buffer_id, int p_direction) {
     int new_index = p_buffer_id + p_direction;
 
     if (new_index >= 0 && new_index < schema_count) {
-        set_selected_buffer_index(new_index);
-        emit_signal("inspection_requested", BLOCK_BUFFER, new_index);
+        emit_signal("inspection_requested", BLOCK_BUFFER, new_index, false, false);
     }
 }
 
+void MemoryRibbon::_on_block_select_all_requested() {
+    emit_signal("select_all_requested");
+}
+
+void MemoryRibbon::_on_block_invert_selection_requested() {
+    emit_signal("invert_selection_requested");
+}
+
+void MemoryRibbon::_on_block_copy_requested() { emit_signal("copy_requested"); }
+void MemoryRibbon::_on_block_cut_requested() { emit_signal("cut_requested"); }
+void MemoryRibbon::_on_block_paste_requested() { emit_signal("paste_requested"); }
+void MemoryRibbon::_on_block_cancel_requested() { emit_signal("cancel_requested"); }
+
 void MemoryRibbon::_on_non_buffer_block_pressed(int p_block_type, int p_index) {
     clear_selection();
-    emit_signal("inspection_requested", p_block_type, p_index);
+    emit_signal("inspection_requested", p_block_type, p_index, false, false);
 }
 
 // --- Drag & Drop Sequencing ---

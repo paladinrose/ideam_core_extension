@@ -17,7 +17,16 @@ void MemoryBlockButton::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_dimmed", "dimmed"), &MemoryBlockButton::set_dimmed);
     ClassDB::bind_method(D_METHOD("get_dimmed"), &MemoryBlockButton::get_dimmed);
 
-    // Signals directed to parent MemoryRibbon
+    ClassDB::bind_method(D_METHOD("set_cut", "cut"), &MemoryBlockButton::set_cut);
+    ClassDB::bind_method(D_METHOD("get_cut"), &MemoryBlockButton::get_cut);
+
+    ADD_SIGNAL(MethodInfo("copy_requested"));
+    ADD_SIGNAL(MethodInfo("cut_requested"));
+    ADD_SIGNAL(MethodInfo("paste_requested"));
+    ADD_SIGNAL(MethodInfo("cancel_requested"));
+    ADD_SIGNAL(MethodInfo("select_all_requested"));
+    ADD_SIGNAL(MethodInfo("invert_selection_requested"));
+    
     ADD_SIGNAL(MethodInfo("block_selected", 
         PropertyInfo(Variant::INT, "buffer_id"), 
         PropertyInfo(Variant::BOOL, "shift_pressed"), 
@@ -30,6 +39,8 @@ void MemoryBlockButton::_bind_methods() {
     ADD_SIGNAL(MethodInfo("block_navigated", 
         PropertyInfo(Variant::INT, "buffer_id"), 
         PropertyInfo(Variant::INT, "direction"))); // -1 for Left, +1 for Right
+    
+    
 }
 
 MemoryBlockButton::MemoryBlockButton() {
@@ -63,10 +74,19 @@ void MemoryBlockButton::set_dimmed(bool p_dimmed) {
     _update_visual_state();
 }
 
+void MemoryBlockButton::set_cut(bool p_cut) {
+    if (is_cut == p_cut) return;
+    is_cut = p_cut;
+    _update_visual_state();
+}
+
 void MemoryBlockButton::_update_visual_state() {
     // Dimming mechanism: reduces opacity without blocking interaction
     if (is_dimmed) {
         set_self_modulate(Color(0.6f, 0.6f, 0.6f, 0.35f));
+    } else if (is_cut) {
+        // Semi-transparent to indicate a staged cut
+        set_self_modulate(Color(1.0f, 1.0f, 1.0f, 0.5f)); 
     } else {
         set_self_modulate(Color(1.0f, 1.0f, 1.0f, 1.0f));
     }
@@ -100,19 +120,38 @@ void MemoryBlockButton::_gui_input(const Ref<InputEvent>& p_event) {
         }
     }
 
-    // Keyboard Arrow Navigation
+    // Keyboard Input: Macros & Navigation
     Ref<InputEventKey> k = p_event;
-    if (k.is_valid() && k->is_pressed() && !k->is_echo()) {
-        if (k->get_keycode() == Key::KEY_LEFT) {
-            emit_signal("block_navigated", buffer_id, -1);
-            accept_event();
-            return;
-        } else if (k->get_keycode() == Key::KEY_RIGHT) {
-            emit_signal("block_navigated", buffer_id, 1);
+    if (k->get_keycode() == Key::KEY_ESCAPE) {
+            emit_signal("cancel_requested");
             accept_event();
             return;
         }
-    }
+
+        // Catch Macros
+        if (k->is_command_or_control_pressed()) {
+            if (k->get_keycode() == Key::KEY_A) {
+                emit_signal("select_all_requested");
+                accept_event();
+                return;
+            } else if (k->get_keycode() == Key::KEY_I) {
+                emit_signal("invert_selection_requested");
+                accept_event();
+                return;
+            } else if (k->get_keycode() == Key::KEY_C) {
+                emit_signal("copy_requested");
+                accept_event();
+                return;
+            } else if (k->get_keycode() == Key::KEY_X) {
+                emit_signal("cut_requested");
+                accept_event();
+                return;
+            } else if (k->get_keycode() == Key::KEY_V) {
+                emit_signal("paste_requested");
+                accept_event();
+                return;
+            }
+        }
 
     Button::_gui_input(p_event);
 }

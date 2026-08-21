@@ -15,8 +15,10 @@ class MemoryBlockButton : public godot::Button {
 
 private:
     int buffer_id = -1;
+
     bool is_selected = false;
     bool is_dimmed = false;
+    bool is_cut = false;
 
     // Optional slot container for embedded BlockGrantButtons
     godot::HBoxContainer* grant_icon_container = nullptr;
@@ -45,6 +47,9 @@ public:
     void set_dimmed(bool p_dimmed);
     bool get_dimmed() const { return is_dimmed; }
 
+    void set_cut(bool p_cut);
+    bool get_cut() const { return is_cut; }
+    
     // Grant Icon Attachment
     godot::HBoxContainer* get_grant_icon_container() const { return grant_icon_container; }
 };

@@ -16,6 +16,8 @@
 #include "memory_buffer_view.h"
 #include "managed_buffer_view.h"
 #include "memory_grant_view.h"
+#include "memory_buffer_selection_view.h"
+
 #include "../controls/theme_selector.h"
 #include "../utilities/ideam_undo_redo.h"
 
@@ -45,7 +47,13 @@ private:
     
     // Column A: Sidebar Tabs
     godot::TabContainer* sidebar_tabs = nullptr;
+    
     godot::ItemList* memory_buffer_list = nullptr;
+    godot::PackedInt32Array selected_buffer_ids;
+    int last_clicked_buffer_index = -1;
+    godot::PackedInt32Array clipboard_buffer_ids;
+    bool is_cut_operation = false;
+
     godot::ItemList* managed_buffer_list = nullptr;
     godot::ItemList* memory_grant_list = nullptr;
 
@@ -61,7 +69,10 @@ private:
     godot::PanelContainer* inspector_panel = nullptr;
     godot::VBoxContainer* inspector_content = nullptr;
     godot::Label* inspector_title = nullptr;
+    MemoryBufferSelectionView* current_selection_view = nullptr;
 
+    // Centralized update hub
+    void _update_buffer_selection(const godot::PackedInt32Array& p_selection);
     void _populate_ui();
 
 protected:
@@ -79,16 +90,27 @@ public:
 
     // Signal Handlers
     void _on_save_pressed();
+    
     void _on_buffer_item_selected(int p_index);
+    void _on_buffer_list_gui_input(const godot::Ref<godot::InputEvent>& p_event);
+    void _select_all_buffers();
+    void _invert_buffer_selection();
+    void _buffer_cut();
+    void _buffer_copy();
+    void _buffer_paste();
+    void _clear_clipboard();
+
     void _on_managed_buffer_item_selected(int p_index);
     void _on_grant_item_selected(int p_index);
     
     void _on_grant_list_gui_input(const godot::Ref<godot::InputEvent>& p_event);
     void _on_grant_list_mouse_exited();
 
-    void _on_ribbon_inspection_requested(int p_block_type, int p_index);
+    void _on_ribbon_inspection_requested(int p_block_type, int p_index, bool p_shift_pressed = false, bool p_ctrl_pressed = false);
     
     void _on_theme_applied(const godot::Ref<godot::Theme>& p_theme, int p_index);
+    
+    void _on_part_selection_inspection_requested(int p_part_index);
     
     // Instance-level operations
     void open_resource(godot::Ref<MemoryManagerResource> p_resource);

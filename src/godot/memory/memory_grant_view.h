@@ -29,6 +29,8 @@ public:
 
     void populate_from_inspector(const godot::Ref<MemoryGrantInspector>& p_inspector);
     void clear();
+
+    void _on_part_inspect_requested(int p_index);
 };
 
 } // namespace ideam::godot_ext
