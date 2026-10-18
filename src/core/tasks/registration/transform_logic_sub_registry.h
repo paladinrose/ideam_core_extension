@@ -14,6 +14,14 @@
 #include "../transform_logic/data_sort_transform_logic.h"
 #include "../transform_logic/euler_integration_transform_logic.h"
 #include "../transform_logic/fast_noise_lite_transform_logic.h"
+#include "../transform_logic/image_channel_extract_transform_logic.h"
+#include "../transform_logic/image_channel_pack_transform_logic.h"
+#include "../transform_logic/image_normalize_scalar_transform_logic.h"
+#include "../transform_logic/image_palette_lut_transform_logic.h"
+#include "../transform_logic/image_raw_export_transform_logic.h"
+#include "../transform_logic/image_raw_import_transform_logic.h"
+#include "../transform_logic/image_spatial2d_export_transform_logic.h"
+#include "../transform_logic/image_spatial2d_import_transform_logic.h"
 #include "../transform_logic/noise_injection_transform_logic.h"
 #include "../transform_logic/packed_array_export_transform_logic.h"
 #include "../transform_logic/stencil_convolution_transform_logic.h"
@@ -72,6 +80,14 @@ namespace {
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::DataSort, C, S> { using Type = DataSortTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::EulerIntegration, C, S> { using Type = EulerIntegrationTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::FastNoiseLite, C, S> { using Type = FastNoiseLiteTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImageChannelExtract, C, S> { using Type = ImageChannelExtractTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImageChannelPack, C, S> { using Type = ImageChannelPackTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImageNormalizeScalar, C, S> { using Type = ImageNormalizeScalarTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImagePaletteLut, C, S> { using Type = ImagePaletteLutTransformLogic<C>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImageRawExport, C, S> { using Type = ImageRawExportTransformLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImageRawImport, C, S> { using Type = ImageRawImportTransformLogic; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImageSpatial2DExport, C, S> { using Type = ImageSpatial2DExportTransformLogic<C, S>; static constexpr bool is_valid = true; };
+    template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::ImageSpatial2DImport, C, S> { using Type = ImageSpatial2DImportTransformLogic<C, S>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::NoiseInjection, C, S> { using Type = NoiseInjectionTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::PackedArrayExport, C, S> { using Type = PackedArrayExportTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::Stencil_Moore_R1, C, S> { 

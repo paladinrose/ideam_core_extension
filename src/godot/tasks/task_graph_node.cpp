@@ -3,6 +3,7 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 #include <godot_cpp/classes/theme.hpp>
+#include <godot_cpp/classes/style_box_flat.hpp>
 
 using namespace godot;
 
@@ -19,6 +20,13 @@ void TaskGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("_on_custom_param_changed", "param_name", "value"), &TaskGraphNode::_on_custom_param_changed);
     ClassDB::bind_method(D_METHOD("_on_buffer_option_selected", "index", "prop_name", "btn"), &TaskGraphNode::_on_buffer_option_selected);
     ClassDB::bind_method(D_METHOD("_on_logic_option_selected", "index"), &TaskGraphNode::_on_logic_option_selected);
+
+    ClassDB::bind_method(D_METHOD("_on_preview_folding_changed", "folded"), &TaskGraphNode::_on_preview_folding_changed);
+    ClassDB::bind_method(D_METHOD("update_preview_image", "image"), &TaskGraphNode::update_preview_image);
+
+    ClassDB::bind_method(D_METHOD("_on_preview_size_changed", "value"), &TaskGraphNode::_on_preview_size_changed);
+    ClassDB::bind_method(D_METHOD("_on_refresh_button_pressed"), &TaskGraphNode::_on_refresh_button_pressed);
+    ClassDB::bind_method(D_METHOD("request_snapshot"), &TaskGraphNode::request_snapshot);
 }
 
 Ref<TaskResource> TaskGraphNode::get_task_node_resource() const {
@@ -36,8 +44,7 @@ StringName TaskGraphNode::get_task_name() const {
 }
 
 void TaskGraphNode::_build_ui() {
-    MemoryGraphNode::_build_ui(); // Generates ports and base states
-
+    MemoryGraphNode::_build_ui();
     set_resizable(true);
     
     task_type_badge = memnew(godot::TextureRect);
@@ -51,16 +58,84 @@ void TaskGraphNode::_build_ui() {
     Ref<TaskResource> task_res = get_task_node_resource();
     if (task_res.is_null()) return;
 
+    if (!task_res->is_connected("snapshot_updated", Callable(this, "update_preview_image"))) {
+        task_res->connect("snapshot_updated", Callable(this, "update_preview_image"));
+    }
+    
     // 1. Header Setup
     task_type_label = memnew(Label);
     String label_text = String("Logic: ") + get_task_name();
     task_type_label->set_text(label_text);
     add_child(task_type_label);
 
-    // 2. Dynamic UI Container Setup
+    // 2. Collapsible Image Preview Container Setup
+    preview_foldable = memnew(FoldableContainer);
+    preview_foldable->set_name("ImagePreviewSection");
+    preview_foldable->set_title("Preview");
+    preview_foldable->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    preview_foldable->set_visible(false);
+
+    // Toolbar for max resolution and manual snapshot trigger
+    HBoxContainer* preview_toolbar = memnew(HBoxContainer);
+    preview_toolbar->set_name("PreviewToolbar");
+    preview_toolbar->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+
+    Label* size_label = memnew(Label);
+    size_label->set_text("Max Res:");
+    preview_toolbar->add_child(size_label);
+
+    preview_size_spin = memnew(SpinBox);
+    preview_size_spin->set_min(64);
+    preview_size_spin->set_max(2048);
+    preview_size_spin->set_step(64);
+    preview_size_spin->set_value(task_res->get_max_preview_size());
+    preview_size_spin->set_suffix("px");
+    preview_size_spin->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    preview_size_spin->connect("value_changed", Callable(this, "_on_preview_size_changed"));
+    preview_toolbar->add_child(preview_size_spin);
+
+    preview_refresh_btn = memnew(Button);
+    preview_refresh_btn->set_text("Capture");
+    preview_refresh_btn->set_tooltip_text("Queue an image snapshot on next execution");
+    preview_refresh_btn->connect("pressed", Callable(this, "_on_refresh_button_pressed"));
+    preview_toolbar->add_child(preview_refresh_btn);
+
+    preview_foldable->add_child(preview_toolbar);
+
+    preview_aspect = memnew(AspectRatioContainer);
+    preview_aspect->set_name("PreviewAspect");
+    preview_aspect->set_ratio(1.0f);
+    preview_aspect->set_stretch_mode(AspectRatioContainer::STRETCH_FIT);
+    preview_aspect->set_custom_minimum_size(Vector2(128, 128));
+    preview_aspect->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+
+    Ref<StyleBoxFlat> preview_bg = memnew(StyleBoxFlat);
+    preview_bg->set_bg_color(Color(0.12f, 0.12f, 0.12f, 1.0f));
+    preview_bg->set_corner_radius_all(4);
+    preview_aspect->add_theme_stylebox_override("panel", preview_bg);
+
+    preview_rect = memnew(TextureRect);
+    preview_rect->set_name("PreviewRect");
+    preview_rect->set_expand_mode(TextureRect::EXPAND_IGNORE_SIZE);
+    preview_rect->set_stretch_mode(TextureRect::STRETCH_KEEP_ASPECT_CENTERED);
+    preview_rect->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    preview_rect->set_v_size_flags(Control::SIZE_EXPAND_FILL);
+
+    preview_aspect->add_child(preview_rect);
+    preview_foldable->add_child(preview_aspect);
+    add_child(preview_foldable);
+
+    int preview_slot = preview_foldable->get_index();
+    set_slot_enabled_left(preview_slot, false);
+    set_slot_enabled_right(preview_slot, false);
+
+    preview_foldable->connect("folding_changed", Callable(this, "_on_preview_folding_changed"));
+
+    // 3. Dynamic UI Container & Inspector Setup
     custom_parameters_scroll = memnew(ScrollContainer);
     custom_parameters_scroll->set_custom_minimum_size(Vector2(0, 25));
     custom_parameters_scroll->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    custom_parameters_scroll->set_v_size_flags(Control::SIZE_EXPAND_FILL);
     add_child(custom_parameters_scroll);
 
     custom_parameters_container = memnew(VBoxContainer);
@@ -68,14 +143,12 @@ void TaskGraphNode::_build_ui() {
     custom_parameters_container->set_h_size_flags(Control::SIZE_EXPAND_FILL);
     custom_parameters_scroll->add_child(custom_parameters_container);
 
-    // 3. Logic Inspector Setup (Persistent parameter controls)
     logic_inspector = memnew(RuntimeInspector);
     logic_inspector->set_name("LogicInspector");
     logic_inspector->set_custom_minimum_size(Vector2(0, 25));
     logic_inspector->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    logic_inspector->set_v_size_flags(Control::SIZE_EXPAND_FILL);
     add_child(logic_inspector);
-    
-    // Route the inspector's mutations up to the graph resource
     logic_inspector->connect("property_changed", Callable(this, "_on_custom_param_changed"));
 
     _rebuild_dynamic_ui();
@@ -86,35 +159,24 @@ void TaskGraphNode::_notification(int p_what) {
 }
 
 void TaskGraphNode::_update_theme_properties() {
-    // 1. Cascade down through structural parent layers (updates slots and metrics)
     MemoryGraphNode::_update_theme_properties();
 
-    Ref<TaskResource> task_res = get_task_node_resource();
-    StringName type_context = "GraphNode";
-
-    // 2. Centralized color assignment pulling directly from active theme tokens
     if (workspace_badge) {
         workspace_badge->set_texture(_get_badge_icon_for_workspace(workspace_state));
-        
-        // Since this badge used to use a custom color modulation in the draw call:
-        godot::Color badge_color = get_theme_color(workspace_state == WORKSPACE_ACTIVE ? "transient_active_color" : "transient_error_color", "GraphNode");
+        Color badge_color = get_theme_color(workspace_state == WORKSPACE_ACTIVE ? "transient_active_color" : "transient_error_color", "GraphNode");
         workspace_badge->set_modulate(badge_color); 
         workspace_badge->set_visible(workspace_state != WORKSPACE_HIDDEN);
     }
-    // 3. Propagate theme updates down to any dynamically instantiated buttons
+
     for (const auto& binding : buffer_option_bindings) {
         if (binding.button) {
-            // If you have specific styles for dropdown inputs, apply them here.
-            // Otherwise, they will naturally look up their custom Theme values from the control tree.
             binding.button->queue_redraw();
         }
     }
-
 }
 
 Ref<Texture2D> TaskGraphNode::_get_badge_icon_for_workspace(TransientWorkspaceState p_state) const {
     StringName type_context = "GraphNode";
-
     switch (p_state) {
         case WORKSPACE_ACTIVE: return get_theme_icon("badge_transient_active", type_context);
         case WORKSPACE_ERROR:  return get_theme_icon("badge_transient_error", type_context);
@@ -125,21 +187,18 @@ Ref<Texture2D> TaskGraphNode::_get_badge_icon_for_workspace(TransientWorkspaceSt
 
 void TaskGraphNode::set_workspace_state(TransientWorkspaceState p_state) {
     if (workspace_state == p_state) return;
-    
     workspace_state = p_state;
-    queue_redraw(); // Invoke NOTIFICATION_DRAW
+    queue_redraw();
 }
 
 void TaskGraphNode::_rebuild_dynamic_ui() {
     if (!custom_parameters_container) return;
 
-    // Safely teardown existing dynamic controls before a logic switch or rebuild
     for (int i = 0; i < custom_parameters_container->get_child_count(); ++i) {
         Node* child = custom_parameters_container->get_child(i);
         child->queue_free();
     }
 
-    // Also clear the logic inspector to prevent ghost parameters
     if (logic_inspector) {
         logic_inspector->clear_inspector();
     }
@@ -147,10 +206,12 @@ void TaskGraphNode::_rebuild_dynamic_ui() {
 
 void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_current_type_id) {
     buffer_option_bindings.clear();
+    has_image_pipeline = false;
+    active_image_property_name = StringName();
+    is_target_image = false;
 
-    godot::Ref<TaskResource> task_res = get_task_node_resource();
-    godot::Ref<MemoryGrantResource> grant_res;
-    
+    Ref<TaskResource> task_res = get_task_node_resource();
+    Ref<MemoryGrantResource> grant_res;
     if (task_res.is_valid()) {
         grant_res = task_res->get_memory_grant();
     }
@@ -162,146 +223,126 @@ void TaskGraphNode::_reify_property_schema(Array& r_properties, uint32_t p_curre
         if (prop.has("type") && prop["type"].get_type() == Variant::STRING && String(prop["type"]) == "T") {
             if (prop.has("type_hints")) {
                 Dictionary hints = prop["type_hints"];
-                
                 if (hints.has(p_current_type_id)) {
                     Dictionary concrete_hint = hints[p_current_type_id];
-                    
-                    // Overwrite generic markers with concrete variant instructions
                     prop["type"] = concrete_hint.has("type") ? concrete_hint["type"] : Variant::NIL;
                     if (concrete_hint.has("hint")) prop["hint"] = concrete_hint["hint"];
                     if (concrete_hint.has("hint_string")) prop["hint_string"] = concrete_hint["hint_string"];
                 } else {
-                    // Fallback if the selected DOD type isn't mapped in the logic struct
                     prop["type"] = Variant::NIL; 
                 }
-                
-                // Erase the hints payload to save memory overhead in the UI layer
                 prop.erase("type_hints");
             }
         }
 
-        // Recursively resolve nested structs (e.g., Array of GroupMaskMapping)
         if (prop.has("struct_properties")) {
             Array sub_schema = prop["struct_properties"];
-            // Recurse down into the struct's definition
             _reify_property_schema(sub_schema, p_current_type_id);
             prop["struct_properties"] = sub_schema;
         }
 
-        // Handle any port overrides encoded in the property dictionary
         if (prop.has("port_override")) {
             uint64_t mask = prop["port_override"];
-            
             uint8_t slot          = mask & 0xFF;
             bool override_left    = (mask >> 8) & 1;
             bool enable_left      = (mask >> 9) & 1;
             auto layout_left      = static_cast<core::BufferLayoutType>((mask >> 10) & 0xFFFF);
-            
             bool override_right   = (mask >> 26) & 1;
             bool enable_right     = (mask >> 27) & 1;
             auto layout_right     = static_cast<core::BufferLayoutType>((mask >> 28) & 0xFFFF);
 
-            // Execute the UI update. 
-            // update_memory_port() naturally sets icons based on the BufferLayoutType.
             if (override_left) {
                 set_slot_enabled_left(slot, enable_left);
-                if (enable_left) update_memory_port(slot, true, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(layout_left)));
+                if (enable_left) update_memory_port(slot, true, BitField<core::BufferLayoutType>(static_cast<int64_t>(layout_left)));
             }
-            
             if (override_right) {
                 set_slot_enabled_right(slot, enable_right);
-                if (enable_right) update_memory_port(slot, false, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(layout_right)));
+                if (enable_right) update_memory_port(slot, false, BitField<core::BufferLayoutType>(static_cast<int64_t>(layout_right)));
             }
         }
 
-        // --- SPECIAL CASE HANDLING ---
+        // --- IMAGE RESOURCE INTERCEPTION ---
+        if (prop.has("type") && static_cast<int>(prop["type"]) == Variant::OBJECT) {
+            String hint_str = prop.has("hint_string") ? String(prop["hint_string"]) : "";
+            if (hint_str == "Texture2D" || hint_str == "Image") {
+                String name_str = prop["name"];
+                has_image_pipeline = true;
+                active_image_property_name = prop["name"];
+                is_target_image = name_str.contains("target");
+            }
+        }
+
+        // --- ENUM / DROPDOWN OVERRIDES ---
         bool consume_property = false;
 
-        // Check if the property is an ENUM to process special UI layout cases
-        if (prop.has("hint") && static_cast<int>(prop["hint"]) == godot::PROPERTY_HINT_ENUM) {
-            godot::String hint_str = prop["hint_string"];
+        if (prop.has("hint") && static_cast<int>(prop["hint"]) == PROPERTY_HINT_ENUM) {
+            String hint_str = prop["hint_string"];
 
             if (hint_str == "buffer_option") {
-                godot::StringName prop_name = prop["name"];
-                
-                godot::OptionButton* opt_btn = memnew(godot::OptionButton);
+                StringName prop_name = prop["name"];
+                OptionButton* opt_btn = memnew(OptionButton);
                 custom_parameters_container->add_child(opt_btn);
                 
                 BufferOptionBinding binding;
                 binding.property_name = prop_name;
                 binding.button = opt_btn;
 
-                // Extract valid layout dimensions from the Grant Resource
                 if (grant_res.is_valid()) {
-                    godot::TypedArray<GrantPartResource> parts = grant_res->get_configured_parts();
+                    TypedArray<GrantPartResource> parts = grant_res->get_configured_parts();
                     binding.buffer_ids.resize(parts.size());
-                    
                     for (int j = 0; j < parts.size(); ++j) {
-                        godot::Ref<GrantPartResource> part = parts[j];
+                        Ref<GrantPartResource> part = parts[j];
                         if (part.is_valid()) {
                             binding.buffer_ids.set(j, part->get_buffer_id());
                         }
                     }
                 }
 
-                // Bind the signal with payload injection (prop_name and the button pointer)
-                opt_btn->connect("item_selected", godot::Callable(this, "_on_buffer_option_selected").bind(prop_name, opt_btn));
-
+                opt_btn->connect("item_selected", Callable(this, "_on_buffer_option_selected").bind(prop_name, opt_btn));
                 buffer_option_bindings.push_back(binding);
-                
-                // Flag to remove the property from the schema so the RuntimeInspector ignores it
                 consume_property = true;
             } 
-            else if (hint_str == "logic_options"){
-                godot::OptionButton* opt_btn = memnew(godot::OptionButton);
+            else if (hint_str == "logic_options") {
+                OptionButton* opt_btn = memnew(OptionButton);
                 custom_parameters_container->add_child(opt_btn);
                 
-                godot::PackedStringArray labels = task_res->get_logic_variant_labels();
+                PackedStringArray labels = task_res->get_logic_variant_labels();
                 for (int j = 0; j < labels.size(); ++j) {
                     opt_btn->add_item(labels[j], j);
                 }
 
-                // Delta calculates the active enum offset (e.g., LOD_3Level - LOD_1Level = Index 2)
                 int current_selection = task_res->get_logic_id() - task_res->get_base_logic_id();
                 if (current_selection >= 0 && current_selection < opt_btn->get_item_count()) {
                     opt_btn->select(current_selection);
                 }
 
-                // Bind the signal to a new generic handler
-                opt_btn->connect("item_selected", godot::Callable(this, "_on_logic_option_selected"));
-
-                //This changes the compiled task type that will be selected, during baking. As such, we consume this property and add a custom drop down, as with the "buffer_option" case above.
+                opt_btn->connect("item_selected", Callable(this, "_on_logic_option_selected"));
                 consume_property = true;
             }
-            
-            // Add future full-override cases here
-            // else if (hint_str == "some_other_custom_control") { 
-            //     consume_property = true;
-            // }
-            // Add future modifying cases here
-            // else if (hint_str == "modify_options_only") {
-            //     prop["hint_string"] = "DynamicOption1,DynamicOption2";
-            //     // Do NOT set consume_property to true here, so it writes back to r_properties
-            // }
         }
 
-        // --- END OF SPECIAL CASE HANDLING ---
-
         if (consume_property) {
-            // We fully handled this control manually, so remove it from the inspector's pipeline
             r_properties.remove_at(i);
-            
-            // CRITICAL: Decrement index because the array just shrank, 
-            // preventing the loop from skipping the next element.
             i--; 
         } else {
-            // Write the mutated dictionary back to the array. 
-            // (Required because extracting `prop` creates a shallow Variant copy of the dictionary ref)
             r_properties[i] = prop;
         }
     }
 
-    // If we registered any async dropdowns, request the current topological names
+    // Configure and synchronize the preview control
+    if (preview_foldable) {
+        preview_foldable->set_visible(has_image_pipeline);
+        if (has_image_pipeline) {
+            preview_foldable->set_title(is_target_image ? "Preview (Target Output)" : "Preview (Source Input)");
+            if (task_res.is_valid()) {
+                preview_foldable->set_folded(task_res->is_preview_folded());
+                _update_preview_from_resource();
+            }
+        } else {
+            update_preview_image(Ref<Image>());
+        }
+    }
+
     if (!buffer_option_bindings.empty()) {
         emit_signal("buffer_names_requested");
     }
@@ -315,108 +356,157 @@ void TaskGraphNode::_rebuild_logic_inspector(const Array& p_properties) {
 
     Dictionary state = task_res->get_task_properties();
     
-    // We must resolve what the generic type "T" represents for DOD alignments
     Variant::Type resolved_t = Variant::NIL;
-    uint32_t current_type_id = 0; // Default fallback
+    uint32_t current_type_id = 0;
     
     if (state.has("type_id")) {
-        //current_type_id = task_res->get_type_id();
         current_type_id = static_cast<uint32_t>(state["type_id"]);
         resolved_t = static_cast<Variant::Type>(current_type_id);
     }
     
-    // CRITICAL: Deep copy the registry blueprint so we don't permanently overwrite 
-    // the generic "T" markers for other nodes using this same logic ID.
     Array instanced_schema = p_properties.duplicate(true);
-    
-    // Perform the Type Reification pass
     _reify_property_schema(instanced_schema, current_type_id);
-    
-    // Hand the concrete, flattened schema to the inspector
     logic_inspector->build_inspector(instanced_schema, state, resolved_t);
 }
 
 void TaskGraphNode::_update_matrix_guardrails() {
-    // Base implementation is empty. Sub-nodes override this to parse the 
-    // registry valid_combinations PackedInt64Array based on their dimensions.
 }
 
 uint64_t TaskGraphNode::_calculate_flat_index() const {
-    return 0; // Base implementation
+    return 0;
 }
 
 void TaskGraphNode::_on_custom_param_changed(const StringName& p_param_name, const Variant& p_value) {
-    // 1. Immediately route the parameter change up to the graph resource
-    // IdeamGraphEdit will catch this and update the resource's dictionary
     emit_property_changed(p_param_name, p_value);
 
-    // 2. Re-evaluate the matrix. 
-    // If a View or Strategy dropdown changed, it might invalidate the other selections.
+    // Keep functional image and live input preview updated
+    if (has_image_pipeline && p_param_name == active_image_property_name) {
+        Ref<TaskResource> task_res = get_task_node_resource();
+        Ref<Texture2D> tex = Object::cast_to<Texture2D>(p_value.operator Object *());
+
+        if (task_res.is_valid()) {
+            task_res->set_functional_texture(tex);
+        }
+
+        if (!is_target_image && tex.is_valid()) {
+            update_preview_image(tex->get_image());
+        } else if (!is_target_image) {
+            update_preview_image(Ref<Image>());
+        }
+    }
+
     _update_matrix_guardrails();
+}
+
+void TaskGraphNode::_on_preview_folding_changed(bool p_folded) {
+    Ref<TaskResource> task_res = get_task_node_resource();
+    if (task_res.is_valid()) {
+        task_res->set_preview_folded(p_folded);
+        // Automatically queue a snapshot when the user expands the foldout
+        if (!p_folded) {
+            request_snapshot();
+        }
+    }
+    reset_size();
+    queue_redraw();
+}
+
+void TaskGraphNode::_on_preview_size_changed(double p_value) {
+    Ref<TaskResource> task_res = get_task_node_resource();
+    if (task_res.is_valid()) {
+        task_res->set_max_preview_size(static_cast<int32_t>(p_value));
+        request_snapshot();
+    }
+}
+
+void TaskGraphNode::_on_refresh_button_pressed() {
+    request_snapshot();
+}
+
+void TaskGraphNode::request_snapshot() {
+    Ref<TaskResource> task_res = get_task_node_resource();
+    if (task_res.is_valid()) {
+        task_res->request_snapshot();
+    }
+}
+
+void TaskGraphNode::_update_preview_from_resource() {
+    Ref<TaskResource> task_res = get_task_node_resource();
+    if (task_res.is_null()) return;
+
+    Ref<Image> target_img = task_res->get_snapshot_image();
+    if (target_img.is_null() && !is_target_image) {
+        Ref<Texture2D> func_tex = task_res->get_functional_texture();
+        if (func_tex.is_valid()) {
+            target_img = func_tex->get_image();
+        }
+    }
+    update_preview_image(target_img);
+}
+
+void TaskGraphNode::update_preview_image(const Ref<Image>& p_image) {
+    if (!preview_rect) return;
+
+    if (p_image.is_null() || p_image->is_empty()) {
+        preview_rect->set_texture(Ref<Texture2D>());
+        preview_texture.unref();
+        return;
+    }
+
+    // Zero-allocation path when dimensions and format match
+    if (preview_texture.is_valid() &&
+        Vector2i(preview_texture->get_size()) == p_image->get_size() &&
+        preview_texture->get_format() == p_image->get_format()) {
+        preview_texture->update(p_image);
+    } else {
+        preview_texture = ImageTexture::create_from_image(p_image);
+        preview_rect->set_texture(preview_texture);
+    }
 }
 
 void TaskGraphNode::_on_buffer_option_selected(int p_index, godot::StringName p_prop_name, godot::OptionButton* p_btn) {
     if (!p_btn) return;
-    
-    // The true buffer ID is stored in the OptionButton's item metadata/ID
     int selected_buffer_id = p_btn->get_item_id(p_index);
-    
-    // Route to GraphEdit to mutate the TaskResource dictionary
     emit_property_changed(p_prop_name, selected_buffer_id);
 }
 
 void TaskGraphNode::receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names) {
-    // Fulfill any base MemoryGraphNode logic first
     MemoryGraphNode::receive_buffer_names_list(p_names); 
 
-    // Rapid iteration over cached UI bindings
     for (const auto& binding : buffer_option_bindings) {
-        godot::OptionButton* btn = binding.button;
+        OptionButton* btn = binding.button;
         if (!btn) continue;
 
-        // Cache the currently selected ID to restore it after population
         int current_selected_id = btn->get_selected_id();
-        
         btn->clear();
 
         for (int i = 0; i < binding.buffer_ids.size(); ++i) {
             int b_id = binding.buffer_ids[i];
-            godot::String b_name = "Unknown Buffer";
-            
-            // Validate the ID against the provided topological name list
+            String b_name = "Unknown Buffer";
             if (b_id >= 0 && b_id < p_names.size()) {
                 b_name = p_names[b_id];
             }
-            
             btn->add_item(b_name, b_id);
         }
 
-        // Restore selection safely
         int new_idx = btn->get_item_index(current_selected_id);
         if (new_idx != -1) {
             btn->select(new_idx);
         } else if (btn->get_item_count() > 0) {
-            // Default to index 0 if the previous selection became invalid
             btn->select(0);
         }
     }
 }
 
 void TaskGraphNode::_on_logic_option_selected(int p_index) {
-    godot::Ref<TaskResource> task_res = get_task_node_resource();
+    Ref<TaskResource> task_res = get_task_node_resource();
     if (task_res.is_null()) return;
 
-    // Project the enum forward based on the user's dropdown index
     uint32_t new_id = task_res->get_base_logic_id() + p_index;
     if (task_res->get_logic_id() == new_id) return;
 
     task_res->set_logic_id(new_id);
-    
-    // Route to GraphEdit to mutate the TaskResource dictionary and handle undo/redo
-    emit_property_changed(godot::StringName("logic_id"), new_id);
-
-    // CRITICAL: A new logic_id means the 'properties' schema in the registry has changed. 
-    // We must rebuild the UI to drop old inspector values and fetch the new ones.
+    emit_property_changed(StringName("logic_id"), new_id);
     _rebuild_dynamic_ui(); 
 }
 

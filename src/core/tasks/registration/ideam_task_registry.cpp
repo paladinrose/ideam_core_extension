@@ -72,8 +72,8 @@ void IdeamTaskRegistry::init() {
     }
 
     // 2. Register Unique Tasks (Populates C++ closures in memory + caches utility matrix definitions)
-    singleton->register_task<EntryFillTask, godot_ext::EntryFillTaskResource, godot_ext::EntryFillTaskGraphNode>("EntryFillTask"); 
-    singleton->register_task<SubGraphTask, godot_ext::SubGraphTaskResource, godot_ext::SubGraphTaskGraphNode>("SubGraphTask");
+    singleton->register_task<EntryFillTask, godot_ext::EntryFillTaskResource, godot_ext::EntryFillTaskGraphNode>("Entry Fill"); 
+    singleton->register_task<SubGraphTask, godot_ext::SubGraphTaskResource, godot_ext::SubGraphTaskGraphNode>("Sub-Graph");
 
     // 3. Spin up the DOD Dispatchers (Fast-path C++ routing arrays)
     QueryTaskRegistry::init_execution_routing();

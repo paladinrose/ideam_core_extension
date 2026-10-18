@@ -8,7 +8,11 @@
 #include "godot/editor/ideam_editor_plugin.h"
 #include "godot/editor/ideam_editor_inspector_plugin.h"
 
+// --- Utilities ---
+#include "godot/utilities/ideam_undo_redo.h"
+
 // --- Controls ---
+#include "godot/controls/runtime_resource_picker.h"
 #include "godot/controls/runtime_inspector.h"
 #include "godot/controls/heatmap_grid.h"
 #include "godot/controls/circular_gauge.h"
@@ -34,20 +38,35 @@
 #include "godot/memory/memory_manager_resource.h"
 #include "godot/memory/memory_profiler.h"
 #include "godot/memory/memory_ribbon.h"
+#include "godot/memory/memory_ribbon_button.h"
+#include "godot/memory/memory_block_button.h"
+#include "godot/memory/block_grant_badge.h"
 #include "godot/memory/memory_manager_inspector.h"
 
+#include "godot/memory/memory_buffer_column_panel.h"
+#include "godot/memory/memory_buffer_linkage_panel.h"
 #include "godot/memory/managed_buffer_resource.h"
 #include "godot/memory/managed_buffer_view.h"
+#include "godot/memory/memory_buffer_tooltip.h"
 
 #include "godot/memory/memory_buffer_resource.h"
 #include "godot/memory/memory_buffer_view.h"
 
 #include "godot/memory/aos_visualizer.h"
+#include "godot/memory/flat_visualizer.h"
 #include "godot/memory/memory_page_grid.h"
+#include "godot/memory/ring_visualizer.h"
 #include "godot/memory/soa_visualizer.h"
+#include "godot/memory/sparse_set_visualizer.h"
+#include "godot/memory/tiled_soa_visualizer.h"
 
 #include "godot/memory/memory_grant_resource.h"
+#include "godot/memory/memory_grant_view.h"
+
 #include "godot/memory/grant_part_resource.h"
+#include "godot/memory/grant_part_view.h"
+
+#include "godot/memory/memory_buffer_selection_resource.h"
 #include "godot/memory/grant_request_window.h"
 #include "godot/memory/memory_inspectors.h"
 
@@ -150,7 +169,11 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         GDREGISTER_CLASS(ideam::core::IdeamTaskRegistry);
         GDREGISTER_CLASS(ideam::core::TaskManifest);
         
+        // --- Utilities ---
+        GDREGISTER_CLASS(ideam::godot_ext::IdeamUndoRedo);
+
         // --- Controls ---
+        GDREGISTER_CLASS(ideam::godot_ext::RuntimeResourcePicker);
         GDREGISTER_CLASS(ideam::godot_ext::RuntimeInspector);
         GDREGISTER_CLASS(ideam::godot_ext::CircularGauge);
         GDREGISTER_CLASS(ideam::godot_ext::HeatmapGrid);
@@ -175,24 +198,40 @@ void initialize_ideam_core_module(ModuleInitializationLevel p_level) {
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::MemoryGraphNode);
 
         GDREGISTER_CLASS(ideam::godot_ext::MemoryManagerResource);
-        GDREGISTER_CLASS(ideam::godot_ext::MemoryProfiler);
-        GDREGISTER_CLASS(ideam::godot_ext::MemoryRibbon);
 
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferColumnPanel);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferLinkagePanel);
         GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferResource);
         GDREGISTER_CLASS(ideam::godot_ext::ManagedBufferView);
 
         GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferResource);
         GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferView);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferTooltip);
 
         GDREGISTER_CLASS(ideam::godot_ext::MemoryPageGrid);
         GDREGISTER_CLASS(ideam::godot_ext::AoSVisualizer);
+        GDREGISTER_CLASS(ideam::godot_ext::FlatVisualizer);
+        GDREGISTER_CLASS(ideam::godot_ext::RingVisualizer);
         GDREGISTER_CLASS(ideam::godot_ext::SoAVisualizer);
+        GDREGISTER_CLASS(ideam::godot_ext::SparseSetVisualizer);
+        GDREGISTER_CLASS(ideam::godot_ext::TiledSoAVisualizer);
 
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBufferSelectionResource);
         GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantResource);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantView);
+
         GDREGISTER_CLASS(ideam::godot_ext::GrantPartResource);
+        GDREGISTER_CLASS(ideam::godot_ext::GrantPartView);
+
         GDREGISTER_CLASS(ideam::godot_ext::MemoryGrantInspector);
         GDREGISTER_CLASS(ideam::godot_ext::MemorySelectionInspector);
         GDREGISTER_CLASS(ideam::godot_ext::GrantRequestWindow);
+
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryProfiler);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryRibbon);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryRibbonButton);
+        GDREGISTER_CLASS(ideam::godot_ext::MemoryBlockButton);
+        GDREGISTER_CLASS(ideam::godot_ext::BlockGrantBadge);
         
         // --- Tasks ---
         GDREGISTER_ABSTRACT_CLASS(ideam::godot_ext::TaskResource);

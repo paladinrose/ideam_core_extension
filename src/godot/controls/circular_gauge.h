@@ -3,6 +3,8 @@
 #include <godot_cpp/classes/control.hpp>
 #include <godot_cpp/classes/curve.hpp>
 #include <godot_cpp/variant/color.hpp>
+#include <godot_cpp/variant/packed_color_array.hpp>
+#include <godot_cpp/variant/packed_vector2_array.hpp>
 
 namespace ideam::godot_ext { 
 
@@ -17,7 +19,7 @@ public:
 
 private:
     GaugeDirection direction = DIRECTION_CLOCKWISE;
-    int marker_count = 1; // 1 or 2 markers
+    int marker_count = 2;
 
     // Angle and Value mapping
     float start_angle = 0.0f; // In degrees
@@ -26,19 +28,33 @@ private:
     float max_value = 100.0f; 
 
     // Marker values
-    float value_1 = 0.0f; // Typically Head or Tail
-    float value_2 = 100.0f; // Only used if marker_count == 2
+    float value_1 = 0.0f; // Tail / Read Index
+    float value_2 = 0.0f; // Head / Write Index
 
     // Drawing properties
-    bool draw_as_band = false;
+    bool draw_as_band = true;
     godot::Ref<godot::Curve> width_curve;
     
     // Ring Buffer Specifics
     bool is_wrapped = false;
+    bool is_full = false;
     bool is_overflowing = false;
 
-    // Internal helper for generating the curved polygon
+    // Slot Subdivision & Concentric Tuple Layers
+    int slot_count = 0;
+    bool draw_slot_ticks = true;
+    bool draw_head_tail_markers = true;
+    godot::PackedColorArray layer_colors;
+
+    // Custom Color Overrides (theme fallbacks applied when alpha == 0)
+    godot::Color custom_bg_color = godot::Color(0, 0, 0, 0);
+    godot::Color custom_fill_color = godot::Color(0, 0, 0, 0);
+    godot::Color custom_overflow_color = godot::Color(0, 0, 0, 0);
+
+    // Helpers
     void _draw_gauge_segment(float p_start_rad, float p_end_rad, float p_outer_radius, float p_inner_radius, const godot::Color& p_color);
+    void _draw_hazard_stripes(float p_start_rad, float p_end_rad, float p_outer_radius, float p_inner_radius);
+    void _draw_markers(const godot::Vector2& p_center, float p_outer_radius, float p_inner_radius, const godot::Color& p_head_col, const godot::Color& p_tail_col);
     float _value_to_angle(float p_value) const;
 
 protected:
@@ -83,8 +99,34 @@ public:
     void set_is_wrapped(bool p_wrapped);
     bool get_is_wrapped() const;
 
+    void set_is_full(bool p_full);
+    bool get_is_full() const;
+
     void set_is_overflowing(bool p_overflowing);
     bool get_is_overflowing() const;
+
+    void set_slot_count(int p_slots);
+    int get_slot_count() const;
+
+    void set_draw_slot_ticks(bool p_draw);
+    bool get_draw_slot_ticks() const;
+
+    void set_draw_head_tail_markers(bool p_draw);
+    bool get_draw_head_tail_markers() const;
+
+    void set_layer_colors(const godot::PackedColorArray& p_colors);
+    godot::PackedColorArray get_layer_colors() const;
+
+    void set_custom_bg_color(const godot::Color& p_col);
+    godot::Color get_custom_bg_color() const;
+
+    void set_custom_fill_color(const godot::Color& p_col);
+    godot::Color get_custom_fill_color() const;
+
+    void set_custom_overflow_color(const godot::Color& p_col);
+    godot::Color get_custom_overflow_color() const;
+
+    virtual godot::Vector2 _get_minimum_size() const override;
 };
 
 } // namespace ideam::godot_ext

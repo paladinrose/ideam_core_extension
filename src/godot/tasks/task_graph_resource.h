@@ -50,6 +50,10 @@ public:
     void set_sel_arena_buffer(const godot::Ref<ManagedBufferResource>& p_buffer);
     godot::Ref<ManagedBufferResource> get_sel_arena_buffer() const;
 
+    void sync_execution_snapshots(
+        const std::shared_ptr<core::TaskGraphDOD>& p_graph,
+        const godot::HashMap<godot::StringName, core::NodeID>& p_ui_to_dod_map);
+        
     std::shared_ptr<core::TaskGraphDOD> compile_to_task_graph(
         core::MemoryManagerDOD* p_manager, 
         godot::HashMap<godot::StringName, core::NodeID>& r_ui_to_dod_map) const;

@@ -46,8 +46,13 @@ void MemoryGraphResource::set_registry_buffer(const godot::Ref<ManagedBufferReso
 godot::Ref<ManagedBufferResource> MemoryGraphResource::get_registry_buffer() const { return registry_buffer; }
 
 void MemoryGraphResource::_ensure_managed_buffers() {
-    // 1. Let the base IdeamGraphResource instantiate/update the structural Nodes/Edges (SoA/AoS)
+    // 1. Let the base IdeamGraphResource request the structural Nodes/Edges (SoA/AoS)
     IdeamGraphResource::_ensure_managed_buffers();
+
+    godot::Ref<MemoryManagerResource> mgr = get_memory_manager();
+    if (mgr.is_null()) {
+        return;
+    }
 
     // Hardware padding constraint
     constexpr int ALIGNMENT = 64; 
@@ -58,33 +63,33 @@ void MemoryGraphResource::_ensure_managed_buffers() {
     // --- Buffer Profile 3: MemoryGraph Internal State Arrays ---
     int meta_bytes = node_cap * (sizeof(core::MemoryGrantPOD) + sizeof(core::MemoryNodeMetadata) + sizeof(core::SelectionMetadata));
     int padded_meta_bytes = (meta_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-
-    if (meta_buffer.is_null()) {
-        meta_buffer.instantiate();
-        meta_buffer->set_purpose("MemoryGraph State Arrays");
-        meta_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT)); 
-        meta_buffer->set_alignment(ALIGNMENT);
+    if (padded_meta_bytes == 0) {
+        padded_meta_bytes = ALIGNMENT;
     }
-    
-    // Always update dynamically changing values
-    meta_buffer->set_consumer_name(get_consumer_key());
-    meta_buffer->set_byte_footprint(padded_meta_bytes);
+
+    meta_buffer = mgr->request_managed_buffer(
+        get_consumer_key(),
+        godot::StringName("MemoryGraph State Arrays"),
+        static_cast<int>(core::BufferLayoutType::FLAT),
+        padded_meta_bytes,
+        ALIGNMENT
+    );
 
     // --- Buffer Profile 4: The Grant Registry Buffer ---
     int req_cap = get_is_volatile() ? volatile_requirement_capacity : std::max(1024, volatile_requirement_capacity);
     int registry_bytes = req_cap * sizeof(core::GrantPartPOD);
     int padded_registry_bytes = (registry_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-
-    if (registry_buffer.is_null()) {
-        registry_buffer.instantiate();
-        registry_buffer->set_purpose("Grant Registry Buffer");
-        registry_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); 
-        registry_buffer->set_alignment(ALIGNMENT);
+    if (padded_registry_bytes == 0) {
+        padded_registry_bytes = ALIGNMENT;
     }
-    
-    // Always update dynamically changing values
-    registry_buffer->set_consumer_name(get_consumer_key());
-    registry_buffer->set_byte_footprint(padded_registry_bytes);
+
+    registry_buffer = mgr->request_managed_buffer(
+        get_consumer_key(),
+        godot::StringName("Grant Registry Buffer"),
+        static_cast<int>(core::BufferLayoutType::PAGED),
+        padded_registry_bytes,
+        ALIGNMENT
+    );
 }
 
 void MemoryGraphResource::_gather_managed_buffers(godot::TypedArray<ManagedBufferResource>& r_buffers) const {

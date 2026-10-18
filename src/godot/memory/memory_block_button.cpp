@@ -26,7 +26,9 @@ void MemoryBlockButton::_bind_methods() {
     ADD_SIGNAL(MethodInfo("cancel_requested"));
     ADD_SIGNAL(MethodInfo("select_all_requested"));
     ADD_SIGNAL(MethodInfo("invert_selection_requested"));
-    
+    ADD_SIGNAL(MethodInfo("drag_initiated", PropertyInfo(Variant::INT, "buffer_id")));
+    ADD_SIGNAL(MethodInfo("delete_requested", PropertyInfo(Variant::BOOL, "bypass_confirm")));
+
     ADD_SIGNAL(MethodInfo("block_selected", 
         PropertyInfo(Variant::INT, "buffer_id"), 
         PropertyInfo(Variant::BOOL, "shift_pressed"), 
@@ -40,7 +42,9 @@ void MemoryBlockButton::_bind_methods() {
         PropertyInfo(Variant::INT, "buffer_id"), 
         PropertyInfo(Variant::INT, "direction"))); // -1 for Left, +1 for Right
     
-    
+    ADD_SIGNAL(MethodInfo("tooltip_requested",
+        PropertyInfo(Variant::INT, "buffer_id"),
+        PropertyInfo(Variant::DICTIONARY, "out_data")));
 }
 
 MemoryBlockButton::MemoryBlockButton() {
@@ -103,7 +107,6 @@ void MemoryBlockButton::_update_visual_state() {
 void MemoryBlockButton::_gui_input(const Ref<InputEvent>& p_event) {
     Ref<InputEventMouseButton> mb = p_event;
     if (mb.is_valid() && mb->is_pressed()) {
-        // Left Click: Selection & Multi-select reporting
         if (mb->get_button_index() == MouseButton::MOUSE_BUTTON_LEFT) {
             bool shift = mb->is_shift_pressed();
             bool ctrl = mb->is_command_or_control_pressed();
@@ -112,7 +115,6 @@ void MemoryBlockButton::_gui_input(const Ref<InputEvent>& p_event) {
             return;
         }
 
-        // Right Click: Forward global position for context menu spawn
         if (mb->get_button_index() == MouseButton::MOUSE_BUTTON_RIGHT) {
             emit_signal("block_context_menu_requested", mb->get_global_position(), buffer_id);
             accept_event();
@@ -122,13 +124,31 @@ void MemoryBlockButton::_gui_input(const Ref<InputEvent>& p_event) {
 
     // Keyboard Input: Macros & Navigation
     Ref<InputEventKey> k = p_event;
-    if (k->get_keycode() == Key::KEY_ESCAPE) {
+    if (k.is_valid() && k->is_pressed()) {
+        if (k->get_keycode() == Key::KEY_ESCAPE) {
             emit_signal("cancel_requested");
             accept_event();
             return;
         }
+        
+        if (k->get_keycode() == Key::KEY_DELETE) {
+            emit_signal("delete_requested", k->is_shift_pressed());
+            accept_event();
+            return;
+        }
 
-        // Catch Macros
+        // Arrow Key Navigation
+        if (k->get_keycode() == Key::KEY_LEFT || k->get_keycode() == Key::KEY_UP) {
+            emit_signal("block_navigated", buffer_id, -1);
+            accept_event();
+            return;
+        }
+        if (k->get_keycode() == Key::KEY_RIGHT || k->get_keycode() == Key::KEY_DOWN) {
+            emit_signal("block_navigated", buffer_id, 1);
+            accept_event();
+            return;
+        }
+
         if (k->is_command_or_control_pressed()) {
             if (k->get_keycode() == Key::KEY_A) {
                 emit_signal("select_all_requested");
@@ -152,6 +172,7 @@ void MemoryBlockButton::_gui_input(const Ref<InputEvent>& p_event) {
                 return;
             }
         }
+    }
 
     Button::_gui_input(p_event);
 }
@@ -161,10 +182,14 @@ Variant MemoryBlockButton::_get_drag_data(const Vector2& p_at_position) {
     drag_payload["type"] = "memory_buffer_reorder";
     drag_payload["origin_buffer_id"] = buffer_id;
 
-    // Create a lightweight visual preview badge for the cursor
+    // Alert the system that this block is being dragged
+    emit_signal("drag_initiated", buffer_id);
+
+    // Create a visual preview badge for the cursor
     PanelContainer* preview_panel = memnew(PanelContainer);
     Label* preview_label = memnew(Label);
-    preview_label->set_text(get_text());
+    // Add an ellipsis to indicate movement
+    preview_label->set_text(get_text() + "..."); 
     preview_panel->add_child(preview_label);
 
     set_drag_preview(preview_panel);
@@ -173,16 +198,20 @@ Variant MemoryBlockButton::_get_drag_data(const Vector2& p_at_position) {
 }
 
 Object* MemoryBlockButton::_make_custom_tooltip(const String& p_for_text) const {
-    // Basic buffer tooltip fallback. 
-    // This can be expanded or delegated to a specialized BufferTooltipView.
-    if (p_for_text.is_empty()) return nullptr;
+    if (p_for_text.is_empty()) {
+        return nullptr;
+    }
 
-    PanelContainer* tooltip_panel = memnew(PanelContainer);
-    Label* lbl = memnew(Label);
-    lbl->set_text(p_for_text);
-    tooltip_panel->add_child(lbl);
+    Dictionary tooltip_data;
+    const_cast<MemoryBlockButton*>(this)->emit_signal("tooltip_requested", buffer_id, tooltip_data);
 
-    return tooltip_panel;
+    if (tooltip_data.is_empty()) {
+        return nullptr;
+    }
+
+    MemoryBufferTooltip* tooltip = memnew(MemoryBufferTooltip);
+    tooltip->configure(tooltip_data);
+    return tooltip;
 }
 
 } // namespace ideam::godot_ext

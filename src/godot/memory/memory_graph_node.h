@@ -112,7 +112,7 @@ public:
     /**
      * @brief Binds a BufferLayoutType to a specific visual port slot.
      */
-    // [Memz] Wrap the core enum in godot::BitField to satisfy the Variant int64_t cast
+    // Wrap the core enum in godot::BitField to satisfy the Variant int64_t cast
     void update_memory_port(int p_slot_index, bool p_is_left, godot::BitField<core::BufferLayoutType> p_layout);
 
     virtual void receive_buffer_names_list(const godot::TypedArray<godot::StringName>& p_names);

@@ -116,6 +116,7 @@ void TaskGraphHost::execute_graph(double p_delta) {
     }
 
     active_graph->execute_graph_dod(p_delta);
+    graph_resource->sync_execution_snapshots(active_graph, ui_to_dod_map);
 }
 
 } // namespace ideam::godot_ext

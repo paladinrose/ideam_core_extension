@@ -1,5 +1,7 @@
 #pragma once
 
+#include "memory_buffer_tooltip.h"
+
 #include <godot_cpp/classes/button.hpp>
 #include <godot_cpp/classes/h_box_container.hpp>
 #include <godot_cpp/classes/input_event.hpp>
@@ -28,15 +30,17 @@ private:
 protected:
     static void _bind_methods();
 
-    // Godot Control Virtual Overrides
-    virtual void _gui_input(const godot::Ref<godot::InputEvent>& p_event) override;
-    virtual godot::Variant _get_drag_data(const godot::Vector2& p_at_position) override;
-    virtual godot::Object* _make_custom_tooltip(const godot::String& p_for_text) const override;
+   
 
 public:
     MemoryBlockButton();
     ~MemoryBlockButton() = default;
 
+     // Godot Control Virtual Overrides
+    virtual void _gui_input(const godot::Ref<godot::InputEvent>& p_event) override;
+    virtual godot::Variant _get_drag_data(const godot::Vector2& p_at_position) override;
+    virtual godot::Object* _make_custom_tooltip(const godot::String& p_for_text) const override;
+    
     // Buffer Binding & State
     void set_buffer_id(int p_id);
     int get_buffer_id() const { return buffer_id; }

@@ -11,6 +11,11 @@
 #include <godot_cpp/classes/check_box.hpp>
 #include <godot_cpp/classes/line_edit.hpp>
 #include <godot_cpp/classes/color_picker_button.hpp>
+#include <godot_cpp/classes/editor_file_dialog.hpp>
+#include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/resource_loader.hpp>
+#include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/classes/texture2d.hpp>
 
 namespace ideam::godot_ext {
 
@@ -56,6 +61,14 @@ protected:
     void _on_color_changed(const godot::Color& p_color, const godot::StringName& p_prop_name);
     void _on_packed_color_changed(const godot::Color& p_color, const godot::StringName& p_prop_name);
 
+    // Resource picker handlers
+    void _on_resource_picker_pressed(const godot::StringName& p_prop_name, const godot::String& p_hint_string, godot::Button* p_button);
+    void _on_resource_file_selected(const godot::String& p_path, const godot::StringName& p_prop_name, const godot::String& p_hint_string, godot::Button* p_button);
+
+    // Editor vs Runtime modal dispatchers
+    void _show_editor_resource_dialog(const godot::StringName& p_prop_name, const godot::String& p_hint_string, godot::Button* p_button);
+    void _show_runtime_resource_dialog(const godot::StringName& p_prop_name, const godot::String& p_hint_string, godot::Button* p_button);
+    
     // The universal exit funnel, capable of resolving deep struct paths
     void _emit_property_changed(const godot::StringName& p_prop_name, const godot::Variant& p_value);
 

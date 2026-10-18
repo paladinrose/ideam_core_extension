@@ -13,33 +13,54 @@ namespace { // Translation Unit Firewall
 } // namespace
 
 // --- Populate the Variant Map ---
+// --- Populate the Variant Map ---
 const std::array<LogicVariantGroup, TransformTaskRegistry::L_COUNT> TransformTaskRegistry::logic_variants = {{
-    // BoundaryConstraint
+    // BoundaryConstraint (0)
     { true, 1, nullptr },
-    // BoundsExtraction
+    // BoundsExtraction (1)
     { true, 1, nullptr },
-    // DataScatter
+    // DataScatter (2)
     { true, 1, nullptr },
-    // DataSort
+    // DataSort (3)
     { true, 1, nullptr },
-    // EulerIntegration
+    // EulerIntegration (4)
     { true, 1, nullptr },
-    // FastNoiseLite
+    // FastNoiseLite (5)
     { true, 1, nullptr },
-    // NoiseInjection
+
+    // ImageChannelExtract (6)
+    { true, 1, nullptr },
+    // ImageChannelPack (7)
+    { true, 1, nullptr },
+    // ImageNormalizeScalar (8)
+    { true, 1, nullptr },
+    // ImagePaletteLut (9)
+    { true, 1, nullptr },
+    // ImageRawExport (10)
+    { true, 1, nullptr },
+    // ImageRawImport (11)
+    { true, 1, nullptr },
+    // ImageSpatial2DExport (12)
+    { true, 1, nullptr },
+    // ImageSpatial2DImport (13)
+    { true, 1, nullptr },
+
+    // NoiseInjection (14)
+    { true, 1, nullptr },
+    // PackedArrayExport (15)
     { true, 1, nullptr },
     
-    // Stencil_Moore_R1
+    // Stencil_Moore_R1 (16)
     { true, 6, stencil_labels },
-    // Stencil_Moore_R2, R3
+    // Stencil_Moore_R2, R3 (17, 18)
     { false, 0, nullptr },
     { false, 0, nullptr },
-    // Stencil_VonNeumann_R1, R2, R3
+    // Stencil_VonNeumann_R1, R2, R3 (19, 20, 21)
     { false, 0, nullptr },
     { false, 0, nullptr },
     { false, 0, nullptr },
     
-    // ValueAccumulation
+    // ValueAccumulation (22)
     { true, 1, nullptr }
 }};
 

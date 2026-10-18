@@ -2,6 +2,8 @@
 #include "../../core/memory/memory_common.h"
 #include "../../core/memory/selection_utils.h" // Needed for core::SelectionMode if it's declared there
 
+#include <godot_cpp/classes/file_access.hpp>
+#include <godot_cpp/classes/json.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -12,7 +14,57 @@
 #include <map>
 #include <vector>
 
+namespace {
+
+godot::String to_snake_case_slug(const godot::String& p_str) {
+    godot::String lower = p_str.to_lower();
+    godot::String result;
+    bool last_was_underscore = false;
+
+    for (int i = 0; i < lower.length(); ++i) {
+        char32_t c = lower[i];
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+            result += c;
+            last_was_underscore = false;
+        } else {
+            // Treat spaces, hyphens, periods, parentheses, and odd punctuation as delimiters
+            if (!last_was_underscore && !result.is_empty()) {
+                result += '_';
+                last_was_underscore = true;
+            }
+        }
+    }
+
+    // Trim trailing underscores
+    while (result.ends_with("_")) {
+        result = result.substr(0, result.length() - 1);
+    }
+
+    return result;
+}
+
+godot::String extract_consumer_basename(const godot::String& p_consumer) {
+    if (p_consumer.is_empty()) {
+        return "consumer";
+    }
+
+    godot::String base = p_consumer;
+    // Extract only the file name, stripping both the directory path and the file extension
+    if (base.contains("/")) {
+        base = base.get_file().get_basename();
+    } else {
+        base = base.get_basename();
+    }
+
+    godot::String slug = to_snake_case_slug(base);
+    return slug.is_empty() ? "consumer" : slug;
+}
+
+} // namespace
+
 namespace ideam::godot_ext {
+
+using ideam::core::BufferLayoutType;
 
 void MemoryManagerResource::_bind_methods() {
     using namespace godot;
@@ -25,12 +77,17 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_buffer_names"), &MemoryManagerResource::get_buffer_names);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "buffer_schemas", PROPERTY_HINT_ARRAY_TYPE, "MemoryBufferResource"), "set_buffer_schemas", "get_buffer_schemas");
 
+    ClassDB::bind_method(D_METHOD("_select_buffers_by_type", "type"), &MemoryManagerResource::_select_buffers_by_type);
+
     ClassDB::bind_method(D_METHOD("move_buffer", "from_index", "to_index"), &MemoryManagerResource::move_buffer);
     ClassDB::bind_method(D_METHOD("insert_buffer", "index", "buffer"), &MemoryManagerResource::insert_buffer);
+    ClassDB::bind_method(D_METHOD("create_new_buffer", "index"), &MemoryManagerResource::create_new_buffer);
     ClassDB::bind_method(D_METHOD("duplicate_buffer", "index"), &MemoryManagerResource::duplicate_buffer);
     ClassDB::bind_method(D_METHOD("remove_buffer", "index"), &MemoryManagerResource::remove_buffer);
+    ClassDB::bind_method(D_METHOD("_on_buffer_changed"), &MemoryManagerResource::_on_buffer_changed);
     ClassDB::bind_method(D_METHOD("move_buffers_bulk", "buffer_ids", "target_index"), &MemoryManagerResource::move_buffers_bulk);
     ClassDB::bind_method(D_METHOD("duplicate_buffers_bulk", "buffer_ids", "target_index"), &MemoryManagerResource::duplicate_buffers_bulk);
+    ClassDB::bind_method(D_METHOD("remove_buffers_bulk", "buffer_ids"), &MemoryManagerResource::remove_buffers_bulk);
 
     ClassDB::bind_method(D_METHOD("set_scaling_strategy", "strategy"), &MemoryManagerResource::set_scaling_strategy);
     ClassDB::bind_method(D_METHOD("get_scaling_strategy"), &MemoryManagerResource::get_scaling_strategy);
@@ -45,10 +102,11 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_managed_buffers", "managed_buffers"), &MemoryManagerResource::set_managed_buffers);
     ClassDB::bind_method(D_METHOD("get_managed_buffers"), &MemoryManagerResource::get_managed_buffers);
     ClassDB::bind_method(D_METHOD("move_managed_buffer", "from_index", "to_index"), &MemoryManagerResource::move_managed_buffer);
-    
+    ClassDB::bind_method(D_METHOD("request_managed_buffer", "consumer", "purpose", "layout_type", "byte_footprint", "alignment"), &MemoryManagerResource::request_managed_buffer, DEFVAL(64));
+
     ClassDB::bind_method(D_METHOD("get_total_projected_footprint_bytes"), &MemoryManagerResource::get_total_projected_footprint_bytes);
     
-    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "managed_buffer_schemas", PROPERTY_HINT_ARRAY_TYPE, "ManagedBufferProfile"), "set_managed_buffers", "get_managed_buffers");
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "managed_buffer_schemas", PROPERTY_HINT_ARRAY_TYPE, "ManagedBufferResource"), "set_managed_buffers", "get_managed_buffers");
     
     ClassDB::bind_method(D_METHOD("get_projected_footprint_string"), &MemoryManagerResource::get_projected_footprint_string);
     ClassDB::bind_method(D_METHOD("buffer_contains_id", "buffer_id", "entity_id"), &MemoryManagerResource::buffer_contains_id);
@@ -62,6 +120,12 @@ void MemoryManagerResource::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_active_emulated_grants"), &MemoryManagerResource::get_active_emulated_grants);
     ClassDB::bind_method(D_METHOD("set_active_emulated_grants", "grants"), &MemoryManagerResource::set_active_emulated_grants);
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "active_emulated_grants", PROPERTY_HINT_ARRAY_TYPE, "MemoryGrantResource"), "set_active_emulated_grants", "get_active_emulated_grants");
+
+    ClassDB::bind_method(D_METHOD("serialize_subresources_to_disk"), &MemoryManagerResource::serialize_subresources_to_disk);
+    ClassDB::bind_method(D_METHOD("to_dictionary"), &MemoryManagerResource::to_dictionary);
+    ClassDB::bind_method(D_METHOD("from_dictionary", "dict"), &MemoryManagerResource::from_dictionary);
+    ClassDB::bind_method(D_METHOD("save_to_json_file", "path"), &MemoryManagerResource::save_to_json_file);
+    ClassDB::bind_method(D_METHOD("load_from_json_file", "path"), &MemoryManagerResource::load_from_json_file);
 }
 
 MemoryManagerResource::MemoryManagerResource() {}
@@ -113,10 +177,50 @@ void MemoryManagerResource::set_buffer_schemas(const godot::TypedArray<MemoryBuf
     }
 }
 void MemoryManagerResource::_set_buffer_schemas(const godot::TypedArray<MemoryBufferResource>& p_schemas) { 
+    // 1. Disconnect previous schemas
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        godot::Ref<MemoryBufferResource> old_buf = buffer_schemas[i];
+        if (old_buf.is_valid() && old_buf->is_connected("changed", godot::Callable(this, "_on_schema_changed"))) {
+            old_buf->disconnect("changed", godot::Callable(this, "_on_schema_changed"));
+        }
+    }
+
     buffer_schemas = p_schemas;
+
+    // 2. Connect new schemas
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        godot::Ref<MemoryBufferResource> new_buf = buffer_schemas[i];
+        if (new_buf.is_valid() && !new_buf->is_connected("changed", godot::Callable(this, "_on_schema_changed"))) {
+            new_buf->connect("changed", godot::Callable(this, "_on_schema_changed"));
+        }
+    }
+
     emit_changed();
 }
 godot::TypedArray<MemoryBufferResource> MemoryManagerResource::get_buffer_schemas() const { return buffer_schemas; }
+
+godot::PackedInt32Array MemoryManagerResource::_select_buffers_by_type(int p_type) const {
+    godot::PackedInt32Array matching_indices;
+    
+    // Cast the requested enum mask to its underlying integer type
+    uint16_t requested_mask = static_cast<uint16_t>(p_type);
+
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        godot::Ref<MemoryBufferResource> schema = buffer_schemas[i];
+        if (!schema.is_valid()) continue;
+
+        // Retrieve the current buffer's layout and cast it for bitwise comparison
+        uint16_t current_layout = static_cast<uint16_t>(schema->get_layout_type());
+        
+        // If the bitwise AND operation results in anything other than 0, 
+        // the current buffer's layout satisfies the requested mask.
+        if ((current_layout & requested_mask) != 0) {
+            matching_indices.push_back(i);
+        }
+    }
+
+    return matching_indices;
+}
 
 void MemoryManagerResource::move_buffer(int p_from_index, int p_to_index) {
     if (p_from_index < 0 || p_from_index >= buffer_schemas.size()) return;
@@ -156,10 +260,36 @@ void MemoryManagerResource::remove_buffer(int p_index) {
         _remove_buffer(p_index);
     }
 }
-
 void MemoryManagerResource::_remove_buffer(int p_index) {
+    if (p_index >= 0 && p_index < buffer_schemas.size()) {
+        godot::Ref<MemoryBufferResource> buf = buffer_schemas[p_index];
+        if (buf.is_valid() && buf->is_connected("changed", godot::Callable(this, "_on_schema_changed"))) {
+            buf->disconnect("changed", godot::Callable(this, "_on_schema_changed"));
+        }
+    }
+
     buffer_schemas.remove_at(p_index);
     emit_changed();
+}
+
+void MemoryManagerResource::remove_buffers_bulk(const godot::PackedInt32Array& p_buffer_ids) {
+    if (p_buffer_ids.is_empty()) return;
+
+    godot::TypedArray<MemoryBufferResource> new_schemas;
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        if (!p_buffer_ids.has(i)) {
+            new_schemas.push_back(buffer_schemas[i]);
+        }
+    }
+
+    if (undo_redo.is_valid()) {
+        undo_redo->create_action("Delete Memory Buffers");
+        undo_redo->add_do_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(new_schemas));
+        undo_redo->add_undo_method(callable_mp(this, &MemoryManagerResource::_set_buffer_schemas).bind(buffer_schemas.duplicate()));
+        undo_redo->commit_action();
+    } else {
+        _set_buffer_schemas(new_schemas);
+    }
 }
 
 void MemoryManagerResource::insert_buffer(int p_index, const godot::Ref<MemoryBufferResource>& p_buffer) {
@@ -181,7 +311,10 @@ void MemoryManagerResource::insert_buffer(int p_index, const godot::Ref<MemoryBu
     }
 }
 void MemoryManagerResource::_insert_buffer(int p_index, const godot::Ref<MemoryBufferResource>& p_buffer) {
-    // If the index is out of bounds, push to the end to prevent crashing
+    if (p_buffer.is_valid() && !p_buffer->is_connected("changed", godot::Callable(this, "_on_schema_changed"))) {
+        p_buffer->connect("changed", godot::Callable(this, "_on_schema_changed"));
+    }
+
     if (p_index < 0 || p_index > buffer_schemas.size()) {
         buffer_schemas.push_back(p_buffer);
     } else {
@@ -190,13 +323,25 @@ void MemoryManagerResource::_insert_buffer(int p_index, const godot::Ref<MemoryB
     emit_changed();
 }
 
+void MemoryManagerResource::create_new_buffer(int p_index) {
+    godot::Ref<MemoryBufferResource> new_buffer;
+    new_buffer.instantiate();
+    
+    // Assign a default name. The UI can handle renaming later.
+    new_buffer->set_buffer_name(godot::StringName("New Buffer"));
+    
+    // Pass to your existing insertion logic, which handles bounds checking, 
+    // array insertion, and the Undo/Redo action commit automatically.
+    insert_buffer(p_index, new_buffer);
+}
+
 void MemoryManagerResource::duplicate_buffer(int p_index) {
     if (p_index < 0 || p_index >= buffer_schemas.size()) return;
 
     godot::Ref<MemoryBufferResource> original = buffer_schemas[p_index];
     if (!original.is_valid()) return;
 
-    // Deep-copy the configuration based on MemoryBufferResource properties[cite: 8]
+    // Deep-copy the configuration based on MemoryBufferResource properties
     godot::Ref<MemoryBufferResource> duplicate_res;
     duplicate_res.instantiate();
     
@@ -208,7 +353,7 @@ void MemoryManagerResource::duplicate_buffer(int p_index) {
     duplicate_res->set_enable_shadowing(original->get_enable_shadowing());
     duplicate_res->set_selection_mode(original->get_selection_mode());
     
-    // Perform a deep copy of the columns dictionary array[cite: 7, 8]
+    // Perform a deep copy of the columns dictionary array
     duplicate_res->set_columns(original->get_columns().duplicate(true)); 
 
     // Insert the duplicate immediately following the original
@@ -222,6 +367,23 @@ void MemoryManagerResource::duplicate_buffer(int p_index) {
     } else {
         _insert_buffer(target_index, duplicate_res);
     }
+}
+
+void MemoryManagerResource::hook_buffer_signals() {
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        godot::Ref<MemoryBufferResource> buf = buffer_schemas[i];
+        if (buf.is_valid()) {
+            auto cb = callable_mp(this, &MemoryManagerResource::_on_buffer_changed);
+            if (!buf->is_connected("changed", cb)) {
+                buf->connect("changed", cb);
+            }
+        }
+    }
+}
+void MemoryManagerResource::_on_buffer_changed() {
+    // A child buffer changed (e.g., max_elements, layout, columns), 
+    // so notify listeners (MemoryRibbon, MemoryProfiler, etc.)
+    emit_changed();
 }
 
 void MemoryManagerResource::move_buffers_bulk(const godot::PackedInt32Array& p_buffer_ids, int p_target_index) {
@@ -368,6 +530,15 @@ void MemoryManagerResource::set_managed_buffers(const godot::TypedArray<ManagedB
 }
 void MemoryManagerResource::_set_managed_buffers(const godot::TypedArray<ManagedBufferResource>& p_buffers) { 
     managed_buffer_schemas = p_buffers; 
+
+    // Re-link the runtime manager reference across loaded buffer resources
+    for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
+        godot::Ref<ManagedBufferResource> buf = managed_buffer_schemas[i];
+        if (buf.is_valid()) {
+            buf->set_manager_resource(this);
+        }
+    }
+
     emit_changed();
 }
 godot::TypedArray<ManagedBufferResource> MemoryManagerResource::get_managed_buffers() const { return managed_buffer_schemas; }
@@ -392,6 +563,109 @@ void MemoryManagerResource::_move_managed_buffer(int p_from_index, int p_to_inde
     managed_buffer_schemas.remove_at(p_from_index);
     managed_buffer_schemas.insert(p_to_index, profile);
     emit_changed();
+}
+
+godot::String MemoryManagerResource::get_subresources_directory() const {
+    godot::String current_path = get_path();
+    if (current_path.is_empty() || !current_path.begins_with("res://")) {
+        return godot::String();
+    }
+
+    godot::String base_dir = current_path.get_base_dir();
+    godot::String manager_name = get_name();
+    if (manager_name.is_empty()) {
+        manager_name = current_path.get_file().get_basename();
+    }
+
+    godot::String target_folder = base_dir.path_join(manager_name + "_resources");
+
+    godot::Ref<godot::DirAccess> dir = godot::DirAccess::open(base_dir);
+    if (dir.is_valid() && !dir->dir_exists(target_folder)) {
+        dir->make_dir(target_folder);
+    }
+
+    return target_folder;
+}
+
+void MemoryManagerResource::save_managed_buffer_to_disk(const godot::Ref<ManagedBufferResource>& p_buffer) {
+    if (!godot::Engine::get_singleton()->is_editor_hint() || p_buffer.is_null()) {
+        return;
+    }
+
+    godot::String target_folder = get_subresources_directory();
+    if (target_folder.is_empty()) {
+        return;
+    }
+
+    godot::String consumer_clean = extract_consumer_basename(p_buffer->get_consumer_name());
+    godot::String purpose_clean = to_snake_case_slug(p_buffer->get_purpose());
+    if (purpose_clean.is_empty()) {
+        purpose_clean = "buffer";
+    }
+
+    godot::String res_name = consumer_clean + "_" + purpose_clean;
+
+    godot::String save_path = target_folder.path_join(res_name + ".tres");
+    p_buffer->set_name(res_name);
+    p_buffer->set_path(save_path);
+
+    godot::ResourceSaver::get_singleton()->save(p_buffer, save_path);
+    p_buffer->take_over_path(save_path);
+}
+
+godot::Ref<ManagedBufferResource> MemoryManagerResource::request_managed_buffer(
+    const godot::StringName& p_consumer,
+    const godot::StringName& p_purpose,
+    int p_layout_type,
+    int p_byte_footprint,
+    int p_alignment) 
+{
+    godot::Ref<ManagedBufferResource> target_buffer;
+    bool is_new = true;
+
+    for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
+        godot::Ref<ManagedBufferResource> mb = managed_buffer_schemas[i];
+        if (mb.is_valid() && mb->get_consumer_name() == p_consumer && mb->get_purpose() == p_purpose) {
+            target_buffer = mb;
+            is_new = false;
+            break;
+        }
+    }
+
+    if (is_new) {
+        target_buffer.instantiate();
+        target_buffer->set_consumer_name(p_consumer);
+        target_buffer->set_purpose(p_purpose);
+    }
+
+    target_buffer->set_layout_type(p_layout_type);
+    target_buffer->set_byte_footprint(p_byte_footprint);
+    target_buffer->set_alignment(p_alignment);
+    target_buffer->set_manager_resource(this);
+
+    // If DOD backend is already initialized, allocate live memory dynamically
+    if (backend_manager && target_buffer->get_live_buffer_id() < 0) {
+        core::BufferLayoutType layout = static_cast<core::BufferLayoutType>(p_layout_type);
+        size_t size = static_cast<size_t>(p_byte_footprint);
+        uint32_t align = static_cast<uint32_t>(p_alignment);
+
+        uint32_t buffer_id = backend_manager->create_buffer(layout, size, align);
+        target_buffer->set_live_buffer_id(static_cast<int>(buffer_id));
+    }
+
+    // Save to disk in the editor immediately so it gains a unique external resource path
+    if (godot::Engine::get_singleton()->is_editor_hint()) {
+        save_managed_buffer_to_disk(target_buffer);
+    }
+
+    if (is_new) {
+        managed_buffer_schemas.push_back(target_buffer);
+    }
+
+    emit_changed();
+    notify_property_list_changed();
+
+    return target_buffer;
 }
 
 void MemoryManagerResource::set_active_emulated_grants(const godot::TypedArray<MemoryGrantResource>& p_grants) { 
@@ -453,6 +727,14 @@ void MemoryManagerResource::_register_consumer_buffers(const godot::StringName& 
             managed_buffer_schemas.remove_at(i);
         }
     }
+    
+    for (int i = 0; i < p_buffers.size(); ++i) {
+        godot::Ref<ManagedBufferResource> buf = p_buffers[i];
+        if (buf.is_valid()) {
+            buf->set_manager_resource(this);
+        }
+    }
+
     managed_buffer_schemas.append_array(p_buffers);
     emit_changed();
 }
@@ -574,6 +856,22 @@ void MemoryManagerResource::initialize_backend() {
         if (buffer_id != 0xFFFFFFFF && !core_columns.empty()) {
             backend_manager->configure_buffer_columns(buffer_id, core_columns);
         }
+    }
+
+    // 2. Process Managed Buffers
+    for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
+        godot::Ref<ManagedBufferResource> mb = managed_buffer_schemas[i];
+        if (!mb.is_valid()) continue;
+
+        if (mb->get_live_buffer_id() >= 0) continue; // Skip if already allocated
+        
+        core::BufferLayoutType layout = static_cast<core::BufferLayoutType>(mb->get_layout_type());
+        size_t size = static_cast<size_t>(mb->get_byte_footprint());
+        uint32_t align = static_cast<uint32_t>(mb->get_alignment());
+
+        uint32_t buffer_id = backend_manager->create_buffer(layout, size, align);
+        mb->set_live_buffer_id(static_cast<int>(buffer_id));
+        mb->set_manager_resource(this);
     }
 }
 
@@ -985,10 +1283,9 @@ void MemoryManagerResource::serialize_subresources_to_disk() {
         
         // Construct the final path
         godot::String save_path = res->get_path();
-        
-        if (!save_path.is_empty()){
-           save_path = target_folder.path_join(res_name + ".tres");
-           res->set_path(save_path);
+        if (save_path.is_empty() || !save_path.begins_with(target_folder)) {
+            save_path = target_folder.path_join(res_name + ".tres");
+            res->set_path(save_path);
         }
         
         // Save to disk
@@ -1001,7 +1298,16 @@ void MemoryManagerResource::serialize_subresources_to_disk() {
     }
 
     for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
-        save_resource(managed_buffer_schemas[i], "ManagedBufferSchema", i);
+        godot::Ref<ManagedBufferResource> mb = managed_buffer_schemas[i];
+        if (mb.is_valid()) {
+            godot::String consumer_clean = extract_consumer_basename(mb->get_consumer_name());
+            godot::String purpose_clean = to_snake_case_slug(mb->get_purpose());
+            if (purpose_clean.is_empty()) {
+                purpose_clean = "buffer";
+            }
+            godot::String prefix = consumer_clean + "_" + purpose_clean;
+            save_resource(mb, prefix, i);
+        }
     }
 
     for (int i = 0; i < active_emulated_grants.size(); ++i) {
@@ -1014,5 +1320,241 @@ void MemoryManagerResource::serialize_subresources_to_disk() {
     godot::ResourceSaver::get_singleton()->save(this, current_path);
 }
 
+godot::Dictionary MemoryManagerResource::to_dictionary() const {
+    godot::Dictionary root;
+    root["version"] = 1;
+    root["scaling_strategy"] = static_cast<int>(scaling_strategy);
+    root["transient_capacity_mb"] = transient_capacity_mb;
+
+    // 1. Buffer Schemas
+    godot::TypedArray<godot::Dictionary> schemas_arr;
+    for (int i = 0; i < buffer_schemas.size(); ++i) {
+        godot::Ref<MemoryBufferResource> schema = buffer_schemas[i];
+        if (schema.is_null()) continue;
+
+        godot::Dictionary s;
+        s["buffer_name"] = schema->get_buffer_name();
+        s["layout_type"] = schema->get_layout_type();
+        s["alignment_mode"] = schema->get_alignment_mode();
+        s["max_elements"] = schema->get_max_elements();
+        s["alignment"] = schema->get_alignment();
+        s["needs_gpu_compute"] = schema->get_needs_gpu_compute();
+        s["elements_per_tile"] = schema->get_elements_per_tile();
+        s["page_size_bytes"] = schema->get_page_size_bytes();
+        s["sparse_universe_size"] = schema->get_sparse_universe_size();
+        s["enable_shadowing"] = schema->get_enable_shadowing();
+        s["selection_mode"] = schema->get_selection_mode();
+        s["columns"] = schema->get_columns().duplicate(true);
+
+        schemas_arr.push_back(s);
+    }
+    root["buffer_schemas"] = schemas_arr;
+
+    // 2. Managed Buffer Profiles
+    godot::TypedArray<godot::Dictionary> managed_arr;
+    for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
+        godot::Ref<ManagedBufferResource> mb = managed_buffer_schemas[i];
+        if (mb.is_null()) continue;
+
+        godot::Dictionary m;
+        m["consumer_name"] = mb->get_consumer_name();
+        m["purpose"] = mb->get_purpose();
+        m["live_buffer_id"] = mb->get_live_buffer_id();
+        m["fallback_layout_type"] = mb->get_layout_type();
+        m["fallback_byte_footprint"] = mb->get_byte_footprint();
+        m["fallback_alignment"] = mb->get_alignment();
+
+        managed_arr.push_back(m);
+    }
+    root["managed_buffer_schemas"] = managed_arr;
+
+    // 3. Active Emulated Grants & Selections
+    godot::TypedArray<godot::Dictionary> grants_arr;
+    for (int i = 0; i < active_emulated_grants.size(); ++i) {
+        godot::Ref<MemoryGrantResource> grant = active_emulated_grants[i];
+        if (grant.is_null()) continue;
+
+        godot::Dictionary g;
+        g["grant_name"] = grant->get_grant_name();
+        g["capacity_mode"] = grant->get_capacity_mode();
+
+        godot::TypedArray<godot::Dictionary> parts_arr;
+        godot::TypedArray<GrantPartResource> parts = grant->get_configured_parts();
+        for (int j = 0; j < parts.size(); ++j) {
+            godot::Ref<GrantPartResource> part = parts[j];
+            if (part.is_null()) continue;
+
+            godot::Dictionary p;
+            p["buffer_id"] = part->get_buffer_id();
+            p["element_stride"] = part->get_element_stride();
+            p["column_id"] = part->get_column_id();
+            p["buffer_type"] = part->get_buffer_type();
+            p["target_buffer_name"] = part->get_target_buffer_name();
+            p["target_column_name"] = part->get_target_column_name();
+            p["access_mode"] = part->get_access_mode();
+            p["is_contiguous"] = part->get_is_contiguous();
+
+            // Nested Selection Resource Serialization
+            godot::Ref<MemoryBufferSelectionResource> sel = part->get_selection();
+            if (sel.is_valid()) {
+                godot::Dictionary s_dict;
+                s_dict["mode"] = sel->get_mode();
+                s_dict["element_count"] = sel->get_element_count();
+                s_dict["start_index"] = sel->get_start_index();
+                s_dict["sparse_indices"] = sel->get_sparse_indices();
+                s_dict["dense_bitmask"] = sel->get_dense_bitmask();
+                p["selection"] = s_dict;
+            }
+
+            parts_arr.push_back(p);
+        }
+        g["parts"] = parts_arr;
+        grants_arr.push_back(g);
+    }
+    root["active_emulated_grants"] = grants_arr;
+
+    return root;
+}
+
+void MemoryManagerResource::from_dictionary(const godot::Dictionary& p_dict) {
+    if (p_dict.has("scaling_strategy")) {
+        set_scaling_strategy(static_cast<int>(p_dict["scaling_strategy"]));
+    }
+    if (p_dict.has("transient_capacity_mb")) {
+        set_transient_capacity_mb(static_cast<int>(p_dict["transient_capacity_mb"]));
+    }
+
+    // 1. Buffer Schemas
+    if (p_dict.has("buffer_schemas")) {
+        godot::Array schemas_raw = p_dict["buffer_schemas"];
+        godot::TypedArray<MemoryBufferResource> new_schemas;
+
+        for (int i = 0; i < schemas_raw.size(); ++i) {
+            godot::Dictionary s = schemas_raw[i];
+            godot::Ref<MemoryBufferResource> schema;
+            schema.instantiate();
+
+            schema->set_buffer_name(s.get("buffer_name", "Buffer"));
+            schema->set_layout_type(s.get("layout_type", 0));
+            schema->set_alignment_mode(s.get("alignment_mode", 0));
+            schema->set_max_elements(s.get("max_elements", 1024));
+            schema->set_alignment(s.get("alignment", 64));
+            schema->set_needs_gpu_compute(s.get("needs_gpu_compute", false));
+            schema->set_elements_per_tile(s.get("elements_per_tile", 64));
+            schema->set_page_size_bytes(s.get("page_size_bytes", 4096));
+            schema->set_sparse_universe_size(s.get("sparse_universe_size", 10000));
+            schema->set_enable_shadowing(s.get("enable_shadowing", false));
+            schema->set_selection_mode(s.get("selection_mode", 0));
+            schema->set_columns(s.get("columns", godot::Array()));
+
+            new_schemas.push_back(schema);
+        }
+        set_buffer_schemas(new_schemas);
+    }
+
+    // 2. Managed Buffer Profiles
+    if (p_dict.has("managed_buffer_schemas")) {
+        godot::Array managed_raw = p_dict["managed_buffer_schemas"];
+        godot::TypedArray<ManagedBufferResource> new_managed;
+
+        for (int i = 0; i < managed_raw.size(); ++i) {
+            godot::Dictionary m = managed_raw[i];
+            godot::Ref<ManagedBufferResource> mb;
+            mb.instantiate();
+
+            mb->set_consumer_name(m.get("consumer_name", ""));
+            mb->set_purpose(m.get("purpose", ""));
+            mb->set_live_buffer_id(m.get("live_buffer_id", -1));
+            mb->set_layout_type(m.get("fallback_layout_type", 0));
+            mb->set_byte_footprint(m.get("fallback_byte_footprint", 0));
+            mb->set_alignment(m.get("fallback_alignment", 64));
+
+            new_managed.push_back(mb);
+        }
+        set_managed_buffers(new_managed);
+    }
+
+    // 3. Active Emulated Grants & Selections
+    if (p_dict.has("active_emulated_grants")) {
+        godot::Array grants_raw = p_dict["active_emulated_grants"];
+        godot::TypedArray<MemoryGrantResource> new_grants;
+
+        for (int i = 0; i < grants_raw.size(); ++i) {
+            godot::Dictionary g = grants_raw[i];
+            godot::Ref<MemoryGrantResource> grant;
+            grant.instantiate();
+
+            grant->set_grant_name(g.get("grant_name", "Grant"));
+            grant->set_capacity_mode(g.get("capacity_mode", 4));
+
+            godot::Array parts_raw = g.get("parts", godot::Array());
+            godot::TypedArray<GrantPartResource> new_parts;
+
+            for (int j = 0; j < parts_raw.size(); ++j) {
+                godot::Dictionary p = parts_raw[j];
+                godot::Ref<GrantPartResource> part;
+                part.instantiate();
+
+                part->set_buffer_id(p.get("buffer_id", -1));
+                part->set_element_stride(p.get("element_stride", 0));
+                part->set_column_id(p.get("column_id", 0));
+                part->set_buffer_type(p.get("buffer_type", 0));
+                part->set_target_buffer_name(p.get("target_buffer_name", ""));
+                part->set_target_column_name(p.get("target_column_name", ""));
+                part->set_access_mode(p.get("access_mode", 0));
+                part->set_is_contiguous(p.get("is_contiguous", false));
+
+                // Nested Selection Resource Deserialization
+                godot::Ref<MemoryBufferSelectionResource> sel;
+                sel.instantiate();
+                if (p.has("selection")) {
+                    godot::Dictionary s_dict = p["selection"];
+                    sel->set_mode(s_dict.get("mode", 2));
+                    sel->set_element_count(s_dict.get("element_count", 0));
+                    sel->set_start_index(s_dict.get("start_index", 0));
+                    sel->set_sparse_indices(s_dict.get("sparse_indices", godot::PackedInt64Array()));
+                    sel->set_dense_bitmask(s_dict.get("dense_bitmask", godot::PackedInt64Array()));
+                }
+                part->set_selection(sel);
+
+                new_parts.push_back(part);
+            }
+            grant->set_configured_parts(new_parts);
+            new_grants.push_back(grant);
+        }
+        set_active_emulated_grants(new_grants);
+    }
+
+    emit_changed();
+}
+
+godot::Error MemoryManagerResource::save_to_json_file(const godot::String& p_path) const {
+    godot::Dictionary dict = to_dictionary();
+    godot::String json_text = godot::JSON::stringify(dict, "\t");
+
+    godot::Ref<godot::FileAccess> file = godot::FileAccess::open(p_path, godot::FileAccess::WRITE);
+    if (file.is_null()) {
+        return godot::FileAccess::get_open_error();
+    }
+
+    file->store_string(json_text);
+    return godot::OK;
+}
+
+godot::Error MemoryManagerResource::load_from_json_file(const godot::String& p_path) {
+    godot::Ref<godot::FileAccess> file = godot::FileAccess::open(p_path, godot::FileAccess::READ);
+    if (file.is_null()) {
+        return godot::FileAccess::get_open_error();
+    }
+
+    godot::String json_text = file->get_as_text();
+    godot::Variant parsed = godot::JSON::parse_string(json_text);
+    if (parsed.get_type() != godot::Variant::DICTIONARY) {
+        return godot::ERR_FILE_CORRUPT;
+    }
+
+    from_dictionary(parsed);
+    return godot::OK;
+}
 
 } // namespace ideam::godot_ext

@@ -169,7 +169,7 @@ void QueryTaskGraphNode::_rebuild_ports() {
     register_port_signature(port_anchor_index, true, output_traits);
 
     // 5. Apply DOD Shape Iconography
-    // [Memz] Explicitly cast the strict enum to int64_t so the BitField constructor accepts it
+    // Explicitly cast the strict enum to int64_t so the BitField constructor accepts it
     update_memory_port(port_anchor_index, true, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(input_layout)));
     update_memory_port(port_anchor_index, false, godot::BitField<core::BufferLayoutType>(static_cast<int64_t>(output_layout)));
 }

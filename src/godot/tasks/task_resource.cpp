@@ -12,7 +12,6 @@ void TaskResource::_bind_methods() {
     godot::ClassDB::bind_integer_constant(get_class_static(), "ExecutionMode", "EXEC_SERIAL", EXEC_SERIAL);
     godot::ClassDB::bind_integer_constant(get_class_static(), "ExecutionMode", "EXEC_PARALLEL", EXEC_PARALLEL);
 
-    // Group scheduling variables distinctly from Visuals and Memory Constraints
     ADD_GROUP("Task Execution", "");
 
     godot::ClassDB::bind_method(godot::D_METHOD("set_is_active", "active"), &TaskResource::set_is_active);
@@ -47,7 +46,33 @@ void TaskResource::_bind_methods() {
     godot::ClassDB::bind_method(godot::D_METHOD("get_logic_variant_labels"), &TaskResource::get_logic_variant_labels);
     ADD_PROPERTY(godot::PropertyInfo(godot::Variant::PACKED_STRING_ARRAY, "logic_variant_labels"), "set_logic_variant_labels", "get_logic_variant_labels"); 
 
+    // --- Image Preview Resource Bindings ---
+    ADD_GROUP("Image Preview Pipeline", "");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_functional_texture", "texture"), &TaskResource::set_functional_texture);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_functional_texture"), &TaskResource::get_functional_texture);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "functional_texture", godot::PROPERTY_HINT_RESOURCE_TYPE, "Texture2D"), "set_functional_texture", "get_functional_texture");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_snapshot_image", "image"), &TaskResource::set_snapshot_image);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_snapshot_image"), &TaskResource::get_snapshot_image);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::OBJECT, "snapshot_image", godot::PROPERTY_HINT_RESOURCE_TYPE, "Image"), "set_snapshot_image", "get_snapshot_image");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_preview_folded", "folded"), &TaskResource::set_preview_folded);
+    godot::ClassDB::bind_method(godot::D_METHOD("is_preview_folded"), &TaskResource::is_preview_folded);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::BOOL, "preview_folded"), "set_preview_folded", "is_preview_folded");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("set_max_preview_size", "size"), &TaskResource::set_max_preview_size);
+    godot::ClassDB::bind_method(godot::D_METHOD("get_max_preview_size"), &TaskResource::get_max_preview_size);
+    ADD_PROPERTY(godot::PropertyInfo(godot::Variant::INT, "max_preview_size", godot::PROPERTY_HINT_RANGE, "64,2048,32"), "set_max_preview_size", "get_max_preview_size");
+
+    godot::ClassDB::bind_method(godot::D_METHOD("request_snapshot"), &TaskResource::request_snapshot);
+    godot::ClassDB::bind_method(godot::D_METHOD("is_snapshot_requested"), &TaskResource::is_snapshot_requested);
+
+    ADD_SIGNAL(godot::MethodInfo("snapshot_updated", godot::PropertyInfo(godot::Variant::OBJECT, "snapshot", godot::PROPERTY_HINT_RESOURCE_TYPE, "Image")));
+    ADD_SIGNAL(godot::MethodInfo("snapshot_requested"));
+
     godot::ClassDB::bind_method(godot::D_METHOD("validate_for_compilation"), &TaskResource::validate_for_compilation);
+
 }
 
 void TaskResource::set_execution_mode(int p_mode) {
@@ -58,7 +83,7 @@ void TaskResource::set_execution_mode(int p_mode) {
 int TaskResource::get_execution_mode() const { return static_cast<int>(exec_mode); }
 
 void TaskResource::set_is_active(bool p_active) {
-    if(p_active == is_active) return;
+    if (p_active == is_active) return;
     is_active = p_active;
     emit_changed();
 }
@@ -80,7 +105,17 @@ godot::StringName TaskResource::get_task_name() const { return task_name; }
 
 void TaskResource::set_task_properties(const godot::Dictionary& p_props) {
     if (p_props == task_properties) return;
-    task_properties = p_props.duplicate(); 
+    task_properties = p_props.duplicate();
+
+    // Keep functional_texture synchronized if passed via dictionary
+    if (task_properties.has("target_image")) {
+        functional_texture = task_properties["target_image"];
+    } else if (task_properties.has("source_image")) {
+        functional_texture = task_properties["source_image"];
+    } else if (task_properties.has("image")) {
+        functional_texture = task_properties["image"];
+    }
+
     emit_changed();
 }
 
@@ -89,21 +124,17 @@ godot::Dictionary TaskResource::get_task_properties() const {
 }
 
 bool TaskResource::validate_for_compilation() const {
-    // 1. Pruning Phase Check
     if (!is_active) {
         return false;
     }
-
-    // 2. Cascade Up the Hierarchy
     if (!MemoryGraphNodeResource::validate_for_compilation()) {
         return false;
     }
-
     return true;
 }
 
 void TaskResource::set_logic_id(uint32_t p_id) {
-    if(p_id == logic_id) return;
+    if (p_id == logic_id) return;
     logic_id = p_id;
     emit_changed();
 }
@@ -123,4 +154,49 @@ void TaskResource::set_logic_variant_labels(const godot::PackedStringArray& p_la
 }
 godot::PackedStringArray TaskResource::get_logic_variant_labels() const { return logic_variant_labels; }
 
+void TaskResource::set_functional_texture(const godot::Ref<godot::Texture2D>& p_texture) {
+    if (functional_texture == p_texture) return;
+    functional_texture = p_texture;
+    emit_changed();
+}
+godot::Ref<godot::Texture2D> TaskResource::get_functional_texture() const { return functional_texture; }
+
+void TaskResource::set_snapshot_image(const godot::Ref<godot::Image>& p_image) {
+    if (snapshot_image == p_image) return;
+    snapshot_image = p_image;
+    emit_changed();
+    emit_signal("snapshot_updated", snapshot_image);
+}
+godot::Ref<godot::Image> TaskResource::get_snapshot_image() const { return snapshot_image; }
+
+void TaskResource::set_preview_folded(bool p_folded) {
+    if (preview_folded == p_folded) return;
+    preview_folded = p_folded;
+    emit_changed();
+}
+bool TaskResource::is_preview_folded() const { return preview_folded; }
+
+void TaskResource::set_max_preview_size(int32_t p_size) {
+    if (max_preview_size == p_size) return;
+    max_preview_size = p_size;
+    task_properties["max_preview_size"] = p_size;
+    emit_changed();
+}
+
+int32_t TaskResource::get_max_preview_size() const {
+    return max_preview_size;
+}
+
+void TaskResource::request_snapshot() {
+    snapshot_requested = true;
+    emit_signal("snapshot_requested");
+}
+
+bool TaskResource::is_snapshot_requested() const {
+    return snapshot_requested;
+}
+
+void TaskResource::clear_snapshot_request() {
+    snapshot_requested = false;
+}
 } // namespace ideam::godot_ext

@@ -40,16 +40,16 @@ void MemoryGraphNode::_bind_methods() {
     
     ADD_SIGNAL(MethodInfo("active_grants_requested", PropertyInfo(Variant::OBJECT, "node", PROPERTY_HINT_RESOURCE_TYPE, "MemoryGraphNode")));
 
-    // [Memz] Manually bind external DOD bitflags to int64_t to safely cross the engine boundary.
+    // Manually bind external DOD bitflags to int64_t to safely cross the engine boundary.
     // This keeps src/core/ entirely agnostic of Godot's reflection macros.
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_NONE"), static_cast<int64_t>(core::BufferLayoutType::NONE));
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_FLAT"), static_cast<int64_t>(core::BufferLayoutType::FLAT));
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_AOS"), static_cast<int64_t>(core::BufferLayoutType::AOS));
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_SOA"), static_cast<int64_t>(core::BufferLayoutType::SOA));
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_SPARSE_SET"), static_cast<int64_t>(core::BufferLayoutType::SPARSE_SET));
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_TILED_SOA"), static_cast<int64_t>(core::BufferLayoutType::TILED_SOA));
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_RING"), static_cast<int64_t>(core::BufferLayoutType::RING));
-    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("LAYOUT_PAGED"), static_cast<int64_t>(core::BufferLayoutType::PAGED));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("NONE"), static_cast<int64_t>(core::BufferLayoutType::NONE));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("FLAT"), static_cast<int64_t>(core::BufferLayoutType::FLAT));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("AOS"), static_cast<int64_t>(core::BufferLayoutType::AOS));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("SOA"), static_cast<int64_t>(core::BufferLayoutType::SOA));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("SPARSE_SET"), static_cast<int64_t>(core::BufferLayoutType::SPARSE_SET));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("TILED_SOA"), static_cast<int64_t>(core::BufferLayoutType::TILED_SOA));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("RING"), static_cast<int64_t>(core::BufferLayoutType::RING));
+    ClassDB::bind_integer_constant(get_class_static(), StringName(), StringName("PAGED"), static_cast<int64_t>(core::BufferLayoutType::PAGED));
     
     // Expose LayoutHeaderState to GDScript
     BIND_ENUM_CONSTANT(HEADER_VALID);

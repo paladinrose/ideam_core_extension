@@ -5,6 +5,7 @@
 #include "task_selection_command_pod.h"
 #include "task_graph_command_pod.h"
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/classes/image.hpp>
 #include <cassert>
 
 namespace ideam::core {
@@ -119,6 +120,12 @@ public:
     virtual void prepare(const TaskContextPOD& p_context) = 0;
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) = 0;
     virtual void execute(const TaskContextPOD& p_context) = 0;
+    
+    virtual godot::Ref<godot::Image> get_image_snapshot() const { return godot::Ref<godot::Image>(); }
+    virtual void request_snapshot() {}
+    virtual void set_max_preview_size(int32_t p_size) {}
+    [[nodiscard]] virtual int32_t get_max_preview_size() const { return 0; }
+    [[nodiscard]] virtual bool is_snapshot_requested() const { return false; }
 };
 
 

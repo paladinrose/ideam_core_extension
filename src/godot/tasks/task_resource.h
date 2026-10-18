@@ -1,14 +1,11 @@
 #pragma once
 
 #include "../memory/memory_graph_node_resource.h"
+#include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/classes/texture2d.hpp>
 
 namespace ideam::godot_ext {
 
-/**
- * TaskType
- * Godot-exposed mirror of core::TaskTypeDOD. Moved here so individual nodes
- * can explicitly type themselves without dynamic dictionary parsing.
- */
 enum TaskType : uint32_t {
     TASK_GODOT_REFLECTION = 0,
     TASK_NATIVE_CPU       = 1,
@@ -16,53 +13,35 @@ enum TaskType : uint32_t {
     TASK_QUERY_CULLER     = 3
 };
 
-/**
- * @class TaskResource
- * @brief The baseline Authoring component for executable graph instructions.
- * * Extends MemoryGraphNodeResource to define scheduling and threading constraints.
- * Specific execution logic (Transform, Query, Metadata) is deferred to derived classes.
- * The Graph Compiler uses this layer to build thread-safe execution queues 
- * (e.g., job system dependency barriers) before fetching the actual task payloads.
- */
 class TaskResource : public MemoryGraphNodeResource {
     GDCLASS(TaskResource, MemoryGraphNodeResource)
 
 public:
-    // Defines how the runtime DOD task scheduler should dispatch this node.
-    // Grouping tasks by parallel vs. serial execution allows the graph to 
-    // maximize thread pool saturation without causing race conditions.
     enum ExecutionMode {
-        EXEC_SERIAL = 0,    // Must run sequentially (e.g., mutates global state)
-        EXEC_PARALLEL = 1   // Thread-safe / SoA compatible (e.g., mapping over a contiguous array)
+        EXEC_SERIAL = 0,
+        EXEC_PARALLEL = 1
     };
 
 private:
     ExecutionMode exec_mode = EXEC_PARALLEL;
-    
-    // Allows designers to safely bypass nodes in the Editor without destroying
-    // their topological edge connections. The compiler will simply prune this 
-    // node from the final DOD execution array if false.
     bool is_active = true;
-
-    // Abstracted away from loosely-packed dictionaries to guarantee fast 
-    // deterministic memory access during compiler instantiation.
     TaskType task_type = TASK_NATIVE_CPU;
     
-    // Fallback associative map reserved purely for dynamic Native Component initialization.
     godot::Dictionary task_properties; 
     godot::StringName task_name;
-   
-protected:
 
+    godot::Ref<godot::Texture2D> functional_texture;
+    godot::Ref<godot::Image> snapshot_image;
+    bool preview_folded = false;
+   
+    int32_t max_preview_size = 256;
+    bool snapshot_requested = false;
+
+protected:
     uint32_t logic_id = 0;
-    
-    // The primary/root ID for this family of logics (e.g., the ID of LOD_1Level)
     uint32_t base_logic_id = 0; 
-    
-    // Cached UI strings for the dropdown
     godot::PackedStringArray logic_variant_labels;
 
-    
     static void _bind_methods();
 
 public:
@@ -93,17 +72,27 @@ public:
     
     void set_logic_variant_labels(const godot::PackedStringArray& p_labels);
     godot::PackedStringArray get_logic_variant_labels() const;
-    // --- DOD Compilation Interface ---
-    
-    /**
-     * @brief Validates the task's scheduling constraints, cascading up to 
-     * ensure memory capacities and topological identities are also sound.
-     */
+
+    void set_functional_texture(const godot::Ref<godot::Texture2D>& p_texture);
+    godot::Ref<godot::Texture2D> get_functional_texture() const;
+
+    void set_snapshot_image(const godot::Ref<godot::Image>& p_image);
+    godot::Ref<godot::Image> get_snapshot_image() const;
+
+    void set_max_preview_size(int32_t p_size);
+    int32_t get_max_preview_size() const;
+
+    void request_snapshot();
+    bool is_snapshot_requested() const;
+    void clear_snapshot_request();
+
+    void set_preview_folded(bool p_folded);
+    bool is_preview_folded() const;
+
     bool validate_for_compilation() const override;
 };
 
 } // namespace ideam::godot_ext
 
-// Expose enums to Godot globally
 VARIANT_ENUM_CAST(ideam::godot_ext::TaskType);
 VARIANT_ENUM_CAST(ideam::godot_ext::TaskResource::ExecutionMode);

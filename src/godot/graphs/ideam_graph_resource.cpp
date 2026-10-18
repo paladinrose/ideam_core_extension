@@ -137,14 +137,12 @@ void IdeamGraphResource::update_managed_buffers() {
 }
 
 void IdeamGraphResource::set_consumer_key(const godot::String& p_key) {
-    // First, we want to clear any existing buffers associated with the old consumer key.
-    memory_manager->clear_consumer_buffers(consumer_key);
+    if (memory_manager.is_valid()) {
+        memory_manager->clear_consumer_buffers(consumer_key);
+    }
 
     consumer_key = p_key;
-    
-    // The queued update will update the consumer_name of each profile, then re-register them with the MemoryManagerResource.
     queue_update_managed_buffers();
-    
     emit_changed();
 }
 
@@ -158,8 +156,13 @@ godot::String IdeamGraphResource::get_consumer_key() {
     return consumer_key;
 }
 
-void IdeamGraphResource::_ensure_managed_buffers(){
-    // 1. Calculate the required bounds
+void IdeamGraphResource::_ensure_managed_buffers() {
+    godot::Ref<MemoryManagerResource> mgr = get_memory_manager();
+    if (mgr.is_null()) {
+        return;
+    }
+
+    // 1. Calculate required bounds
     int node_cap = is_volatile_at_runtime ? std::max(static_cast<int>(nodes.size()), volatile_node_capacity) : static_cast<int>(nodes.size());
     int edge_cap = is_volatile_at_runtime ? std::max(static_cast<int>(edges.size()), volatile_edge_capacity) : static_cast<int>(edges.size());
 
@@ -168,32 +171,32 @@ void IdeamGraphResource::_ensure_managed_buffers(){
     // --- Buffer Profile 1: Topology Nodes (SoA) ---
     int node_bytes = node_cap * 12;
     int padded_node_bytes = (node_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-
-    if (node_buffer.is_null()) {
-        node_buffer.instantiate();
-        node_buffer->set_purpose("Topology Nodes SoA");
-        node_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::SOA));
-        node_buffer->set_alignment(ALIGNMENT);
+    if (padded_node_bytes == 0) {
+        padded_node_bytes = ALIGNMENT; // Reserve minimum block so the buffer registers in profiler telemetry
     }
-    
-    // Always update dynamically changing values
-    node_buffer->set_consumer_name(get_consumer_key());
-    node_buffer->set_byte_footprint(padded_node_bytes);
+
+    node_buffer = mgr->request_managed_buffer(
+        get_consumer_key(),
+        godot::StringName("Topology Nodes SoA"),
+        static_cast<int>(core::BufferLayoutType::SOA),
+        padded_node_bytes,
+        ALIGNMENT
+    );
 
     // --- Buffer Profile 2: Topology Edges (AoS) ---
     int edge_bytes = edge_cap * sizeof(core::GraphEdgeData);
     int padded_edge_bytes = (edge_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-
-    if (edge_buffer.is_null()) {
-        edge_buffer.instantiate();
-        edge_buffer->set_purpose("Topology Edges AoS");
-        edge_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::AOS));
-        edge_buffer->set_alignment(ALIGNMENT);
+    if (padded_edge_bytes == 0) {
+        padded_edge_bytes = ALIGNMENT;
     }
-    
-    // Always update dynamically changing values
-    edge_buffer->set_consumer_name(get_consumer_key());
-    edge_buffer->set_byte_footprint(padded_edge_bytes);
+
+    edge_buffer = mgr->request_managed_buffer(
+        get_consumer_key(),
+        godot::StringName("Topology Edges AoS"),
+        static_cast<int>(core::BufferLayoutType::AOS),
+        padded_edge_bytes,
+        ALIGNMENT
+    );
 }
 
 void IdeamGraphResource::_gather_managed_buffers(godot::TypedArray<ManagedBufferResource>& r_buffers) const {

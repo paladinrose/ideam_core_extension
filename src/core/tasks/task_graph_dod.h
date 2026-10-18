@@ -6,6 +6,8 @@
 
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/classes/rendering_device.hpp>
+#include <godot_cpp/classes/image.hpp>
+
 #include <vector>
 #include <memory>
 #include <span>
@@ -139,6 +141,25 @@ public:
         return tier1_meta;
     }
     
+    [[nodiscard]] inline godot::Ref<godot::Image> get_task_image_snapshot(NodeID p_id) const {
+        if (p_id < cpu_metadata.size() && cpu_metadata[p_id].native_interface) {
+            return cpu_metadata[p_id].native_interface->get_image_snapshot();
+        }
+        return {};
+    }
+    
+    inline void request_task_image_snapshot(NodeID p_id) {
+        if (p_id < cpu_metadata.size() && cpu_metadata[p_id].native_interface) {
+            cpu_metadata[p_id].native_interface->request_snapshot();
+        }
+    }
+
+    inline void set_task_max_preview_size(NodeID p_id, int32_t p_size) {
+        if (p_id < cpu_metadata.size() && cpu_metadata[p_id].native_interface) {
+            cpu_metadata[p_id].native_interface->set_max_preview_size(p_size);
+        }
+    }
+
     void sync_with_manager() {
         if (manager) {
             rd = manager->get_rendering_device();

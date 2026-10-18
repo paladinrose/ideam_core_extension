@@ -1,4 +1,6 @@
 #include "runtime_inspector.h"
+#include "runtime_resource_picker.h"
+
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/classes/h_box_container.hpp>
 #include <godot_cpp/classes/label.hpp>
@@ -35,6 +37,10 @@ void RuntimeInspector::_bind_methods() {
     // Array Struct Mutators
     ClassDB::bind_method(D_METHOD("_on_array_element_added", "array_name", "schema"), &RuntimeInspector::_on_array_element_added);
     ClassDB::bind_method(D_METHOD("_on_array_element_removed", "array_name", "index"), &RuntimeInspector::_on_array_element_removed);
+    
+    // Resource picker handlers
+    ClassDB::bind_method(D_METHOD("_on_resource_picker_pressed", "prop_name", "hint_string", "button"), &RuntimeInspector::_on_resource_picker_pressed);
+    ClassDB::bind_method(D_METHOD("_on_resource_file_selected", "path", "prop_name", "hint_string", "button"), &RuntimeInspector::_on_resource_file_selected);
 }
 
 RuntimeInspector::RuntimeInspector() {
@@ -338,7 +344,29 @@ Control* RuntimeInspector::_create_packed_color_edit(const Dictionary& p_prop, c
 
 Control* RuntimeInspector::_create_resource_picker(const Dictionary& p_prop, const Variant& p_value) {
     Button* pick_btn = memnew(Button);
-    pick_btn->set_text(p_value.get_type() == Variant::OBJECT ? "[Resource Loaded]" : "[Assign Resource]");
+    StringName prop_name = p_prop["name"];
+    String hint_str = p_prop.has("hint_string") ? String(p_prop["hint_string"]) : "";
+
+    // Set button label based on currently loaded resource or schema type
+    if (p_value.get_type() == Variant::OBJECT) {
+        Object* obj = p_value.operator Object *();
+        Ref<Resource> res = Object::cast_to<Resource>(obj);
+        if (res.is_valid() && !res->get_path().is_empty()) {
+            pick_btn->set_text(res->get_path().get_file());
+            pick_btn->set_tooltip_text(res->get_path());
+        } else if (Object::cast_to<Image>(obj)) {
+            Ref<Image> img = Object::cast_to<Image>(obj);
+            pick_btn->set_text(vformat("[Image %dx%d]", img->get_width(), img->get_height()));
+        } else {
+            pick_btn->set_text("[Resource Loaded]");
+        }
+    } else {
+        pick_btn->set_text(hint_str.is_empty() ? "[Assign Resource]" : vformat("[Assign %s]", hint_str));
+    }
+
+    pick_btn->set_h_size_flags(Control::SIZE_EXPAND_FILL);
+    pick_btn->connect("pressed", Callable(this, "_on_resource_picker_pressed").bind(prop_name, hint_str, pick_btn));
+
     return pick_btn;
 }
 
@@ -557,6 +585,86 @@ void RuntimeInspector::_on_packed_color_changed(const Color& p_color, const Stri
     
     uint32_t packed_hex = (r << 24) | (g << 16) | (b << 8) | a;
     _emit_property_changed(p_prop_name, static_cast<int>(packed_hex));
+}
+
+void RuntimeInspector::_on_resource_picker_pressed(const StringName& p_prop_name, const String& p_hint_string, Button* p_button) {
+    if (Engine::get_singleton()->is_editor_hint()) {
+        _show_editor_resource_dialog(p_prop_name, p_hint_string, p_button);
+    } else {
+        _show_runtime_resource_dialog(p_prop_name, p_hint_string, p_button);
+    }
+}
+
+void RuntimeInspector::_show_runtime_resource_dialog(const StringName& p_prop_name, const String& p_hint_string, Button* p_button) {
+    RuntimeResourcePicker* picker = memnew(RuntimeResourcePicker);
+    picker->set_target_property(p_prop_name, p_hint_string);
+    
+    // Connect the picker signal straight into your existing inspector assignment funnel
+    picker->connect("resource_selected", Callable(this, "_on_resource_file_selected").bind(p_hint_string, p_button));
+    picker->connect("close_requested", Callable(picker, "queue_free"));
+    picker->connect("canceled", Callable(picker, "queue_free"));
+
+    add_child(picker);
+    picker->open_picker();
+}
+
+void RuntimeInspector::_show_editor_resource_dialog(const StringName& p_prop_name, const String& p_hint_string, Button* p_button) {
+    EditorFileDialog* dialog = memnew(EditorFileDialog);
+    dialog->set_file_mode(EditorFileDialog::FILE_MODE_OPEN_FILE);
+    dialog->set_access(EditorFileDialog::ACCESS_RESOURCES);
+
+    // Apply filters based on schema type
+    if (p_hint_string == "Image") {
+        dialog->add_filter("*.png, *.jpg, *.jpeg, *.webp, *.svg, *.hdr, *.exr, *.tga, *.bmp", "Images");
+        dialog->add_filter("*.tres, *.res", "Resource Files");
+    } else if (!p_hint_string.is_empty()) {
+        dialog->add_filter("*.tres, *.res", vformat("%s Files", p_hint_string));
+    }
+    dialog->add_filter("*.*", "All Files");
+
+    dialog->connect("file_selected", Callable(this, "_on_resource_file_selected").bind(p_prop_name, p_hint_string, p_button));
+    
+    // Auto-free dialog upon closure
+    dialog->connect("close_requested", Callable(dialog, "queue_free"));
+    dialog->connect("canceled", Callable(dialog, "queue_free"));
+
+    add_child(dialog);
+    dialog->popup_file_dialog();
+}
+
+void RuntimeInspector::_on_resource_file_selected(const String& p_path, const StringName& p_prop_name, const String& p_hint_string, Button* p_button) {
+    Variant loaded_val;
+
+    if (p_hint_string == "Image") {
+        // Direct image loading supports common image formats into a raw Image resource
+        Ref<Image> img = Image::load_from_file(p_path);
+        if (img.is_valid() && !img->is_empty()) {
+            loaded_val = img;
+        } else {
+            // Fallback via ResourceLoader (e.g., if selecting an imported Texture2D resource)
+            Ref<Resource> res = ResourceLoader::get_singleton()->load(p_path);
+            if (res.is_valid()) {
+                Ref<Texture2D> tex = Object::cast_to<Texture2D>(res.ptr());
+                if (tex.is_valid()) {
+                    loaded_val = tex->get_image();
+                } else {
+                    loaded_val = res;
+                }
+            }
+        }
+    } else {
+        loaded_val = ResourceLoader::get_singleton()->load(p_path);
+    }
+
+    if (loaded_val.get_type() != Variant::NIL && loaded_val.operator Object *() != nullptr) {
+        if (p_button) {
+            p_button->set_text(p_path.get_file());
+            p_button->set_tooltip_text(p_path);
+        }
+        _emit_property_changed(p_prop_name, loaded_val);
+    } else {
+        UtilityFunctions::printerr(vformat("[RuntimeInspector] Failed to load resource from: %s", p_path));
+    }
 }
 
 void RuntimeInspector::_emit_property_changed(const StringName& p_prop_name, const Variant& p_value) {

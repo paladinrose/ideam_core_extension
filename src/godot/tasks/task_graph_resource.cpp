@@ -72,8 +72,14 @@ void TaskGraphResource::set_sel_arena_buffer(const godot::Ref<ManagedBufferResou
 godot::Ref<ManagedBufferResource> TaskGraphResource::get_sel_arena_buffer() const { return sel_arena_buffer; }
 
 void TaskGraphResource::_ensure_managed_buffers() {
-    // 1. Let the parent MemoryGraphResource instantiate/update its structures
+    // 1. Parent MemoryGraphResource updates its structures
     MemoryGraphResource::_ensure_managed_buffers();
+
+    // Retrieve the attached MemoryManagerResource from base class
+    godot::Ref<MemoryManagerResource> mgr = get_memory_manager();
+    if (mgr.is_null()) {
+        return;
+    }
 
     constexpr int ALIGNMENT = 64;
     constexpr int PAGE_SIZE = 4096; 
@@ -84,48 +90,47 @@ void TaskGraphResource::_ensure_managed_buffers() {
         sizeof(core::TaskTypeDOD) + 
         sizeof(core::TaskCPUMetadata) + 
         sizeof(core::TaskGPUMetadata) + 
-        sizeof(uint32_t) + // transient bytes
-        (sizeof(std::vector<core::TaskPortMetadata>) * 3) + // I/O/Constant port vectors
+        sizeof(uint32_t) + 
+        (sizeof(std::vector<core::TaskPortMetadata>) * 3) + 
         sizeof(std::vector<core::TaskPortConnectionDOD>)
     );
     int padded_exec_bytes = (exec_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-
-    if (exec_buffer.is_null()) {
-        exec_buffer.instantiate();
-        exec_buffer->set_purpose("Task Execution State (SoA)");
-        exec_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::FLAT));
-        exec_buffer->set_alignment(ALIGNMENT);
+    // Ensure non-zero footprint for telemetry when graph has 0 nodes
+    if (padded_exec_bytes == 0) {
+        padded_exec_bytes = ALIGNMENT;
     }
-    
-    exec_buffer->set_consumer_name(get_consumer_key());
-    exec_buffer->set_byte_footprint(padded_exec_bytes);
 
     // --- Profile 6: Structural Command Arena ---
     int padded_cmd_arena = ((command_arena_capacity_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
-    
-    if (cmd_arena_buffer.is_null()) {
-        cmd_arena_buffer.instantiate();
-        cmd_arena_buffer->set_purpose("Structural Command Arena");
-        cmd_arena_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); 
-        cmd_arena_buffer->set_alignment(ALIGNMENT);
-    }
-    
-    cmd_arena_buffer->set_consumer_name(get_consumer_key());
-    cmd_arena_buffer->set_byte_footprint(padded_cmd_arena);
 
     // --- Profile 7: Selection Command Queue ---
     int sel_bytes = selection_queue_capacity_elements * sizeof(int64_t);
     int padded_sel_arena = ((sel_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
 
-    if (sel_arena_buffer.is_null()) {
-        sel_arena_buffer.instantiate();
-        sel_arena_buffer->set_purpose("Selection Command Queue");
-        sel_arena_buffer->set_layout_type(static_cast<int>(core::BufferLayoutType::PAGED)); 
-        sel_arena_buffer->set_alignment(ALIGNMENT);
-    }
-    
-    sel_arena_buffer->set_consumer_name(get_consumer_key());
-    sel_arena_buffer->set_byte_footprint(padded_sel_arena);
+    // Request buffers from the manager rather than instantiating locally
+    exec_buffer = mgr->request_managed_buffer(
+        get_consumer_key(),
+        godot::StringName("Task Execution State (SoA)"),
+        static_cast<int>(core::BufferLayoutType::FLAT),
+        padded_exec_bytes,
+        ALIGNMENT
+    );
+
+    cmd_arena_buffer = mgr->request_managed_buffer(
+        get_consumer_key(),
+        godot::StringName("Structural Command Arena"),
+        static_cast<int>(core::BufferLayoutType::PAGED),
+        padded_cmd_arena,
+        ALIGNMENT
+    );
+
+    sel_arena_buffer = mgr->request_managed_buffer(
+        get_consumer_key(),
+        godot::StringName("Selection Command Queue"),
+        static_cast<int>(core::BufferLayoutType::PAGED),
+        padded_sel_arena,
+        ALIGNMENT
+    );
 }
 
 void TaskGraphResource::_gather_managed_buffers(godot::TypedArray<ManagedBufferResource>& r_managed_buffers) const {
@@ -136,6 +141,30 @@ void TaskGraphResource::_gather_managed_buffers(godot::TypedArray<ManagedBufferR
     if (exec_buffer.is_valid()) r_managed_buffers.append(exec_buffer);
     if (cmd_arena_buffer.is_valid()) r_managed_buffers.append(cmd_arena_buffer);
     if (sel_arena_buffer.is_valid()) r_managed_buffers.append(sel_arena_buffer);
+}
+
+void TaskGraphResource::sync_execution_snapshots(
+    const std::shared_ptr<core::TaskGraphDOD>& p_graph,
+    const godot::HashMap<godot::StringName, core::NodeID>& p_ui_to_dod_map) 
+{
+    if (!p_graph) return;
+
+    godot::TypedArray<godot::Ref<IdeamGraphNodeResource>> current_nodes = get_nodes();
+
+    for (int i = 0; i < current_nodes.size(); ++i) {
+        godot::Ref<TaskResource> task_res = current_nodes[i];
+        if (task_res.is_null() || !task_res->get_is_active()) continue;
+
+        godot::StringName ui_name = task_res->get_node_name();
+        if (!p_ui_to_dod_map.has(ui_name)) continue;
+
+        core::NodeID dod_id = p_ui_to_dod_map[ui_name];
+        godot::Ref<godot::Image> snapshot = p_graph->get_task_image_snapshot(dod_id);
+
+        if (snapshot.is_valid() && !snapshot->is_empty()) {
+            task_res->set_snapshot_image(snapshot);
+        }
+    }
 }
 
 std::shared_ptr<core::TaskGraphDOD> TaskGraphResource::compile_to_task_graph(
