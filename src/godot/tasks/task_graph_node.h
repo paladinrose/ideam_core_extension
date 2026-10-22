@@ -91,6 +91,8 @@ public:
     TaskGraphNode();
     virtual ~TaskGraphNode() override = default;
 
+    virtual void receive_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) override;
+    
     godot::Ref<TaskResource> get_task_node_resource() const;
     uint32_t get_task_type() const;
     godot::StringName get_task_name() const;

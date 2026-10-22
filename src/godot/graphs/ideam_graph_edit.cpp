@@ -317,18 +317,18 @@ void IdeamGraphEdit::_on_blueprint_changed() {
 
         if (ign) {
             ign->update_from_resource(n_res);
-            
         } else {
-            //This should be somehow harnessing _spawn_node_by_type, so start here, later.
             ign = _create_graph_node(n_res);
             
             if (ign) {
-                ign->initialize(n_res);
+                // Set name and add_child BEFORE initialize() so the node is inside the SceneTree
+                // and inherits the GraphEdit theme before building its UI and ports.
+                ign->set_name(dod_id);
                 add_child(ign);
                 ign->set_theme(get_theme());
+                ign->initialize(n_res);
             }
         }
-        
     }
 
     TypedArray<Ref<IdeamGraphGroupResource>> blueprint_groups = current_blueprint->get_groups();
@@ -352,7 +352,7 @@ void IdeamGraphEdit::_on_blueprint_changed() {
 
         // Map child dependencies to the frame layout canvas
         TypedArray<StringName> associated_nodes = g_res->get_nodes();
-        for(int j = 0; j < associated_nodes.size(); ++j) {
+        for (int j = 0; j < associated_nodes.size(); ++j) {
             Node* target_node = get_node_or_null(NodePath(associated_nodes[j]));
             GraphElement* ge = Object::cast_to<GraphElement>(target_node);
             if (ge && ge->get_parent() == this) {
@@ -360,6 +360,10 @@ void IdeamGraphEdit::_on_blueprint_changed() {
             }
         }
     }
+
+    // Allow derived graph editors (e.g. MemoryGraphEdit) to configure/propagate port slots
+    // before GraphEdit::connect_node() validates port indices.
+    _pre_connect_edges();
 
     // Rebuild Edges
     TypedArray<Dictionary> dod_edges = current_blueprint->get_edges();

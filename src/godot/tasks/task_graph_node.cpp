@@ -29,6 +29,11 @@ void TaskGraphNode::_bind_methods() {
     ClassDB::bind_method(D_METHOD("request_snapshot"), &TaskGraphNode::request_snapshot);
 }
 
+void TaskGraphNode::receive_memory_grant(const godot::Ref<MemoryGrantResource>& p_grant) {
+    MemoryGraphNode::receive_memory_grant(p_grant);
+    _rebuild_dynamic_ui();
+}
+
 Ref<TaskResource> TaskGraphNode::get_task_node_resource() const {
     return Object::cast_to<TaskResource>(get_node_resource().ptr());
 }

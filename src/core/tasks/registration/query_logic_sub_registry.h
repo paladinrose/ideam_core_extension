@@ -77,7 +77,7 @@ namespace {
     template <typename S> struct StrategyDimExtractor<S, std::void_t<decltype(S::dimensions)>> { static constexpr size_t value = S::dimensions; };
 
     template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
-    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::KernelSize)>> { static constexpr size_t value = T_Resolver::KernelSize; static constexpr bool has_kernel = true; };
+    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::K_SIZE)>> { static constexpr size_t value = T_Resolver::K_SIZE; static constexpr bool has_kernel = true; };
 
     template <QueryLogicID ID, typename T_Concrete, typename T_Strategy> struct QueryLogicResolver { static constexpr bool is_valid = false; };
     template <typename C, typename S> struct QueryLogicResolver<QueryLogicID::AABB, C, S> { using Type = AABBQueryLogic; static constexpr bool is_valid = true; };

@@ -13,7 +13,6 @@ namespace { // Translation Unit Firewall
 } // namespace
 
 // --- Populate the Variant Map ---
-// --- Populate the Variant Map ---
 const std::array<LogicVariantGroup, TransformTaskRegistry::L_COUNT> TransformTaskRegistry::logic_variants = {{
     // BoundaryConstraint (0)
     { true, 1, nullptr },

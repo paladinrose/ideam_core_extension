@@ -9,15 +9,20 @@
 
 namespace ideam::godot_ext {
 
+/**
+ * @class TaskGraphResource
+ * @brief Serialized authoring blueprint for a Data-Oriented TaskGraphDOD execution pipeline.
+ * Manages Command Arena and Selection Queue footprints on the attached MemoryManagerResource
+ * and compiles TaskResource nodes (Transform, Query, Metadata, EntryFill, SubGraph)
+ * along with Independent and Forked MemoryGrantResources into a runtime TaskGraphDOD.
+ */
 class TaskGraphResource : public MemoryGraphResource {
     GDCLASS(TaskGraphResource, MemoryGraphResource)
 
 private:
     // --- Command Arena Capacities ---
-    int command_arena_capacity_bytes = 1024 * 1024; // 1 MB default
-    int selection_queue_capacity_elements = 250000;
-
-    
+    int command_arena_capacity_bytes = 1024 * 1024; // 1 MB default (Tier 1 Graph Commands)
+    int selection_queue_capacity_elements = 250000; // Default element count (Tier 2 Wave Commands)
 
 protected:
     static void _bind_methods();

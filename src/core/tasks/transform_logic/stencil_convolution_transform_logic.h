@@ -46,7 +46,7 @@ struct alignas(64) StencilConvolutionTransformLogic {
     // Abstract spatial deltas [dx, dy, dz]. Aligns with Strategy dimensionality.
     std::array<std::array<int64_t, T_Strategy::dimensions>, KernelSize> kernel_deltas{};
     std::array<T, KernelSize> kernel_weights{};
-    T center_weight = T{0};
+    T center_weight = T{};
 
     // --- Internal State Tracking ---
     uint32_t cached_buffer_version = 0;
@@ -87,13 +87,15 @@ struct alignas(64) StencilConvolutionTransformLogic {
     [[nodiscard]] uint32_t get_target_buffer_id() const { return grid_buffer_id; }
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
-        if (p_props.has("center_weight")) {
-            center_weight = static_cast<T>(p_props["center_weight"]);
-        }
-        if (p_props.has("kernel_weights")) {
-            godot::Array kw_array = p_props["kernel_weights"];
-            for (size_t i = 0; i < KernelSize && i < kw_array.size(); ++i) {
-                kernel_weights[i] = static_cast<T>(kw_array[i]);
+        if constexpr (!std::is_same_v<T, void*>) {
+            if (p_props.has("center_weight")) {
+                center_weight = static_cast<T>(p_props["center_weight"]);
+            }
+            if (p_props.has("kernel_weights")) {
+                godot::Array kw_array = p_props["kernel_weights"];
+                for (size_t i = 0; i < KernelSize && i < kw_array.size(); ++i) {
+                    kernel_weights[i] = static_cast<T>(kw_array[i]);
+                }
             }
         }
         if (p_props.has("kernel_deltas")) {

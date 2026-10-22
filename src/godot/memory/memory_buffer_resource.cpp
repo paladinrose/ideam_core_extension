@@ -5,6 +5,9 @@ namespace ideam::godot_ext {
 void MemoryBufferResource::_bind_methods() {
     using namespace godot;
 
+    BIND_ENUM_CONSTANT(SELECTION_DENSE);
+    BIND_ENUM_CONSTANT(SELECTION_SPARSE);
+    
     ClassDB::bind_method(D_METHOD("set_buffer_name", "name"), &MemoryBufferResource::set_buffer_name);
     ClassDB::bind_method(D_METHOD("get_buffer_name"), &MemoryBufferResource::get_buffer_name);
     

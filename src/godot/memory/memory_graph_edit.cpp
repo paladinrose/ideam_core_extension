@@ -43,6 +43,37 @@ void MemoryGraphEdit::_ready() {
 
 }
 
+void MemoryGraphEdit::_pre_connect_edges() {
+    if (current_blueprint.is_null()) return;
+
+    TypedArray<Dictionary> dod_edges = current_blueprint->get_edges();
+
+    // Propagate parent MemoryGrantResources down to MODE_FORKED child nodes
+    // so their input/output port slots are enabled before GraphEdit::connect_node() runs.
+    for (int i = 0; i < dod_edges.size(); ++i) {
+        Dictionary e = dod_edges[i];
+        if (!e.has("from") || !e.has("to")) continue;
+
+        MemoryGraphNode* from_mn = Object::cast_to<MemoryGraphNode>(get_node_or_null(NodePath(e["from"])));
+        MemoryGraphNode* to_mn = Object::cast_to<MemoryGraphNode>(get_node_or_null(NodePath(e["to"])));
+        if (!from_mn || !to_mn) continue;
+
+        Ref<MemoryGraphNodeResource> from_res = from_mn->get_memory_node_resource();
+        Ref<MemoryGraphNodeResource> to_res = to_mn->get_memory_node_resource();
+        if (from_res.is_valid() && to_res.is_valid() &&
+            to_res->get_derivation_mode() == MemoryGraphNodeResource::MODE_FORKED) {
+            Ref<MemoryGrantResource> parent_grant = from_res->get_memory_grant();
+            Ref<MemoryGrantResource> child_grant = to_res->get_memory_grant();
+            if (parent_grant.is_valid() && parent_grant->get_configured_parts().size() > 0 &&
+                (child_grant.is_null() || child_grant->get_configured_parts().is_empty())) {
+                to_mn->receive_memory_grant(parent_grant);
+            }
+        }
+    }
+
+    _refresh_edge_cache();
+}
+
 void MemoryGraphEdit::_notification(int p_what) {
     // Forward structural notifications to the parent class first
     IdeamGraphEdit::_notification(p_what);
@@ -269,6 +300,13 @@ void MemoryGraphEdit::_draw_custom_edges() {
         MemoryGraphNode* to_n = Object::cast_to<MemoryGraphNode>(get_node_or_null(NodePath(to_name)));
 
         if (!from_n || !to_n) continue;
+
+        if (from_port < 0 || from_port >= from_n->get_output_port_count()) {
+            continue;
+        }
+        if (to_port < 0 || to_port >= to_n->get_input_port_count()) {
+            continue;
+        }
 
         // Obtain node local positions and translate to canvas space
         Vector2 from_pos = from_n->get_position() + (from_n->get_output_port_position(from_port) * zoom);

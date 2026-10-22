@@ -71,8 +71,8 @@ namespace {
     template <typename S> struct StrategyDimExtractor<S, std::void_t<decltype(S::dimensions)>> { static constexpr size_t value = S::dimensions; };
 
     template <typename T_Resolver, typename Enable = void> struct KernelExtractorImpl { static constexpr size_t value = 0; static constexpr bool has_kernel = false; };
-    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::Type::KERNEL_POINTS)>> { static constexpr size_t value = T_Resolver::Type::KERNEL_POINTS; static constexpr bool has_kernel = true; };
-
+    template <typename T_Resolver> struct KernelExtractorImpl<T_Resolver, std::void_t<decltype(T_Resolver::K_SIZE)>> { static constexpr size_t value = T_Resolver::K_SIZE; static constexpr bool has_kernel = true; };
+    
     template <TransformLogicID ID, typename T_Concrete, typename T_Strategy> struct TransformLogicResolver { static constexpr bool is_valid = false; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundaryConstraint, C, S> { using Type = BoundaryConstraintTransformLogic<C>; static constexpr bool is_valid = true; };
     template <typename C, typename S> struct TransformLogicResolver<TransformLogicID::BoundsExtraction, C, S> { using Type = BoundsExtractionTransformLogic<C>; static constexpr bool is_valid = true; };

@@ -55,7 +55,8 @@ protected:
 
     // The Reactive Update Loop
     void _on_blueprint_changed();
-
+    virtual void _pre_connect_edges() {}
+    
     // Internal Helpers
     void _create_popup();
     virtual IdeamGraphNode* _create_graph_node(const godot::Ref<IdeamGraphNodeResource>& p_node_res);

@@ -158,6 +158,7 @@ void IdeamGraphDOD::_bake_adjacency() {
         current_in += build_nodes.input_edge_count[i];
         current_out += build_nodes.output_edge_count[i];
         build_nodes.input_edge_count[i] = 0; 
+        build_nodes.output_edge_count[i] = 0;
     }
 
     for (const auto& edge : build_edges) {
