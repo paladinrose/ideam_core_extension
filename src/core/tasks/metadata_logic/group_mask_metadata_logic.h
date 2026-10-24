@@ -122,7 +122,7 @@ struct GroupMaskMetadataLogic {
     template <typename T_View, typename T_Strategy>
     void execute(MemoryBufferSelectionPOD& r_selection,
                             const TaskContextPOD& p_context,
-                            const T_View& p_view
+                            T_View& p_view
                             //const T_Strategy& p_strategy,
                             ) const {
         if (!r_selection.group_masks || r_selection.element_count == 0) return;
@@ -155,9 +155,30 @@ private:
         }
     }
 
+    template <typename T_View>
+    #if defined(_MSC_VER)
+        [[msvc::forceinline]]
+    #else
+        [[gnu::always_inline]]
+    #endif
+    inline void _write_view(T_View& p_view, int64_t idx, const T& value) const {
+        if constexpr (std::is_pointer_v<decltype(p_view[idx])>) {
+            *reinterpret_cast<T*>(p_view[idx]) = value;
+        } else if constexpr (requires { p_view[idx].write(); }) {
+            p_view[idx] = value;
+        } else if constexpr (requires { p_view[idx].store(value); }) {
+            p_view[idx].store(value);
+        } else if constexpr (requires { p_view[idx] = value; }) {
+            p_view[idx] = value;
+        }
+    }
+
     [[nodiscard]] inline bool _matches(const T& p_val, const T& p_target) const noexcept {
         if constexpr (std::is_floating_point_v<T>) {
             return std::abs(p_val - p_target) <= tolerance;
+        } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
+            const float diff = std::abs(static_cast<float>(p_val) - static_cast<float>(p_target));
+            return diff <= tolerance;
         } else if constexpr (requires { p_val.distance_squared_to(p_target); }) {
             return p_val.distance_squared_to(p_target) <= (tolerance * tolerance);
         } else {
@@ -213,11 +234,17 @@ private:
         for (int64_t i = 0; i < cap; ++i) {
             if (bitset[i >> 6] & (1ULL << (i & 63))) {
                 const uint32_t flags = _get_flags(_read_view(p_view, i));
-                if (flags != 0) {
-                    if constexpr (O == GroupMaskOp::SET)         masks[i] = flags;
-                    else if constexpr (O == GroupMaskOp::ADD)    masks[i] |= flags;
+                if constexpr (O == GroupMaskOp::SET) {
+                    masks[i] = flags;
+                    if (flags == 0) {
+                        _write_view(p_view, i, T{});
+                    }
+                } else if (flags != 0) {
+                    if constexpr (O == GroupMaskOp::ADD)         masks[i] |= flags;
                     else if constexpr (O == GroupMaskOp::REMOVE) masks[i] &= ~flags;
                 }
+            } else if constexpr (O == GroupMaskOp::SET) {
+                masks[i] = 0;
             }
         }
     }
@@ -231,9 +258,10 @@ private:
         for (int64_t i = 0; i < count; ++i) {
             const int64_t idx = indices[i];
             const uint32_t flags = _get_flags(_read_view(p_view, idx));
-            if (flags != 0) {
-                if constexpr (O == GroupMaskOp::SET)         masks[idx] = flags;
-                else if constexpr (O == GroupMaskOp::ADD)    masks[idx] |= flags;
+            if constexpr (O == GroupMaskOp::SET) {
+                masks[idx] = flags;
+            } else if (flags != 0) {
+                if constexpr (O == GroupMaskOp::ADD)         masks[idx] |= flags;
                 else if constexpr (O == GroupMaskOp::REMOVE) masks[idx] &= ~flags;
             }
         }
@@ -246,9 +274,10 @@ private:
 
         for (int64_t i = r_sel.start_index; i < end; ++i) {
             const uint32_t flags = _get_flags(_read_view(p_view, i));
-            if (flags != 0) {
-                if constexpr (O == GroupMaskOp::SET)         masks[i] = flags;
-                else if constexpr (O == GroupMaskOp::ADD)    masks[i] |= flags;
+            if constexpr (O == GroupMaskOp::SET) {
+                masks[i] = flags;
+            } else if (flags != 0) {
+                if constexpr (O == GroupMaskOp::ADD)         masks[i] |= flags;
                 else if constexpr (O == GroupMaskOp::REMOVE) masks[i] &= ~flags;
             }
         }

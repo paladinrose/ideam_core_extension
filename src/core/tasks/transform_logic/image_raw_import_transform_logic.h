@@ -41,6 +41,8 @@ struct alignas(64) ImageRawImportTransformLogic {
 
     // --- Configuration State ---
     uint32_t buffer_id = INVALID_ID;
+    bool one_shot = false;
+    mutable bool already_imported = false;
     godot::Ref<godot::Image> source_image;
 
     static godot::Array get_ui_properties() {
@@ -59,6 +61,12 @@ struct alignas(64) ImageRawImportTransformLogic {
         img_prop["hint_string"] = "Texture2D";
         props.push_back(img_prop);
 
+        godot::Dictionary oneshot_prop;
+        oneshot_prop["name"] = "one_shot";
+        oneshot_prop["type"] = godot::Variant::BOOL;
+        oneshot_prop["hint"] = godot::PROPERTY_HINT_NONE;
+        props.push_back(oneshot_prop);
+
         return props;
     }
 
@@ -70,6 +78,10 @@ struct alignas(64) ImageRawImportTransformLogic {
         if (p_props.has("buffer_id")) {
             buffer_id = static_cast<uint32_t>(static_cast<int64_t>(p_props["buffer_id"]));
         }
+        if (p_props.has("one_shot")) {
+            one_shot = static_cast<bool>(p_props["one_shot"]);
+        }
+        already_imported = false;
         
         godot::Variant tex_var;
         if (p_props.has("source_image")) {
@@ -98,6 +110,7 @@ struct alignas(64) ImageRawImportTransformLogic {
         [[gnu::always_inline]]
     #endif
     void execute(const TaskContextPOD& p_context, T_View& p_view) const {
+        if (one_shot && already_imported) return;
         if (!source_image.is_valid() || source_image->is_empty()) return;
 
         const GrantPartPOD* part = p_context.get_grant_part(buffer_id);
@@ -119,6 +132,7 @@ struct alignas(64) ImageRawImportTransformLogic {
 
         if (src_ptr && dst_ptr && copy_bytes > 0) {
             std::memcpy(dst_ptr, src_ptr, copy_bytes);
+            already_imported = true;
         }
     }
 };

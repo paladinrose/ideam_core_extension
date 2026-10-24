@@ -221,7 +221,8 @@ private:
                     const int64_t neighbor_idx = ((raw_idx % capacity) + capacity) % capacity;
 
                     if (!(bitset[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
-                        if (unclaimed && (unclaimed[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
+                        const bool is_write_owner = (part->access_mode != BufferAccessMode::READ);
+                        if (is_write_owner || !unclaimed || (unclaimed[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
                             p_ctx.queue_selection_command(target_buffer_id, neighbor_idx);
                         }
                     }

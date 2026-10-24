@@ -104,12 +104,15 @@ struct SingleElementView {
         // --- 1D LINEAR ACCESS PATH ---
         if constexpr (sizeof...(Coords) == 1) {
             size_t p_selection_index = static_cast<size_t>((p_coords, ...));
+            const size_t bound_limit = (selection.mode == SelectionMode::DENSE)
+                ? static_cast<size_t>(selection.capacity)
+                : static_cast<size_t>(selection.element_count);
             
             // C++26 Optimizer Hinting
             #ifdef NDEBUG
-                [[assume(p_selection_index < static_cast<size_t>(selection.element_count))]];
+                [[assume(p_selection_index < bound_limit)]];
             #else
-                assert(p_selection_index < static_cast<size_t>(selection.element_count) && "SingleElementView out of bounds!");
+                assert(p_selection_index < bound_limit && "SingleElementView out of bounds!");
             #endif
 
             size_t actual_buffer_index = 0;

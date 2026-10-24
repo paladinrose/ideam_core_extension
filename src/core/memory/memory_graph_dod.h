@@ -58,7 +58,8 @@ protected:
     std::vector<MemoryNodeMetadata> node_metadata;
     std::vector<SelectionMetadata> selection_metadata;
     std::vector<MemoryGrantPOD> active_grants;
-
+    std::vector<NodeID> fork_parents;
+    
     // Internal Custom Dirty Flag
     static constexpr uint32_t RESOURCES = 1 << 3;
 

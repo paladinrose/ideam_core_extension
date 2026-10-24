@@ -190,9 +190,18 @@ struct alignas(64) StencilConvolutionTransformLogic {
                 }
             }
         } else if (context.local_workspace) {
-            // Snapshot input after the kernel weights in transient workspace to prevent in-place read-after-write corruption
+            // Snapshot input after the kernel weights in transient workspace to prevent in-place read-after-write corruption.
             T* snapshot = reinterpret_cast<T*>(static_cast<uint8_t*>(context.local_workspace) + MemoryUtilities::align_to(KernelSize * sizeof(T), 64));
-            std::memcpy(snapshot, dst_ptr, static_cast<size_t>(count) * sizeof(T));
+            if constexpr (std::is_arithmetic_v<T>) {
+                // Normalize selected cells to 1 and unselected (culled) cells to 0 so multi-step cellular automata
+                // convolve clean binary states even when dst_ptr stores encoded sums (e.g., 3, 11, 12) for palette LUTs.
+                for (int64_t i = 0; i < count; ++i) {
+                    const bool is_active = (bitset[i >> 6] & (1ULL << (i & 63))) != 0;
+                    snapshot[i] = (is_active && dst_ptr[i] != T{}) ? static_cast<T>(1) : T{};
+                }
+            } else {
+                std::memcpy(snapshot, dst_ptr, static_cast<size_t>(count) * sizeof(T));
+            }
             src_ptr = snapshot;
         }
 
@@ -201,7 +210,10 @@ struct alignas(64) StencilConvolutionTransformLogic {
             kernel_weights.data();
 
         for (int64_t i = 0; i < count; ++i) {
-            if (!(bitset[i >> 6] & (1ULL << (i & 63)))) continue;
+            if (!(bitset[i >> 6] & (1ULL << (i & 63)))) {
+                dst_ptr[i] = T{};
+                continue;
+            }
 
             T accumulator = src_ptr[i] * center_weight;
 

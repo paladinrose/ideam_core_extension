@@ -28,19 +28,14 @@ public:
         
         if (!selection) [[unlikely]] return; 
 
-        // DOD Fast-Path: Highly predictable branch. If populated, pass through.
-        if (selection->element_count > 0) [[likely]] {
+        // DOD Fast-Path: Only pass through if both populated AND already initialized past Tick 0.
+        if (selection->element_count > 0 && selection->selection_version > 0) [[likely]] {
             return;
         }
 
-        // Trigger the Manager's SIMD inversion to populate the empty selection.
+        // Trigger the Manager's SIMD inversion to populate the empty/uninitialized selection.
         if (p_context.manager) [[likely]] {
             p_context.manager->populate_inverse_selection(target_buffer_id, *selection);
-        }
-        
-        // Check selection_version > 0 as well so an uninitialized zeroed bitset on Tick 0 is populated
-        if (selection->element_count > 0 && selection->selection_version > 0) [[likely]] {
-            return;
         }
     }
     
