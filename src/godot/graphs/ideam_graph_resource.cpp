@@ -166,34 +166,29 @@ void IdeamGraphResource::_ensure_managed_buffers() {
     int node_cap = is_volatile_at_runtime ? std::max(static_cast<int>(nodes.size()), volatile_node_capacity) : static_cast<int>(nodes.size());
     int edge_cap = is_volatile_at_runtime ? std::max(static_cast<int>(edges.size()), volatile_edge_capacity) : static_cast<int>(edges.size());
 
-    constexpr int ALIGNMENT = 64; 
+    constexpr int ALIGNMENT = 64;
+    constexpr int PAGE_SIZE = 4096;
 
-    // --- Buffer Profile 1: Topology Nodes (SoA) ---
-    int node_bytes = node_cap * 12;
-    int padded_node_bytes = (node_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-    if (padded_node_bytes == 0) {
-        padded_node_bytes = ALIGNMENT; // Reserve minimum block so the buffer registers in profiler telemetry
-    }
+    // IdeamGraphDOD allocates 2 PAGED buffers for nodes/waves (wave_node_id + wave_meta_id)
+    int node_bytes = std::max(node_cap * 12, PAGE_SIZE * 2);
+    int padded_node_bytes = ((node_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
 
     node_buffer = mgr->request_managed_buffer(
         get_consumer_key(),
         godot::StringName("Topology Nodes SoA"),
-        static_cast<int>(core::BufferLayoutType::SOA),
+        static_cast<int>(core::BufferLayoutType::PAGED),
         padded_node_bytes,
         ALIGNMENT
     );
 
-    // --- Buffer Profile 2: Topology Edges (AoS) ---
-    int edge_bytes = edge_cap * sizeof(core::GraphEdgeData);
-    int padded_edge_bytes = (edge_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-    if (padded_edge_bytes == 0) {
-        padded_edge_bytes = ALIGNMENT;
-    }
+    // IdeamGraphDOD allocates 2 PAGED buffers for edge adjacency (input_registry_id + output_registry_id)
+    int edge_bytes = std::max(static_cast<int>(edge_cap * sizeof(core::GraphEdgeData)), PAGE_SIZE * 2);
+    int padded_edge_bytes = ((edge_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
 
     edge_buffer = mgr->request_managed_buffer(
         get_consumer_key(),
         godot::StringName("Topology Edges AoS"),
-        static_cast<int>(core::BufferLayoutType::AOS),
+        static_cast<int>(core::BufferLayoutType::PAGED),
         padded_edge_bytes,
         ALIGNMENT
     );

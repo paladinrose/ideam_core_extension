@@ -140,7 +140,9 @@ uint32_t MemoryManagerDOD::create_buffer(BufferLayoutType p_layout, size_t p_siz
 
     size_t padding = MemoryUtilities::align_to(master_used, p_alignment) - master_used;
     if (master_used + padding + p_size_bytes > master_capacity) {
-        return 0xFFFFFFFF; 
+        size_t needed = master_used + padding + p_size_bytes;
+        size_t new_cap = std::max(master_capacity * 2, MemoryUtilities::align_to(needed, 4096));
+        _rebase_master_block_unlocked(new_cap);
     }
 
     master_used += padding;
@@ -210,6 +212,15 @@ uint32_t MemoryManagerDOD::create_shadowed_buffer(BufferLayoutType p_layout, siz
 }
 
 void MemoryManagerDOD::_resolve_selection_pointers(uint32_t p_data_buffer_id, MemoryBufferSelectionPOD& r_selection) {
+    if (p_data_buffer_id >= data_to_shadow_map.size() || data_to_shadow_map[p_data_buffer_id] == 0xFFFFFFFF) return;
+
+    MemoryBufferPOD& d_buf = buffers[id_to_index[p_data_buffer_id]];
+    r_selection.target_buffer_id = p_data_buffer_id;
+    if (r_selection.capacity == 0 && d_buf.max_elements > 0) {
+        r_selection.capacity = d_buf.max_elements;
+    }
+    r_selection.manager_version = global_version;
+
     if (p_data_buffer_id >= data_to_shadow_map.size() || data_to_shadow_map[p_data_buffer_id] == 0xFFFFFFFF) return;
 
     MemoryBufferPOD& s_buf = buffers[id_to_index[data_to_shadow_map[p_data_buffer_id]]];
@@ -333,7 +344,11 @@ bool MemoryManagerDOD::expand_paged_buffer(uint32_t p_id, size_t p_new_size_byte
     size_t allocation_size = pages_to_add * page_size;
 
     size_t padding = MemoryUtilities::align_to(master_used, buf.alignment_requirement) - master_used;
-    if (master_used + padding + allocation_size > master_capacity) return false;
+    if (master_used + padding + allocation_size > master_capacity) {
+        size_t needed = master_used + padding + allocation_size;
+        size_t new_cap = std::max(master_capacity * 2, MemoryUtilities::align_to(needed, 4096));
+        _rebase_master_block_unlocked(new_cap);
+    }
 
     master_used += padding;
     uint8_t* new_memory_start = master_block_ptr + master_used;
@@ -395,10 +410,20 @@ void MemoryManagerDOD::configure_buffer_columns(uint32_t p_id, const std::vector
             current_offset = buf.columns[i].offset + buf.columns[i].type_size;
             total_element_size = static_cast<uint32_t>(current_offset);
         }
+        else if (buf.layout_type == BufferLayoutType::FLAT || buf.layout_type == BufferLayoutType::PAGED) {
+            buf.columns[i].offset = current_offset;
+            current_offset += buf.columns[i].type_size;
+            total_element_size = static_cast<uint32_t>(current_offset);
+        }
     }
 
     // 3. Post-Loop Finalization and Capacity Checks
-    if (buf.layout_type == BufferLayoutType::SOA) {
+    if (buf.layout_type == BufferLayoutType::FLAT || buf.layout_type == BufferLayoutType::PAGED) {
+        if (total_element_size > 0) {
+            buf.element_stride = total_element_size;
+        }
+    } 
+    else if (buf.layout_type == BufferLayoutType::SOA) {
         if (current_offset > buf.capacity_bytes) return;
     } 
     else if (buf.layout_type == BufferLayoutType::AOS) {
@@ -665,7 +690,11 @@ bool MemoryManagerDOD::_bake_grant_core(GrantPartPOD* r_parts, uint32_t max_part
                 break;
             case BufferLayoutType::FLAT:
                 r_parts[i].raw_base_ptr = buffer_start;
-                r_parts[i].element_stride = buf.element_stride;
+                if (buf.element_stride > 0) {
+                    r_parts[i].element_stride = buf.element_stride;
+                } else if (r_parts[i].element_stride == 0) {
+                    r_parts[i].element_stride = 1;
+                }
                 r_parts[i].capacity_bytes = buf.capacity_bytes;
                 break;
             case BufferLayoutType::NONE:
@@ -735,15 +764,17 @@ void MemoryManagerDOD::populate_inverse_selection(uint32_t p_buffer_id, MemoryBu
 
     const size_t qwords = (r_selection.capacity + 63) >> 6;
     uint64_t* target_mask = r_selection.data.bitset;
+    if (!target_mask) return;
 
-    // The availability mask tracks what is completely free.
+    // global_unclaimed_masks already stores 1 = Unclaimed (Available), 0 = Claimed.
+    // Copy available bits (and preserve any bits already claimed by this grant).
     const uint64_t* global_mask = nullptr;
-    if (p_buffer_id < global_unclaimed_masks.size()) {
+    if (p_buffer_id < global_unclaimed_masks.size() && !global_unclaimed_masks[p_buffer_id].empty()) {
         global_mask = global_unclaimed_masks[p_buffer_id].data();
     }
 
     if (global_mask) {
-        CollisionUtils::copy_inverse(target_mask, global_mask, qwords);
+        CollisionUtils::apply_union(target_mask, global_mask, qwords);
     } else {
         CollisionUtils::fill_all(target_mask, qwords);
     }
@@ -771,8 +802,8 @@ void MemoryManagerDOD::flush_gpu_updates() {
     }
 }
 
-void MemoryManagerDOD::rebase_master_block(size_t p_new_capacity) {
-    std::unique_lock<std::shared_mutex> lock(manager_rw_lock);
+void MemoryManagerDOD::_rebase_master_block_unlocked(size_t p_new_capacity) {
+    if (p_new_capacity <= master_capacity) return;
 
 #if defined(_MSC_VER)
     uint8_t* new_block = static_cast<uint8_t*>(_aligned_malloc(p_new_capacity, CACHE_LINE_SIZE));
@@ -780,13 +811,19 @@ void MemoryManagerDOD::rebase_master_block(size_t p_new_capacity) {
     uint8_t* new_block = static_cast<uint8_t*>(std::aligned_alloc(CACHE_LINE_SIZE, p_new_capacity));
 #endif
 
-    std::memcpy(new_block, master_block_ptr, master_used);
-    
+    if (master_block_ptr && master_used > 0) {
+        std::memcpy(new_block, master_block_ptr, master_used);
+    }
+    // Zero-initialize the newly added capacity region
+    std::memset(new_block + master_used, 0, p_new_capacity - master_used);
+
+    if (master_block_ptr) {
 #if defined(_MSC_VER)
-    _aligned_free(master_block_ptr);
+        _aligned_free(master_block_ptr);
 #else
-    std::free(master_block_ptr);
+        std::free(master_block_ptr);
 #endif
+    }
 
     master_block_ptr = new_block;
     master_capacity = p_new_capacity;
@@ -796,7 +833,7 @@ void MemoryManagerDOD::rebase_master_block(size_t p_new_capacity) {
         buf.master_block_ptr = master_block_ptr;
         buf.version++; 
         
-        if (buf.layout_type == BufferLayoutType::PAGED) {
+        if (buf.layout_type == BufferLayoutType::PAGED && buf.extra.paged.table_ptr) {
             uint8_t* buffer_start = buf.master_block_ptr + buf.memory_offset;
             for (uint32_t i = 0; i < buf.extra.paged.page_count; ++i) {
                 buf.extra.paged.table_ptr[i] = buffer_start + (i * buf.extra.paged.page_size_bytes);
@@ -806,6 +843,11 @@ void MemoryManagerDOD::rebase_master_block(size_t p_new_capacity) {
         uint32_t idx = id_to_index[buf.buffer_id];
         buffer_dirty_flags[idx] |= 0x1; 
     }
+}
+
+void MemoryManagerDOD::rebase_master_block(size_t p_new_capacity) {
+    std::unique_lock<std::shared_mutex> lock(manager_rw_lock);
+    _rebase_master_block_unlocked(p_new_capacity);
 }
 
 MemoryBufferPOD* MemoryManagerDOD::get_buffer(uint32_t p_id) {

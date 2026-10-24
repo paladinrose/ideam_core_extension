@@ -98,6 +98,7 @@ public:
     virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
 
     virtual void apply_properties(const godot::Dictionary& p_props) override { 
+        apply_common_buffer_properties(logic, p_props);
         logic.apply_properties(p_props);
         if (p_props.has("max_preview_size")) {
             max_preview_size = static_cast<int32_t>(p_props["max_preview_size"]);

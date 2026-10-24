@@ -88,6 +88,7 @@ private:
     std::mutex command_ring_mutex;
 
     // Internal Helpers
+    void _rebase_master_block_unlocked(size_t p_new_capacity);
     void _update_buffer_pointers();
     void _sync_buffer_to_vram(uint32_t p_index);
     void _initialize_system_buffers();

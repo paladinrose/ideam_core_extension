@@ -225,6 +225,30 @@ void TaskGraphDOD::execute_graph_dod(double p_delta) {
         _process_tier2_commands(current_wave_nodes.data(), wave.count);
         
         _batch_resolve_wave(current_wave_nodes.data(), wave.count);
+
+        // Synchronize selection scalar metadata (element_count, selection_version, mode)
+        // across all forked grants that share the same underlying shadow selection buffer.
+        for (uint32_t i = 0; i < wave.count; ++i) {
+            const MemoryGrantPOD* src_grant = get_grant(current_wave_nodes[i]);
+            if (!src_grant) continue;
+
+            for (uint32_t sp = 0; sp < src_grant->part_count; ++sp) {
+                const MemoryBufferSelectionPOD& src_sel = src_grant->parts[sp].selection;
+                if (!src_sel.data.raw_data) continue;
+
+                for (size_t n = 0; n < active_grants.size(); ++n) {
+                    if (n == current_wave_nodes[i] || !active_grants[n].active) continue;
+                    for (uint32_t dp = 0; dp < active_grants[n].part_count; ++dp) {
+                        MemoryBufferSelectionPOD& dst_sel = active_grants[n].parts[dp].selection;
+                        if (dst_sel.data.raw_data == src_sel.data.raw_data) {
+                            dst_sel.element_count = src_sel.element_count;
+                            dst_sel.selection_version = src_sel.selection_version;
+                            dst_sel.mode = src_sel.mode;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     _process_tier1_commands();
@@ -421,14 +445,21 @@ void TaskGraphDOD::_process_tier2_commands(const NodeID* p_nodes, uint32_t p_cou
                 
                 for (int64_t k = 0; k < cmd.count; ++k) {
                     const int64_t idx = cmd.queued_indices[k];
+                    if (idx < 0 || idx >= sel.capacity) continue;
+
                     if (sel.mode == SelectionMode::DENSE) {
-                        sel.data.bitset[idx >> 6] |= (1ULL << (idx & 63));
+                        const uint64_t bit = (1ULL << (idx & 63));
+                        if (!(sel.data.bitset[idx >> 6] & bit)) {
+                            sel.data.bitset[idx >> 6] |= bit;
+                            sel.element_count++;
+                        }
                     } else if (sel.mode == SelectionMode::SPARSE) {
                         if (sel.element_count < sel.capacity) {
                             sel.data.indices[sel.element_count++] = idx;
                         }
                     }
                 }
+                sel.selection_version++;
                 break;
             }
         }

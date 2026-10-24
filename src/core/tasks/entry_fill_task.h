@@ -37,6 +37,11 @@ public:
         if (p_context.manager) [[likely]] {
             p_context.manager->populate_inverse_selection(target_buffer_id, *selection);
         }
+        
+        // Check selection_version > 0 as well so an uninitialized zeroed bitset on Tick 0 is populated
+        if (selection->element_count > 0 && selection->selection_version > 0) [[likely]] {
+            return;
+        }
     }
     
     inline void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}

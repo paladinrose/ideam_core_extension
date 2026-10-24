@@ -246,22 +246,31 @@ void IdeamGraphDOD::_sort_kahn_waves() {
         total_node_count += current_wave.size();
         wave_list.push_back(current_wave);
 
+        MemoryGrantPOD out_grant;
+        std::array<GrantPartPOD, 1> out_req = {{ 
+            GrantPartPOD{ 
+                .buffer_id = output_registry_id, 
+                .element_stride = sizeof(EdgeID),
+                .access_mode = BufferAccessMode::READ 
+            } 
+        }};
+        if (const MemoryBufferPOD* b = manager->get_buffer(output_registry_id)) {
+            out_req[0].selection.mode = SelectionMode::RANGE;
+            out_req[0].selection.start_index = 0;
+            out_req[0].selection.element_count = b->max_elements;
+            out_req[0].selection.capacity = b->max_elements;
+        }
+        manager->bake_grant(out_grant, out_req);
+        auto out_view = _get_paged_view<EdgeID, FlatStrategy>(out_grant, 0);
+
         for (NodeID u : current_wave) {
-            MemoryGrantPOD out_grant;
-            std::array<GrantPartPOD, 1> out_req = {{ 
-                GrantPartPOD{ .buffer_id = output_registry_id, .access_mode = BufferAccessMode::READ } 
-            }};
-            manager->bake_grant(out_grant, out_req);
-
-            auto out_view = _get_paged_view<EdgeID, FlatStrategy>(out_grant, 0);
-
             for (uint32_t i = 0; i < build_nodes.output_edge_count[u]; ++i) {
                 EdgeID eid = out_view[build_nodes.output_edge_offset[u] + i];
                 NodeID v = build_edges[eid].to_node;
                 if (--in_degree[v] == 0) next_wave.push_back(v);
             }
-            manager->release_grant(out_grant);
         }
+        manager->release_grant(out_grant);
         
         current_wave.clear();
         std::swap(current_wave, next_wave);

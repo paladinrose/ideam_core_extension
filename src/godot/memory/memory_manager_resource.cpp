@@ -643,16 +643,6 @@ godot::Ref<ManagedBufferResource> MemoryManagerResource::request_managed_buffer(
     target_buffer->set_alignment(p_alignment);
     target_buffer->set_manager_resource(this);
 
-    // If DOD backend is already initialized, allocate live memory dynamically
-    if (backend_manager && target_buffer->get_live_buffer_id() < 0) {
-        core::BufferLayoutType layout = static_cast<core::BufferLayoutType>(p_layout_type);
-        size_t size = static_cast<size_t>(p_byte_footprint);
-        uint32_t align = static_cast<uint32_t>(p_alignment);
-
-        uint32_t buffer_id = backend_manager->create_buffer(layout, size, align);
-        target_buffer->set_live_buffer_id(static_cast<int>(buffer_id));
-    }
-
     // Save to disk in the editor immediately so it gains a unique external resource path
     if (godot::Engine::get_singleton()->is_editor_hint()) {
         save_managed_buffer_to_disk(target_buffer);
@@ -858,19 +848,11 @@ void MemoryManagerResource::initialize_backend() {
         }
     }
 
-    // 2. Process Managed Buffers
+    // 2. Link Managed Buffers to this Manager Resource (do NOT pre-allocate duplicate buffers
+    //    here, as IdeamGraphDOD / MemoryGraphDOD / TaskGraphDOD allocate them via _ensure_buffer)
     for (int i = 0; i < managed_buffer_schemas.size(); ++i) {
         godot::Ref<ManagedBufferResource> mb = managed_buffer_schemas[i];
         if (!mb.is_valid()) continue;
-
-        if (mb->get_live_buffer_id() >= 0) continue; // Skip if already allocated
-        
-        core::BufferLayoutType layout = static_cast<core::BufferLayoutType>(mb->get_layout_type());
-        size_t size = static_cast<size_t>(mb->get_byte_footprint());
-        uint32_t align = static_cast<uint32_t>(mb->get_alignment());
-
-        uint32_t buffer_id = backend_manager->create_buffer(layout, size, align);
-        mb->set_live_buffer_id(static_cast<int>(buffer_id));
         mb->set_manager_resource(this);
     }
 }

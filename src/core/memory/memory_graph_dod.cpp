@@ -30,8 +30,18 @@ void MemoryGraphDOD::validate_grants() {
 
     if (registry_buffer_id != INVALID_ID) {
         std::array<GrantPartPOD, 1> reg_req = {{ 
-            GrantPartPOD{ .buffer_id = registry_buffer_id, .access_mode = BufferAccessMode::READ } 
+            GrantPartPOD{ 
+                .buffer_id = registry_buffer_id, 
+                .element_stride = sizeof(GrantPartPOD),
+                .access_mode = BufferAccessMode::READ 
+            } 
         }};
+        if (const MemoryBufferPOD* b = manager->get_buffer(registry_buffer_id)) {
+            reg_req[0].selection.mode = SelectionMode::RANGE;
+            reg_req[0].selection.start_index = 0;
+            reg_req[0].selection.element_count = b->max_elements;
+            reg_req[0].selection.capacity = b->max_elements;
+        }
         reg_available = manager->bake_grant(reg_grant, reg_req);
     }
 

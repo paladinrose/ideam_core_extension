@@ -53,7 +53,10 @@ public:
     explicit QueryTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~QueryTask() override = default;
 
-    virtual void apply_properties(const godot::Dictionary& p_props) override { logic.apply_properties(p_props); }
+    virtual void apply_properties(const godot::Dictionary& p_props) override { 
+        apply_common_buffer_properties(logic,p_props);
+        logic.apply_properties(p_props); 
+    }
 
     virtual void prepare(const TaskContextPOD& p_context) override {
         if constexpr (requires { logic.prepare(p_context); }) {
@@ -70,7 +73,7 @@ public:
         return 0;
     }
     
-    virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {
+    virtual void old_cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) { // override {
         if constexpr (Op != QueryOp::CULL) return;
 
         const uint32_t target_id = logic.get_target_buffer_id();
@@ -86,7 +89,7 @@ public:
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
 
-    virtual void execute(const TaskContextPOD& p_context) override {
+    virtual void old_execute(const TaskContextPOD& p_context) { //override {
         if constexpr (Op != QueryOp::ADD) return;
 
         const uint32_t target_id = logic.get_target_buffer_id();
@@ -99,6 +102,20 @@ public:
 
         T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         
+        logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
+    }
+
+    virtual void cull_selections(const TaskContextPOD& p_context, uint8_t p_dirty_mask) override {}
+
+    virtual void execute(const TaskContextPOD& p_context) override {
+        const uint32_t target_id = logic.get_target_buffer_id();
+        const GrantPartPOD* part = p_context.get_grant_part(target_id);
+        if (!part) return;
+
+        MemoryBufferSelectionPOD* selection = p_context.get_selection(target_id);
+        if (!selection) return;
+
+        T_View view = assemble_view<T_Logic, T_View>(logic, p_context, part);
         logic.template execute<Op, T_View, T_Strategy>(*selection, p_context, view);
     }
 };

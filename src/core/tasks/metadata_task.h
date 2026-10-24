@@ -48,7 +48,10 @@ public:
     explicit MetadataTask(const T_Logic& p_logic) : logic(p_logic) {}
     virtual ~MetadataTask() override = default;
 
-    virtual void apply_properties(const godot::Dictionary& p_props) override { logic.apply_properties(p_props); }
+    virtual void apply_properties(const godot::Dictionary& p_props) override { 
+        apply_common_buffer_properties(logic, p_props);
+        logic.apply_properties(p_props); 
+    }
 
     virtual void prepare(const TaskContextPOD& p_context) override {
         // Compile-time check: Only call prepare if the Logic struct defines it.

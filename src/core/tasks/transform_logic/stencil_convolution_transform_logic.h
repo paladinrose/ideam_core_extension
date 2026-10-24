@@ -42,7 +42,9 @@ struct alignas(64) StencilConvolutionTransformLogic {
     
     // --- Configuration ---
     uint32_t grid_buffer_id = INVALID_ID;
-    
+    int64_t buffer_width = 0;
+    uint32_t output_buffer_id = INVALID_ID;
+
     // Abstract spatial deltas [dx, dy, dz]. Aligns with Strategy dimensionality.
     std::array<std::array<int64_t, T_Strategy::dimensions>, KernelSize> kernel_deltas{};
     std::array<T, KernelSize> kernel_weights{};
@@ -107,10 +109,20 @@ struct alignas(64) StencilConvolutionTransformLogic {
                 }
             }
         }
+        if(p_props.has("grid_buffer_id")) {
+            grid_buffer_id = static_cast<uint32_t>(p_props["grid_buffer_id"]);
+        }
+        if(p_props.has("output_buffer_id")) {
+            output_buffer_id = static_cast<uint32_t>(p_props["output_buffer_id"]);
+        }
+        if(p_props.has("buffer_width")) {
+            buffer_width = static_cast<int64_t>(p_props["buffer_width"]);
+        }
     }
     
     [[nodiscard]] inline size_t get_transient_requirement(const TaskContextPOD& p_context) const noexcept {
-        return KernelSize * sizeof(T); 
+        MemoryBufferSelectionPOD* sel = p_context.get_selection(grid_buffer_id);
+        return MemoryUtilities::align_to(KernelSize * sizeof(T), 64) + (sel ? sel->capacity * sizeof(T) : 0);
     }
 
     inline void prepare(const TaskContextPOD& p_context) {
@@ -119,8 +131,22 @@ struct alignas(64) StencilConvolutionTransformLogic {
 
         // 1. Selectively recalculate spatial byte-offsets if the buffer layout changed
         if (part->buffer_version_at_issue != cached_buffer_version) {
+            T_Strategy strat{};
+            const uint32_t effective_stride = (part->element_stride > 0)
+                ? part->element_stride
+                : static_cast<uint32_t>(sizeof(T));
+
+            int64_t w = buffer_width;
+            if (w <= 0 && part->selection.capacity > 0) {
+                w = static_cast<int64_t>(std::sqrt(static_cast<double>(part->selection.capacity)));
+            }
+
+            if constexpr (requires { strat.stride_y; }) {
+                strat.stride_y = w * static_cast<int64_t>(effective_stride);
+            }
+
             persistent_baked_offsets = DefaultView::bake_spatial_offsets(
-                T_Strategy{}, part->element_stride, kernel_deltas
+                strat, effective_stride, kernel_deltas
             );
             cached_buffer_version = part->buffer_version_at_issue;
         }
@@ -145,35 +171,47 @@ struct alignas(64) StencilConvolutionTransformLogic {
         [[gnu::always_inline]]
     #endif
     inline void execute(const TaskContextPOD& context, const T_View& main_view) const {
+        const GrantPartPOD* part = context.get_grant_part(grid_buffer_id);
         const MemoryBufferSelectionPOD* sel = context.get_selection(grid_buffer_id);
-        if (!sel || sel->mode != SelectionMode::DENSE) return;
+        if (!part || !part->raw_base_ptr || !sel || sel->mode != SelectionMode::DENSE) return;
 
-        // 1. Spin up the Secondary SwapView for State T+1 Writes
-        SwapView<T, T_StrategyType> write_view;
-        write_view.bind_secondary(context.get_grant_part(grid_buffer_id));
-
-        // 2. Resolve Active Weights Pointer
-        const T* active_weights = context.local_workspace ? 
-            reinterpret_cast<const T*>(context.local_workspace) : 
-            kernel_weights.data();
-        
         const int64_t count = sel->capacity;
+        if (count <= 0) return;
         const uint64_t* bitset = sel->data.bitset;
+        const intptr_t stride = static_cast<intptr_t>(part->element_stride > 0 ? part->element_stride : sizeof(T));
 
-        // --- THE HOT LOOP ---
+        T* dst_ptr = reinterpret_cast<T*>(part->raw_base_ptr);
+        const T* src_ptr = dst_ptr;
+
+        if (output_buffer_id != INVALID_ID && output_buffer_id != grid_buffer_id) {
+            if (const GrantPartPOD* out_part = context.get_grant_part(output_buffer_id)) {
+                if (out_part->raw_base_ptr) {
+                    dst_ptr = reinterpret_cast<T*>(out_part->raw_base_ptr);
+                }
+            }
+        } else if (context.local_workspace) {
+            // Snapshot input after the kernel weights in transient workspace to prevent in-place read-after-write corruption
+            T* snapshot = reinterpret_cast<T*>(static_cast<uint8_t*>(context.local_workspace) + MemoryUtilities::align_to(KernelSize * sizeof(T), 64));
+            std::memcpy(snapshot, dst_ptr, static_cast<size_t>(count) * sizeof(T));
+            src_ptr = snapshot;
+        }
+
+        const T* active_weights = context.local_workspace ?
+            reinterpret_cast<const T*>(context.local_workspace) :
+            kernel_weights.data();
+
         for (int64_t i = 0; i < count; ++i) {
             if (!(bitset[i >> 6] & (1ULL << (i & 63)))) continue;
 
-            main_view[i]; // Position Stencil center
-            
-            T accumulator = main_view.center() * center_weight;
+            T accumulator = src_ptr[i] * center_weight;
 
-            // Zero-branching, unrollable sequence
             for (size_t k = 0; k < KernelSize; ++k) {
-                accumulator += main_view.neighbor(k) * active_weights[k];
+                const int64_t elem_offset = static_cast<int64_t>(persistent_baked_offsets[k] / stride);
+                const int64_t neighbor_idx = ((i + elem_offset) % count + count) % count;
+                accumulator += src_ptr[neighbor_idx] * active_weights[k];
             }
 
-            write_view[i].write() = accumulator;
+            dst_ptr[i] = accumulator;
         }
     }
 };

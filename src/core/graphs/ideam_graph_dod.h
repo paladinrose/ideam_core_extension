@@ -152,16 +152,18 @@ protected:
     template<typename T, typename Strategy = FlatStrategy>
     PagedView<T, Strategy> _get_paged_view(const MemoryGrantPOD& p_grant, uint32_t p_part_index) const {
         PagedView<T, Strategy> view;
+        if (!manager || !p_grant.active || p_part_index >= p_grant.part_count) {
+            return view;
+        }
         view.grant = &p_grant;
         view.grant_part_index = p_part_index;
 
-        // 1. Fetch the physical buffer configuration
         MemoryBufferPOD* buf = manager->get_buffer(p_grant.parts[p_part_index].buffer_id);
-        
-        // --- THE FIX ---
-        // Route the actual page table directory, NOT the raw data pointer!
-        view.page_table = buf->extra.paged.table_ptr;
+        if (!buf || buf->layout_type != BufferLayoutType::PAGED || buf->extra.paged.page_size_bytes == 0) {
+            return view;
+        }
 
+        view.page_table = buf->extra.paged.table_ptr;
         uint32_t page_size = buf->extra.paged.page_size_bytes;
 
         view.page_shift = static_cast<uint32_t>(std::countr_zero(page_size));

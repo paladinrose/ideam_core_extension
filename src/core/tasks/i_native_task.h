@@ -93,19 +93,76 @@ template <typename T_Logic, typename T_View>
 #endif
 static inline T_View assemble_view(const T_Logic& p_logic, const TaskContextPOD& p_context, const GrantPartPOD* p_part) {
     T_View view;
-    
+
+    if (p_context.grant && p_part) {
+        const uint32_t part_idx = static_cast<uint32_t>(p_part - p_context.grant->parts);
+        const uint32_t mgr_ver = p_context.grant->global_manager_version_ptr
+            ? static_cast<uint32_t>(*p_context.grant->global_manager_version_ptr)
+            : 0;
+
+        if constexpr (requires { view.grant; view.grant_part_index; }) {
+            view.grant = p_context.grant;
+            view.grant_part_index = part_idx;
+        }
+        if constexpr (requires { view.read_grant; view.read_part_idx; view.write_grant; view.write_part_idx; }) {
+            view.read_grant = p_context.grant;
+            view.read_part_idx = part_idx;
+            view.write_grant = p_context.grant;
+            view.write_part_idx = part_idx;
+        }
+        if constexpr (requires { view.parent_grant; view.parent_part_idx; view.child_grant; view.child_part_idx; }) {
+            view.parent_grant = p_context.grant;
+            view.parent_part_idx = part_idx;
+            view.child_grant = p_context.grant;
+            view.child_part_idx = part_idx;
+        }
+        if constexpr (requires { view.baked_buffer_version; }) {
+            view.baked_buffer_version = p_part->buffer_version_at_issue;
+        }
+        if constexpr (requires { view.baked_manager_version; }) {
+            view.baked_manager_version = mgr_ver;
+        }
+    }
+
     // 1. Primary Memory Binding (Agnostic to execution context)
     if constexpr (requires { view.bind(p_part); }) {
         view.bind(p_part);
     }
-    
+
     // 2. Logic-Specific Configuration (Handles secondary buffers)
-    // Because p_logic knows about TaskContextPOD, IT does the heavy lifting.
     if constexpr (requires { p_logic.configure_view(view, p_context, p_part); }) {
         p_logic.configure_view(view, p_context, p_part);
     }
-    
+
     return view;
+}
+
+template <typename T_Logic>
+static inline void apply_common_buffer_properties(T_Logic& r_logic, const godot::Dictionary& p_props) noexcept {
+    uint32_t resolved_id = INVALID_ID;
+    if (p_props.has("target_buffer_id")) {
+        resolved_id = static_cast<uint32_t>(static_cast<int64_t>(p_props["target_buffer_id"]));
+    } else if (p_props.has("grid_buffer_id")) {
+        resolved_id = static_cast<uint32_t>(static_cast<int64_t>(p_props["grid_buffer_id"]));
+    } else if (p_props.has("primary_buffer_id")) {
+        resolved_id = static_cast<uint32_t>(static_cast<int64_t>(p_props["primary_buffer_id"]));
+    } else if (p_props.has("buffer_id")) {
+        resolved_id = static_cast<uint32_t>(static_cast<int64_t>(p_props["buffer_id"]));
+    }
+    if (resolved_id != INVALID_ID) {
+        if constexpr (requires { r_logic.target_buffer_id = resolved_id; }) {
+            r_logic.target_buffer_id = resolved_id;
+        }
+        if constexpr (requires { r_logic.grid_buffer_id = resolved_id; }) {
+            r_logic.grid_buffer_id = resolved_id;
+        }
+        if constexpr (requires { r_logic.primary_buffer_id = resolved_id; }) {
+            r_logic.primary_buffer_id = resolved_id;
+        }
+        if constexpr (requires { r_logic.buffer_id = resolved_id; }) {
+            r_logic.buffer_id = resolved_id;
+        }
+    }
 }
 
 class INativeTask {
@@ -126,6 +183,8 @@ public:
     virtual void set_max_preview_size(int32_t p_size) {}
     [[nodiscard]] virtual int32_t get_max_preview_size() const { return 0; }
     [[nodiscard]] virtual bool is_snapshot_requested() const { return false; }
+
+    
 };
 
 

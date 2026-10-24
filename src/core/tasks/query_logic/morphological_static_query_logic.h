@@ -46,6 +46,9 @@ struct MorphologicalStaticQueryLogic {
     
     uint32_t target_buffer_id = 0;
     int32_t iterations = 1;
+    int64_t buffer_width = 0;
+    uint32_t cached_buffer_version = 0;
+    std::array<intptr_t, PointCount> persistent_baked_offsets{};
 
     static godot::Array get_ui_properties() {
         godot::Array props;
@@ -70,9 +73,51 @@ struct MorphologicalStaticQueryLogic {
     [[nodiscard]] uint32_t get_target_buffer_id() const { return target_buffer_id; }
 
     void apply_properties(const godot::Dictionary& p_props) noexcept {
+        if (p_props.has("target_buffer_id")) {
+            target_buffer_id = static_cast<uint32_t>(static_cast<int64_t>(p_props["target_buffer_id"]));
+        }
         if (p_props.has("iterations")) {
             iterations = static_cast<int32_t>(p_props["iterations"]);
         }
+        if (p_props.has("buffer_width")) {
+            buffer_width = static_cast<int64_t>(p_props["buffer_width"]);
+        }
+    }
+
+    inline void prepare(const TaskContextPOD& p_context) {
+        const GrantPartPOD* part = p_context.get_grant_part(target_buffer_id);
+        if (!part) return;
+
+        if (part->buffer_version_at_issue != cached_buffer_version) {
+            T_Strategy strat{};
+            const int64_t stride = static_cast<int64_t>(part->element_stride > 0 ? part->element_stride : sizeof(T));
+            int64_t w = buffer_width;
+            if (w <= 0 && part->selection.capacity > 0) {
+                w = static_cast<int64_t>(std::sqrt(static_cast<double>(part->selection.capacity)));
+            }
+            if constexpr (requires { strat.stride_y; }) {
+                strat.stride_y = w * stride;
+            }
+
+            std::array<std::array<int64_t, T_Strategy::dimensions>, PointCount> deltas{};
+            if constexpr (T_Strategy::dimensions == 2 && PointCount == 9) {
+                constexpr int64_t moore2d[9][2] = {
+                    {-1,-1}, {0,-1}, {1,-1},
+                    {-1, 0}, {0, 0}, {1, 0},
+                    {-1, 1}, {0, 1}, {1, 1}
+                };
+                for (size_t k = 0; k < 9; ++k) {
+                    deltas[k][0] = moore2d[k][0];
+                    deltas[k][1] = moore2d[k][1];
+                }
+            }
+            persistent_baked_offsets = DefaultView::bake_spatial_offsets(strat, static_cast<uint32_t>(stride), deltas);
+            cached_buffer_version = part->buffer_version_at_issue;
+        }
+    }
+
+    inline void configure_view(DefaultView& p_view, const TaskContextPOD& p_context, const GrantPartPOD* p_part) const {
+        p_view.baked_offsets = persistent_baked_offsets;
     }
 
     template <QueryOp Op, typename T_View, typename T_Strat>
@@ -154,8 +199,11 @@ private:
         const uint64_t* bitset = r_selection.data.bitset;
         const uint64_t* unclaimed = r_selection.unclaimed_mask;
         const int64_t capacity = r_selection.capacity;
+        if (!bitset || capacity <= 0) return;
 
         const GrantPartPOD* part = p_ctx.get_grant_part(target_buffer_id);
+        if (!part || !part->raw_base_ptr || part->element_stride == 0) return;
+
         const intptr_t stride = part->element_stride;
         const uint8_t* raw_base = static_cast<const uint8_t*>(part->raw_base_ptr);
 
@@ -169,13 +217,12 @@ private:
                     const T& neigh_val = p_view.neighbor(p);
                     
                     const intptr_t byte_diff = reinterpret_cast<const uint8_t*>(&neigh_val) - raw_base;
-                    const int64_t neighbor_idx = byte_diff / stride;
-                    
-                    if (neighbor_idx >= 0 && neighbor_idx < capacity) {
-                        if (!(bitset[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
-                            if (unclaimed && (unclaimed[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
-                                p_ctx.queue_selection_command(target_buffer_id, neighbor_idx);
-                            }
+                    const int64_t raw_idx = byte_diff / stride;
+                    const int64_t neighbor_idx = ((raw_idx % capacity) + capacity) % capacity;
+
+                    if (!(bitset[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
+                        if (unclaimed && (unclaimed[neighbor_idx >> 6] & (1ULL << (neighbor_idx & 63)))) {
+                            p_ctx.queue_selection_command(target_buffer_id, neighbor_idx);
                         }
                     }
                 }

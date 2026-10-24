@@ -75,14 +75,11 @@ void MemoryGraphResource::_ensure_managed_buffers() {
         ALIGNMENT
     );
 
-    // --- Buffer Profile 4: The Grant Registry Buffer ---
+    constexpr int PAGE_SIZE = 4096;
     int req_cap = get_is_volatile() ? volatile_requirement_capacity : std::max(1024, volatile_requirement_capacity);
-    int registry_bytes = req_cap * sizeof(core::GrantPartPOD);
-    int padded_registry_bytes = (registry_bytes + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1);
-    if (padded_registry_bytes == 0) {
-        padded_registry_bytes = ALIGNMENT;
-    }
-
+    int registry_bytes = std::max(static_cast<int>(req_cap * sizeof(core::GrantPartPOD)), PAGE_SIZE);
+    int padded_registry_bytes = ((registry_bytes + (PAGE_SIZE - 1)) / PAGE_SIZE) * PAGE_SIZE;
+    
     registry_buffer = mgr->request_managed_buffer(
         get_consumer_key(),
         godot::StringName("Grant Registry Buffer"),
